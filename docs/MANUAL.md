@@ -186,25 +186,50 @@ Questlog starts.
 
 ## Updating Questlog
 
-Questlog downloads updates by itself, but under Proton it cannot install
-them: its installer stops, as described above. Do not use the "install
-update" button inside Questlog's window. Update by hand instead.
+**A2Qlinux updates Questlog for you.** Questlog's own updater downloads new
+versions but cannot install them under Proton (its installer stops, as
+described in "Installing Questlog"), so A2Qlinux switches it off and does the
+job itself, the way Questlog does on Windows: download in the background,
+install at the next start.
 
-**How you notice an update:** Questlog's window says an update is ready, or
-the version in `latest.yml` (step 1 of "Installing Questlog") is newer than
-yours. Your installed version is in Questlog's log:
+What you will notice:
 
-```
-grep -a 'latest version' ~/Games/Questlog/proton-stream/questlog.log
-```
+1. A minute after Questlog starts, and every six hours after that, A2Qlinux
+   checks for a new Questlog. It never downloads while the game is running,
+   so your connection to the game server is left alone; it waits until the
+   game is closed.
+2. When a new version is out, A2Qlinux downloads it, checks that the
+   download is complete and genuine, and checks that the new version still
+   works with A2Qlinux. Then you get a desktop notification:
+   - "Questlog X is ready. It is installed the next time Questlog starts."
+     Nothing else to do.
+   - "Questlog X does not fit this A2Qlinux yet …" with the reason. Your
+     current version stays. This happens when Questlog changed something
+     A2Qlinux relies on; A2Qlinux itself needs an update first.
+3. The next time you start "Questlog (AION 2)", the new version is put in
+   place before Questlog opens. That takes a few seconds. The status window
+   says `Installed Questlog X; Questlog Y is kept in …` and then
+   `Starting Questlog X.`
+4. If the new version does not start, A2Qlinux puts the previous one back,
+   tells you so, and starts it.
 
-Steps:
+The previous version is kept next to the current one (for example
+`~/Games/Questlog-0.1.34`) until the next update replaces it. Your fights and
+settings are not in these folders, so an update does not touch them.
+
+Tip: the status window shows which version is running in its
+`Starting Questlog …` line.
+
+To turn automatic updates off, start A2Qlinux with `--no-auto-update` (in
+Steam's launch option, before `%command%`). Then update by hand.
+
+### Updating by hand
 
 1. Do steps 1–4 of "Installing Questlog" for the new version.
 2. Check that the new version still works with A2Qlinux. This is a short
    technical check, listed in [ARCHITECTURE.md](ARCHITECTURE.md) §10. If
-   you are not comfortable doing it, wait until A2Qlinux confirms the
-   version.
+   you are not comfortable doing it, use the automatic update, which does
+   this check for you.
 3. Quit Questlog from the tray icon and wait until the status window closes.
 4. Swap the folder, keeping the old one and A2Qlinux's working folder
    `proton-stream`:
@@ -212,11 +237,9 @@ Steps:
    cd ~/Games && mv Questlog Questlog-old && mkdir Questlog && cp -a /tmp/qlupd/app/. Questlog/ && mv Questlog-old/proton-stream Questlog/
    ```
    Replace the whole folder rather than copying over it. Some of Questlog's
-   files have changing names, and the old ones would pile up. Your fights
-   and settings are not in this folder, so they are not affected.
-5. Start "Questlog (AION 2)". The log should now say
-   `Update for version <new> is not available`, and the tray should show
-   one icon.
+   files have changing names, and the old ones would pile up.
+5. Start "Questlog (AION 2)". The status window should say
+   `Starting Questlog <new version>.`, and the tray should show one icon.
 6. If all is well, delete `~/Games/Questlog-old` and `/tmp/qlupd`. If not,
    swap the folders back.
 
@@ -233,6 +256,8 @@ Steps:
 | two Questlog icons in the tray | hiding Questlog's own icon failed | the status window says why; both icons work, but use A2Qlinux's |
 | clicks in the game open Questlog's window | the click fix did not start | look for lines starting `[questlog-proton]` in `~/Games/Questlog/proton-stream/questlog.log` |
 | Questlog closes right after starting | its graphics process failed | send `~/Games/Questlog/proton-stream/questlog.log` with your report |
+| notification "Questlog X does not fit this A2Qlinux yet" | the new Questlog changed something A2Qlinux relies on | keep using the current version; the reason is in the notification |
+| "Questlog update check failed" in the status window | no internet connection at that moment | nothing; it tries again later |
 | the menu entry does nothing visible | A2Qlinux is already running and was asked to show Questlog | look for the status window and Questlog's window |
 
 ## Removing A2Qlinux

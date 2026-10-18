@@ -61,6 +61,7 @@ Terms used below:
 | `questlog_desktop.py` | Linux | entry point of the menu entry and of `steam_launch.sh`; one launcher at a time |
 | `questlog_tray.py` | Linux, child of the launcher | our tray icon (PyQt6, drawn by KDE) |
 | `steam_launch.sh` | Linux, as Steam's launch option | starts the launcher with the game; lets the game join a running Questlog |
+| `questlog_update.py` | Linux, in the launcher | stages new Questlog versions in the background, installs them at the next start (§6.6) |
 | `install.py` | Linux, by hand | menu entry, icon, dependency check, build |
 | `bridge/wpcap.dll` | prefix, in Questlog's NodeService process | libpcap stand-in; window-order guard |
 | `bridge/questlog_ctl.exe` | prefix, started per command | hides/shows Questlog's tray icon, closes its window, ends its session |
@@ -387,9 +388,8 @@ but Questlog. It was written before `questlog_ctl.exe` existed and is kept for
 that case. `wineboot -e` must never be sent while the game runs or is
 starting (§5.2).
 
-Electron's auto-update installs on quit (`autoInstallOnAppQuit`). The session
-end skips that, so a downloaded update is never installed through the
-installer that fails under Wine (§7.5).
+Electron's auto-update would install on quit (`autoInstallOnAppQuit`); it is
+switched off (§6.6), and the session end would skip it anyway.
 
 ### 6.5 Signals between the menu entry and the launcher
 
@@ -412,6 +412,78 @@ was ending when signalled, it releases the lock instead of answering; the
 menu entry waits up to `HANDOVER_WAIT` (10 s) for that and then starts a new
 launcher.
 
+### 6.6 Updating Questlog
+
+Questlog updates itself with electron-updater: every 5 minutes it reads
+`https://cdn.questlog.gg/desktop/latest.yml`, downloads a newer installer in
+the background, and runs it on quit or from an "install" button in its
+window. Under Wine that installer stops (§7.5), so a downloaded update is
+never installed. `questlog_update.py` does the update instead, the same way as
+a manual update, which therefore remains the fallback (`docs/MANUAL.md`,
+"Updating Questlog"):
+
+```
+ launcher start ── disable_builtin_updater ── install_staged ── Questlog runs
+                                                   ^                  |
+                                                   |   60 s, then every 6 h,
+                                                   |   deferred while AION2.exe runs
+                                                   |                  v
+           <state>/update/<version>/app  <──── stage(): feed -> download ->
+           <state>/update/staged.json           size + SHA-512 -> 7z -> checks
+```
+
+1. **`disable_builtin_updater`** removes `resources/app-update.yml`, the only
+   configuration electron-updater runs on. Questlog then logs
+   `[updater] … ENOENT … app-update.yml` every 5 minutes and does nothing
+   else: it downloads nothing and never shows its "update ready" prompt,
+   which appears only after a download. Tested in a throwaway prefix.
+2. **`stage`**, in a thread (`check_for_updates` in `questlog_start.py`): first
+   check 60 s after the start, then every `UPDATE_CHECK_EVERY` (6 h). While
+   `AION2.exe` runs it waits instead (`UPDATE_CHECK_DEFER`, 10 min), so the
+   115 MB download never competes with the game's connection. It reads the
+   feed (`parse_feed`) and compares versions numerically. For a newer
+   version it downloads the installer with the User-Agent
+   `A2Qlinux (Questlog updater for Linux)`; the CDN answers Python's default
+   one with 403. It checks the size and SHA-512 against the feed, unpacks
+   the NSIS installer and its `$PLUGINSDIR/app-64.7z` with `7z`, and runs
+   `compatibility_problems`, which automates the checks of §10.
+   - Fits: the version is left staged, and the user is told it installs at
+     the next start (log and desktop notification).
+   - Does not fit: the unpacked files are deleted, and the user is told which
+     check failed and that the installed version stays.
+   - Either way the verdict is kept in `staged.json`, so the same version is
+     not downloaded again.
+3. **`install_staged`**, called by `start_questlog` before every Questlog
+   launch: if a version that fits is staged, the Questlog folder is renamed
+   to `<folder>-<old version>`, the staged files take its place, and
+   `proton-stream` moves across. The launcher's lock is an open file and
+   moves with it, so it stays held. One backup is kept: the previous one
+   made by A2Qlinux is deleted, recorded in `proton-stream/questlog-backup.json`.
+   Folders A2Qlinux did not make are never deleted.
+4. **Trial:** if the just-installed Questlog ends within `UPDATE_TRIAL`
+   (60 s) of its start, `rollback` puts the backup back, marks the version as
+   not fitting, notifies the user and starts the previous version.
+
+A busy lock (`BUSY`) keeps an install from meeting a half-written stage; an
+install that finds a stage in progress waits for a later start.
+`--no-auto-update` turns off steps 2–4. Step 1 stays, since the built-in
+updater cannot install under Wine anyway.
+
+**Why "at the next start".** That is when Questlog does not run, so the swap
+needs no shutdown; it is also what Questlog does on Windows. A swap while
+Questlog runs would mean ending it in the middle of a session.
+
+**Why an unknown Electron version blocks the install.** The tray icon id and
+the `WM_ENDSESSION` behaviour that `questlog_ctl.exe` relies on cannot be
+read from the binary, only from Electron's source for that version. A new
+Electron is reported to the user instead; adding it to `KNOWN_ELECTRON`
+after reading that source lets the next check install it.
+
+Checked against the real CDN (18 October 2026), on a copy of 0.1.29: feed,
+download, checksum, unpacking, checks and swap to 0.1.34 in 3.9 s. The result
+was identical to the manual installation of the same version, except for the
+removed `app-update.yml`.
+
 ## 7. Failure modes
 
 | Symptom | Cause | Where to look |
@@ -427,6 +499,9 @@ launcher.
 | "questlog_start.py is already running in another window" | second launcher refused (I1) | use the running one |
 | "Questlog is already running in the game prefix without the capture bridge" | Questlog started outside A2Qlinux | quit it from its own tray icon |
 | Tracker Map overlay blank after restarting Questlog mid-game | Questlog learns the character's zone only at login or zone change | change zone |
+| "Questlog update check failed (…)" | no network, CDN change | none; retried at the next check |
+| "Questlog X does not fit this A2Qlinux yet …" (notification) | a check of §10 failed | A2Qlinux needs a change for that version; the installed one stays |
+| "Questlog X ended within 60 s … going back" | the new version did not start under Proton | the previous version runs again; the failed one is in `<folder>-X-failed` |
 
 ### 7.1 `--no-sandbox`
 
@@ -470,8 +545,9 @@ processes whose environment points at the game's prefix. Never use
 The NSIS installer checks through PowerShell whether Questlog runs. Wine's
 PowerShell is a stub that answers "running", so the installer tries to close
 Questlog and gives up with code 2. Questlog is therefore installed by
-unpacking its files (`docs/MANUAL.md`, "Installing Questlog"). Its own
-updater downloads new versions fine but would start that same installer.
+unpacking its files (`docs/MANUAL.md`, "Installing Questlog"), and updated
+by `questlog_update.py` (§6.6). Its own updater downloads new versions fine
+but would start that same installer, so it is switched off.
 
 ## 8. Decisions and rejected alternatives
 
@@ -500,7 +576,7 @@ one** — §6.4.
 
 | What | How |
 |---|---|
-| launcher, bridge, quit logic | `python3 -m unittest` in the repository root |
+| launcher, bridge, quit logic, updates | `python3 -m unittest` in the repository root; the update tests build a fake installer with `7z` and run feed → download (`file://`) → checks → swap → rollback offline |
 | DLL against a live bridge | `bridge/tests/bridge_client_test.exe` in a throwaway prefix, with a running `BridgeServer` and `WINEDLLOVERRIDES=wpcap=n`; report in `C:\bridge_client_test.txt` (packets, delay) |
 | window-order guard | copy `bridge/tests/zorder_guard_test.exe` and `bridge/wpcap.dll` to an empty folder, then `WINEPREFIX=<throwaway> xvfb-run -a wine zorder_guard_test.exe 'Z:\<folder>\wpcap.dll'`; prints the order before and after, `PASS`/`FAIL` |
 | `questlog_ctl.exe` by hand | `protontricks-launch --appid 3393110 bridge/questlog_ctl.exe hide-tray` (or `show-tray`, `close-window`, `end-session`) |
@@ -519,13 +595,15 @@ own files.
 
 ## 10. What Questlog updates can break
 
-A2Qlinux depends on these properties of Questlog. Re-check them on every
-Questlog update (procedure in `docs/MANUAL.md`, "Updating Questlog"):
+A2Qlinux depends on these properties of Questlog. `compatibility_problems`
+in `questlog_update.py` checks all of them before an automatic update
+(§6.6); for a manual update, check them by hand (`docs/MANUAL.md`, "Updating
+Questlog"):
 
 | Property | Used by | How to check |
 |---|---|---|
 | the eleven pcap calls in §4.1 | `bridge/wpcap_bridge.c` | `grep -ohE 'pcap_[a-z_]+\(' …/workers/aion-2/*.cjs \| sort -u` in the unpacked `app.asar` |
-| Electron 44.5.1: tray icon id 3, `WM_ENDSESSION` ending the process | `questlog_ctl.exe` | `grep -aoE 'Electron/[0-9.]+' Questlog.exe`; for another version read `notify_icon_host.cc` and `native_window_views_win.cc` |
+| Electron 44.5.1 (`KNOWN_ELECTRON`): tray icon id 3, `WM_ENDSESSION` ending the process | `questlog_ctl.exe` | `grep -aoE 'Electron/[0-9.]+' Questlog.exe`; for another version read `notify_icon_host.cc` and `native_window_views_win.cc` |
 | `second-instance` shows the window | §6.3 | `grep -oE 'on\("second-instance",[^)]*\)' main.cjs` |
 | overlay windows non-activatable (`focusable: false`) | §6.1 | `grep -c 'focusable:!1' main.cjs` |
 | `resources/icon.png` in `app.asar` | `install.py` | rerun `install.py` |

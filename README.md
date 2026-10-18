@@ -19,7 +19,11 @@ game:
 - its own tray icon (Open / Quit) in place of Questlog's, whose menu opens
   only once under Proton;
 - quitting Questlog without losing its last data and without touching the
-  game or other programs in the prefix.
+  game or other programs in the prefix;
+- updating Questlog: its own updater cannot install under Proton, so A2Qlinux
+  downloads new versions in the background (not while the game runs), checks
+  them against what it relies on, installs them at the next start and rolls
+  back if they do not start.
 
 Status: in daily use on CachyOS, KDE Plasma 6 (Wayland), Proton 11
 (`proton-cachyos-slr`), Questlog 0.1.34. Other setups are untested.
@@ -49,6 +53,7 @@ Status: in daily use on CachyOS, KDE Plasma 6 (Wayland), Proton 11
 | `pcap_bridge.py` | TCP server that feeds captured packets to the DLL |
 | `questlog_desktop.py` | menu-entry and Steam entry point; one launcher at a time |
 | `questlog_tray.py` | tray icon (PyQt6) |
+| `questlog_update.py` | background Questlog updates: download, verify, check, install, roll back |
 | `steam_launch.sh` | Steam launch-option wrapper |
 | `install.py` | menu entry, icon, dependency check, build |
 | `bridge/` | Windows parts in C: `wpcap.dll` stand-in, `questlog_ctl.exe`, their tests; `build.sh` |

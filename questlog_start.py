@@ -36,6 +36,7 @@ import threading
 import time
 
 from pcap_bridge import BridgeServer, read_records
+import questlog_update
 
 APPID = 3393110
 GAME_PORT = 13328
@@ -515,6 +516,29 @@ def show_questlog_window(start_again):
 
 # ------------------------------------------------------------------- launch
 
+UPDATE_CHECK_EVERY = 6 * 3600   # s between checks for a new Questlog
+UPDATE_CHECK_DEFER = 600        # s to wait while the game runs: no 115 MB download during play
+UPDATE_TRIAL = 60               # s: a just-updated Questlog that exits sooner is rolled back
+
+
+def notify(text):
+    """Desktop notification, for what the user should know even with the terminal hidden."""
+    subprocess.run(["notify-send", "--app-name=Questlog (AION 2)",
+                    "--icon=" + str(Path.home() / ".local/share/icons/questlog-aion2.png"),
+                    "Questlog (AION 2)", text], check=False)
+
+
+def check_for_updates(questlog_dir, state_dir):
+    """Thread body: stage new Questlog versions, never while the game runs."""
+    time.sleep(60)
+    while True:
+        if game_processes(APPID, ["aion2.exe"])["aion2.exe"]:
+            time.sleep(UPDATE_CHECK_DEFER)
+            continue
+        questlog_update.stage(questlog_dir, state_dir, log, notify)
+        time.sleep(UPDATE_CHECK_EVERY)
+
+
 GAME_EXIT_GRACE = 15      # s without AION2.exe before Questlog is closed
 QUESTLOG_QUIT_WAIT = 20   # s for Questlog to quit after the session end
 
@@ -590,6 +614,9 @@ def main():
     parser.add_argument("--wait-for-game", action="store_true",
                         help="start Questlog only once AION 2 runs (the Steam launch option uses this); "
                              "default: start it at once, e.g. to look through saved fights")
+    parser.add_argument("--no-auto-update", action="store_true",
+                        help="do not download or install new Questlog versions (default: download them "
+                             "in the background and install them at the next start)")
     parser.add_argument("--close-with-game", action="store_true",
                         help=f"close Questlog {GAME_EXIT_GRACE} s after AION 2 exits "
                              "(default: Questlog stays open, e.g. to look through fights afterwards)")
@@ -642,9 +669,15 @@ def main():
             tray = Tray(requests)
             quit_control = QuitControl()
 
+            trial = {"until": 0.0}      # end of a just-installed update's trial run
+
             def start_questlog():
                 # A fresh Questlog shows its window anyway; earlier "open" requests are answered by that.
                 requests.take()
+                questlog_update.disable_builtin_updater(executable.parent, log)
+                if not args.no_auto_update and questlog_update.install_staged(executable.parent, state_dir, log):
+                    trial["until"] = time.monotonic() + UPDATE_TRIAL
+                log(f"Starting Questlog {questlog_update.installed_version(executable.parent) or '(version unknown)'}.")
                 started = launch_questlog(executable, server, address, protontricks, log_path)
                 tray.start()
                 hide_questlog_tray_icon(protontricks, log_path)
@@ -654,11 +687,24 @@ def main():
                 return launch_questlog(executable, server, address, protontricks, log_path)
 
             questlog = start_questlog()
+            if not args.no_auto_update:
+                threading.Thread(target=check_for_updates, args=(executable.parent, state_dir), daemon=True).start()
             told = False
             game_gone_since = None
             closing = False
             while True:
                 if questlog.poll() is not None:
+                    if time.monotonic() < trial["until"]:
+                        trial["until"] = 0.0
+                        version = questlog_update.installed_version(executable.parent)
+                        log(f"Questlog {version} ended within {UPDATE_TRIAL} s of its first start after the update "
+                            f"(code {questlog.returncode}); going back to the previous version.")
+                        tray.stop()
+                        if questlog_update.rollback(executable.parent, state_dir, log):
+                            notify(f"Questlog {version} did not start under Proton; went back to the previous "
+                                   "version. Details in the terminal window.")
+                            questlog = start_questlog()
+                            continue
                     break
                 for request in requests.take():
                     if request == "tray-died":

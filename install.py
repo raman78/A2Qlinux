@@ -16,13 +16,14 @@ Run it again after moving this checkout or Questlog's folder.
 """
 
 import argparse
-import json
 import os
 from pathlib import Path
 import shutil
 import struct
 import subprocess
 import sys
+
+from questlog_update import read_asar_file
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_QUESTLOG_DIR = Path.home() / "Games" / "Questlog"
@@ -33,6 +34,7 @@ MENU_ENTRY = Path.home() / ".local" / "share" / "applications" / f"{ENTRY_ID}.de
 # program -> what provides it (Arch / CachyOS package)
 NEEDED = {
     "dumpcap": "wireshark-cli (and membership of the 'wireshark' group)",
+    "7z": "p7zip (unpacks Questlog's installer for updates)",
     "protontricks-launch": "protontricks",
     "konsole": "konsole",
     "notify-send": "libnotify",
@@ -41,25 +43,6 @@ NEEDED = {
 }
 NEEDED_PYTHON = {"PyQt6": "python-pyqt6", "Xlib": "python-xlib"}
 NEEDED_TO_BUILD = {"clang": "clang", "ld.lld": "lld"}
-
-
-def read_asar_file(asar, name):
-    """One file from an Electron app.asar archive.
-
-    Layout: a 16-byte prefix (pickle sizes; the 4th field is the length of
-    the JSON header), the JSON header describing every file with an offset
-    relative to the end of the header pickle, then the file data. Files kept
-    outside the archive are in app.asar.unpacked.
-    """
-    with open(asar, "rb") as stream:
-        _, header_size, _, json_size = struct.unpack("<4I", stream.read(16))
-        node = json.loads(stream.read(json_size))
-        for part in name.split("/"):
-            node = node["files"][part]
-        if node.get("unpacked"):
-            return (Path(str(asar) + ".unpacked") / name).read_bytes()
-        stream.seek(8 + header_size + int(node["offset"]))
-        return stream.read(node["size"])
 
 
 def check_programs():
