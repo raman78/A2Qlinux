@@ -35,10 +35,21 @@ to Questlog, and it shows what A2Qlinux is doing. The line
 window closes by itself when Questlog quits. If something fails, it stays
 open with the message until you press Enter.
 
-**When the game ends**, Questlog stays open so you can look at your fights.
-Start the game again and the traffic flows to it again. If you would rather
-have Questlog close 15 seconds after the game, put `--close-with-game` between
-`a2qlinux-steam` and `%command%` in Steam's launch option.
+**When the game ends**, Questlog stays with you: look through your fights,
+use the database or the map. It also waits for the game: start it again and
+the traffic flows to Questlog again, whichever way you start it.
+
+About 15 seconds after the game ends, Questlog briefly closes and comes back,
+as it was: with its window open if it was open, otherwise only in the tray.
+This is what lets Steam see the game as closed. Under Proton, Steam
+counts the game as running for as long as anything else runs in the game's
+Windows environment, and Questlog runs in it because that is the only way it
+can see the game. Restarted, Questlog is in an environment of its own until
+you press Play again.
+
+If you would rather have Questlog close for good 15 seconds after the game,
+put `--close-with-game` between `a2qlinux-steam` and `%command%` in Steam's
+launch option.
 
 Tip: to see A2Qlinux's messages in the terminal you are in, instead of a new
 window, run `a2qlinux-run`.

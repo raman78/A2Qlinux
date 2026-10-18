@@ -3,6 +3,14 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
+## [Unreleased]
+
+### Fixed
+- Steam no longer shows AION 2 as running after the game is closed while
+  Questlog stays open: about 15 seconds after the game ends, Questlog restarts
+  on its own, as it was (window open or only in the tray), and keeps waiting
+  for the next start of the game.
+
 ## [0.1.0] — 2026-10-18
 
 First release.

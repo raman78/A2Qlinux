@@ -105,5 +105,29 @@ class SessionLockTest(unittest.TestCase):
                 q.os.close(fd)
 
 
+class WineSessionRunningTest(unittest.TestCase):
+    """A process whose executable is named wineserver, as the kernel reports it, with WINEPREFIX set."""
+
+    def test_finds_a_wineserver_by_prefix(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = Path(tmp) / "wineserver"
+            shutil.copy(shutil.which("sleep"), fake)
+            prefix = Path(tmp) / "pfx"
+            prefix.mkdir()
+            server = q.subprocess.Popen([str(fake), "30"], env={"WINEPREFIX": str(prefix) + "/"})
+            try:
+                for _ in range(50):                       # until the kernel shows the new name
+                    if q._read(f"/proc/{server.pid}/comm").strip() == "wineserver":
+                        break
+                    q.time.sleep(0.02)
+                self.assertTrue(q.wine_session_running(prefix))
+                self.assertFalse(q.wine_session_running(Path(tmp)))
+            finally:
+                server.kill()
+                server.wait()
+            self.assertFalse(q.wine_session_running(prefix))
+
+
 if __name__ == "__main__":
     unittest.main()

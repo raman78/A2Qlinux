@@ -33,7 +33,9 @@ Tags are `vMAJOR.MINOR.PATCH`; the package version is the tag without `v`
 
 ## 3. Write the changelog
 
-Add a section above the previous one in `CHANGELOG.md`:
+Changes are collected under `## [Unreleased]` while they are made; rename
+that heading to the version and date. Without such a section, add one above the
+previous release in `CHANGELOG.md`:
 
 ```markdown
 ## [X.Y.Z] — YYYY-MM-DD

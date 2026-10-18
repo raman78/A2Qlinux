@@ -494,6 +494,53 @@ download, checksum, unpacking, checks and swap to 0.1.34 in 3.9 s. The result
 was identical to the manual installation of the same version, except for the
 removed `app-update.yml`.
 
+### 6.7 Releasing Steam after the game
+
+**Symptom.** After the game is closed, Steam keeps showing AION 2 as running
+(and counting play time, with Stop instead of Play) for as long as Questlog
+runs.
+
+**Cause** (Proton's `steam_helper/steam.c`, Wine's `server/process.c`). The
+game is started by Proton's `steam.exe`, which marks itself a Wine *system*
+process (`ProcessWineMakeProcessSystem`) and waits on the event that request
+returns. Wineserver signals that event when no *user* process is left in the
+session. Questlog is a user process in the game's session, so `steam.exe`, the
+`proton` script above it and Steam's `reaper` wait for Questlog. This follows
+from sharing the session (§1), which Questlog needs to see the game.
+
+**Rejected: marking Questlog as a system process.** The server would accept
+it (`make_process_system` takes any process handle), but when the last user
+process ends it signals system processes to exit and kills them two seconds
+later (`server_shutdown_timeout`). Questlog would die about 5 s after the
+game, and at once when started without it. A Wine process cannot move to
+another session either; it is bound to its wineserver for life.
+
+**What the launcher does.** `GAME_EXIT_GRACE` (15 s) after `AION2.exe` is
+gone, unless `--close-with-game` or a quit is in progress:
+
+1. `find_questlog_window` records whether Questlog's main window is shown.
+2. `move_to_fresh_session`: `questlog_ctl.exe end-session`, then
+   `wait_for_questlog_exit`. No extra save wait: with the game gone no new
+   data arrives, and 15 s covers Questlog's 10 s flush.
+3. It waits up to `SESSION_END_WAIT` (30 s) until `wine_session_running`
+   finds no `wineserver` for the prefix (by `WINEPREFIX`, else
+   `STEAM_COMPAT_DATA_PATH/pfx`). The session is then over, and with it
+   `steam.exe` and the game's entry in Steam. If another program keeps the
+   session open (a second meter, say), this is logged, since Steam then stays
+   "running" because of that program.
+4. `start_questlog(hidden=not shown)` starts Questlog again on the same
+   bridge, with Questlog's own `--hidden` switch if its window was not shown.
+   It runs in a new session; the next Play joins that one (§5.1).
+
+Checked with a stand-in game (a process named `AION2.exe` with
+`SteamAppId=3393110`): exit seen, Questlog ended and restarted with its window
+as before, a new `wineserver`, one tray icon. Not yet with Steam and the real
+game.
+
+**Edge.** If Play is pressed in the few seconds while the old session shuts
+down, the game may join a session that is closing. Not observed; the window
+is a few seconds once in a session.
+
 ## 7. Failure modes
 
 | Symptom | Cause | Where to look |

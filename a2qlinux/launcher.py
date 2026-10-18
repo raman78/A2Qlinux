@@ -471,38 +471,50 @@ class Tray:
             process.wait(timeout=3)
 
 
+def find_questlog_window():
+    """X window id of Questlog's main window while it is shown, else None.
+
+    Shown windows are in the window manager's _NET_CLIENT_LIST; a hidden one
+    is not. Recognised by title "Questlog" and a _NET_WM_PID that is one of
+    Questlog's processes (overlay windows are not managed, so not listed).
+    """
+    from Xlib import X, display
+    screen = display.Display()
+    try:
+        pids = game_processes(APPID, ["questlog.exe"])["questlog.exe"]
+        listed = screen.screen().root.get_full_property(screen.intern_atom("_NET_CLIENT_LIST"), X.AnyPropertyType)
+        pid_atom = screen.intern_atom("_NET_WM_PID")
+        for wid in (listed.value if listed else []):
+            window = screen.create_resource_object("window", wid)
+            try:
+                name = window.get_wm_name()
+                pid = window.get_full_property(pid_atom, X.AnyPropertyType)
+            except Exception:      # the window went away meanwhile
+                continue
+            if isinstance(name, bytes):
+                name = name.decode("utf-8", "replace")
+            if name == "Questlog" and pid and pid.value[0] in pids:
+                return wid
+        return None
+    finally:
+        screen.close()
+
+
 def activate_questlog_window(timeout=15):
     """Bring Questlog's main window to the front once it is shown.
 
     Questlog shows it itself when it is started a second time, but Wine does
-    not let it take the focus (no recent user input in its process; docs/ARCHITECTURE.md §6.3),
-    so KWin is asked instead, through _NET_ACTIVE_WINDOW (xdotool).
+    not let it take the focus (no recent user input in its process;
+    docs/ARCHITECTURE.md §6.3), so KWin is asked instead, through
+    _NET_ACTIVE_WINDOW (xdotool).
     """
-    from Xlib import X, display
-    screen = display.Display()
-    root = screen.screen().root
-    client_list = screen.intern_atom("_NET_CLIENT_LIST")
-    pid_atom = screen.intern_atom("_NET_WM_PID")
     deadline = time.monotonic() + timeout
-    try:
-        while time.monotonic() < deadline:
-            pids = game_processes(APPID, ["questlog.exe"])["questlog.exe"]
-            listed = root.get_full_property(client_list, X.AnyPropertyType)
-            for wid in (listed.value if listed else []):
-                window = screen.create_resource_object("window", wid)
-                try:
-                    name = window.get_wm_name()
-                    pid = window.get_full_property(pid_atom, X.AnyPropertyType)
-                except Exception:      # the window went away meanwhile
-                    continue
-                if isinstance(name, bytes):
-                    name = name.decode("utf-8", "replace")
-                if name == "Questlog" and pid and pid.value[0] in pids:
-                    subprocess.run(["xdotool", "windowactivate", str(wid)], check=False)
-                    return True
-            time.sleep(0.3)
-    finally:
-        screen.close()
+    while time.monotonic() < deadline:
+        wid = find_questlog_window()
+        if wid:
+            subprocess.run(["xdotool", "windowactivate", str(wid)], check=False)
+            return True
+        time.sleep(0.3)
     log(f"Questlog's window did not appear within {timeout} s of asking for it.")
     return False
 
@@ -563,6 +575,50 @@ def wait_for_questlog_exit(saved_note):
         f"stopped its {len(left)} processes ({saved_note}).")
 
 
+def wine_session_running(prefix):
+    """True while a wineserver serves the game's prefix (WINEPREFIX, else STEAM_COMPAT_DATA_PATH/pfx)."""
+    prefix = Path(prefix).resolve()
+    uid = str(os.getuid())
+    with os.scandir("/proc") as entries:
+        for entry in entries:
+            if not entry.name.isdigit() or _read(f"/proc/{entry.name}/comm").strip() != "wineserver":
+                continue
+            status = dict(line.split(":", 1) for line in _read(f"/proc/{entry.name}/status").splitlines() if ":" in line)
+            if status.get("Uid", "").split()[:1] != [uid]:
+                continue
+            env = dict(item.split("=", 1) for item in _read(f"/proc/{entry.name}/environ").split("\0") if "=" in item)
+            served = env.get("WINEPREFIX") or (env.get("STEAM_COMPAT_DATA_PATH", "") + "/pfx")
+            if served and Path(served).resolve() == prefix:
+                return True
+    return False
+
+
+SESSION_END_WAIT = 30   # s for the game's Wine session to close once Questlog has gone
+
+
+def move_to_fresh_session(prefix, protontricks, log_path):
+    """End Questlog and wait until the game's Wine session is gone. Returns True if it went.
+
+    Proton's steam.exe, which started the game, waits until no ordinary
+    program is left in the Wine session - Questlog included - and Steam shows
+    the game as running until then (docs/ARCHITECTURE.md §6.7). Ending
+    Questlog lets the session close and Steam see the game end; the caller
+    then starts Questlog again in a session of its own.
+    """
+    run_ctl(protontricks, "end-session", log_path)
+    wait_for_questlog_exit("the game had been closed for "
+                           f"{GAME_EXIT_GRACE} s, so its data was saved")
+    deadline = time.monotonic() + SESSION_END_WAIT
+    while time.monotonic() < deadline:
+        if not wine_session_running(prefix):
+            return True
+        time.sleep(0.5)
+    log(f"The game's Wine session is still open {SESSION_END_WAIT} s after Questlog left it: another "
+        "program in the prefix keeps it (e.g. a second meter), and Steam shows AION 2 as running "
+        "until that program ends. Questlog starts again anyway.")
+    return False
+
+
 def close_questlog(prefix, protontricks, log_path):
     """Close Questlog after the game has gone, the way Windows does at log-off.
 
@@ -592,7 +648,7 @@ def close_questlog(prefix, protontricks, log_path):
             ender.wait(timeout=5)
 
 
-def launch_questlog(executable, server, address, protontricks, log_path):
+def launch_questlog(executable, server, address, protontricks, log_path, hidden=False):
     env = os.environ.copy()
     env["QUESTLOG_PROTON_BRIDGE"] = server.environment_value(address)
     # Wine ships a builtin wpcap.dll and loads it instead of ours even when
@@ -604,7 +660,9 @@ def launch_questlog(executable, server, address, protontricks, log_path):
     # Windows sandbox: the GPU process fails with error 39 and the renderers
     # never start, so Questlog quits or shows no pages. Wine does not enforce
     # the Windows security boundaries that sandbox relies on in any case.
-    return subprocess.Popen([protontricks, "--appid", str(APPID), str(executable), "--no-sandbox"],
+    # --hidden is Questlog's own switch: start with its window hidden, tray only.
+    extra = ["--hidden"] if hidden else []
+    return subprocess.Popen([protontricks, "--appid", str(APPID), str(executable), "--no-sandbox", *extra],
                             cwd=str(executable.parent), env=env, start_new_session=True,
                             stdin=subprocess.DEVNULL, stdout=log_path.open("ab"), stderr=subprocess.STDOUT)
 
@@ -673,14 +731,14 @@ def main():
 
             trial = {"until": 0.0}      # end of a just-installed update's trial run
 
-            def start_questlog():
-                # A fresh Questlog shows its window anyway; earlier "open" requests are answered by that.
+            def start_questlog(hidden=False):
+                # A fresh Questlog shows its window (unless hidden); earlier "open" requests are answered by that.
                 requests.take()
                 questlog_update.disable_builtin_updater(executable.parent, log)
                 if not args.no_auto_update and questlog_update.install_staged(executable.parent, state_dir, log):
                     trial["until"] = time.monotonic() + UPDATE_TRIAL
                 log(f"Starting Questlog {questlog_update.installed_version(executable.parent) or '(version unknown)'}.")
-                started = launch_questlog(executable, server, address, protontricks, log_path)
+                started = launch_questlog(executable, server, address, protontricks, log_path, hidden=hidden)
                 tray.start()
                 hide_questlog_tray_icon(protontricks, log_path)
                 return started
@@ -782,12 +840,28 @@ def main():
                     if args.close_with_game:
                         log(f"AION 2 has exited; closing Questlog in {GAME_EXIT_GRACE} s unless the game comes back.")
                     else:
-                        log("AION 2 has exited; Questlog stays open (quit it from its tray icon). "
-                            "Start the game again and traffic flows to it again.")
+                        log(f"AION 2 has exited. In {GAME_EXIT_GRACE} s Questlog restarts in the background, "
+                            "out of the game's Wine session, so that Steam sees the game as closed; it stays "
+                            "usable and waits for the next start of the game.")
                 elif args.close_with_game and not closing and time.monotonic() - game_gone_since >= GAME_EXIT_GRACE:
                     closing = True
                     tray.stop()
                     close_questlog(prefix, protontricks, log_path)
+                elif not args.close_with_game and not quit_control.quitting \
+                        and time.monotonic() - game_gone_since >= GAME_EXIT_GRACE:
+                    shown = find_questlog_window() is not None
+                    log("Moving Questlog out of the game's Wine session; back in a few seconds"
+                        + (" with its window open." if shown else ", in the tray."))
+                    move_to_fresh_session(prefix, protontricks, log_path)
+                    try:
+                        questlog.wait(timeout=30)
+                    except subprocess.TimeoutExpired:
+                        log("The previous Questlog launcher did not end; continuing anyway.")
+                    questlog = start_questlog(hidden=not shown)
+                    game_seen = False
+                    game_gone_since = None
+                    told = False
+                    continue
                 time.sleep(0.5)
             log(f"Questlog has exited (code {questlog.returncode}); its output is in {log_path}.")
             return 0
