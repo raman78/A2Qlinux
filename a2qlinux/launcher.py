@@ -594,6 +594,34 @@ def wine_session_running(prefix):
 
 
 SESSION_END_WAIT = 30   # s for the game's Wine session to close once Questlog has gone
+STEAM_HELPER_WAIT = 5   # s for an orphaned steam.exe to end after SIGTERM
+
+
+def end_orphaned_steam_helper():
+    """End the game's steam.exe if it outlived its Wine session. Returns how many were ended.
+
+    Call only once the game's session is gone. Proton's steam.exe waits for
+    the session's "no user process left" event; with Proton's ntsync waits it
+    was seen sleeping on after the session's wineserver had exited, never
+    woken, and Steam showed AION 2 as running until it was ended - by hand, or
+    here. SIGTERM ends it and, with it, Proton's script, the runtime container
+    and Steam's reaper, exactly as Steam's own Stop does (tested).
+    """
+    orphans = game_processes(APPID, ["steam.exe"])["steam.exe"]
+    for pid in orphans:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    deadline = time.monotonic() + STEAM_HELPER_WAIT
+    while orphans and time.monotonic() < deadline and game_processes(APPID, ["steam.exe"])["steam.exe"] & orphans:
+        time.sleep(0.2)
+    left = game_processes(APPID, ["steam.exe"])["steam.exe"] & orphans
+    if orphans:
+        log(f"Ended {len(orphans) - len(left)} of {len(orphans)} steam.exe left over from the game's launch "
+            "after its Wine session had closed; Steam sees AION 2 as closed now."
+            + (f" Still running: {sorted(left)} - use Stop in Steam." if left else ""))
+    return len(orphans) - len(left)
 
 
 def move_to_fresh_session(prefix, protontricks, log_path):
@@ -611,6 +639,7 @@ def move_to_fresh_session(prefix, protontricks, log_path):
     deadline = time.monotonic() + SESSION_END_WAIT
     while time.monotonic() < deadline:
         if not wine_session_running(prefix):
+            end_orphaned_steam_helper()
             return True
         time.sleep(0.5)
     log(f"The game's Wine session is still open {SESSION_END_WAIT} s after Questlog left it: another "

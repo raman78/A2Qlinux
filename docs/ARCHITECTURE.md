@@ -524,18 +524,31 @@ gone, unless `--close-with-game` or a quit is in progress:
    data arrives, and 15 s covers Questlog's 10 s flush.
 3. It waits up to `SESSION_END_WAIT` (30 s) until `wine_session_running`
    finds no `wineserver` for the prefix (by `WINEPREFIX`, else
-   `STEAM_COMPAT_DATA_PATH/pfx`). The session is then over, and with it
-   `steam.exe` and the game's entry in Steam. If another program keeps the
-   session open (a second meter, say), this is logged, since Steam then stays
-   "running" because of that program.
+   `STEAM_COMPAT_DATA_PATH/pfx`). The session is then over. If another
+   program keeps the session open (a second meter, say), this is logged,
+   since Steam then stays "running" because of that program, and step 4
+   follows without step 3b.
+3b. `end_orphaned_steam_helper`: any `steam.exe` with the game's app id still
+   alive at this point gets SIGTERM. Observed with the real game: the
+   session's wineserver had exited, yet `steam.exe` slept on in the kernel
+   (all three threads in `ntsync_schedule`: Proton's ntsync waits do not go
+   through the server, so the server's exit does not wake them), and Steam
+   showed the game running for hours. Why the server had not set the
+   shutdown event before exiting is not known. SIGTERM ended `steam.exe`, the
+   `proton` script, the runtime container and Steam's `reaper` within a
+   second, and Steam showed Play again, the same result as Steam's own Stop.
+   Only processes carrying the game's app id are touched, and only once its
+   session is gone.
 4. `start_questlog(hidden=not shown)` starts Questlog again on the same
    bridge, with Questlog's own `--hidden` switch if its window was not shown.
    It runs in a new session; the next Play joins that one (§5.1).
 
 Checked with a stand-in game (a process named `AION2.exe` with
 `SteamAppId=3393110`): exit seen, Questlog ended and restarted with its window
-as before, a new `wineserver`, one tray icon. Not yet with Steam and the real
-game.
+as before, a new `wineserver`, one tray icon. With the real game the session
+ended as intended, but Steam stayed "running" until step 3b, which was added
+after that run and tested by hand on the orphaned `steam.exe` (18 October
+2026); the full sequence with the game is still to be run.
 
 **Edge.** If Play is pressed in the few seconds while the old session shuts
 down, the game may join a session that is closing. Not observed; the window

@@ -105,6 +105,29 @@ class SessionLockTest(unittest.TestCase):
                 q.os.close(fd)
 
 
+class OrphanedSteamHelperTest(unittest.TestCase):
+    """Only a steam.exe carrying the game's app id is ended."""
+
+    def test_ends_the_games_steam_exe_and_nothing_else(self):
+        def start(appid):
+            return q.subprocess.Popen(["bash", "-c", "exec -a 'c:\\windows\\system32\\steam.exe' sleep 30"],
+                                      env={"SteamAppId": appid, "PATH": "/usr/bin:/bin"})
+        ours, other = start(str(q.APPID)), start("12345")
+        try:
+            for _ in range(50):                           # until both have exec'd under the new name
+                if ours.pid in q.game_processes(q.APPID, ["steam.exe"])["steam.exe"]:
+                    break
+                q.time.sleep(0.02)
+            self.assertEqual(q.end_orphaned_steam_helper(), 1)
+            self.assertIsNotNone(ours.wait(timeout=5))
+            self.assertIsNone(other.poll())
+        finally:
+            for process in (ours, other):
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
+
+
 class WineSessionRunningTest(unittest.TestCase):
     """A process whose executable is named wineserver, as the kernel reports it, with WINEPREFIX set."""
 
