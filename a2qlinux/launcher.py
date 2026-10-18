@@ -15,8 +15,9 @@ opens at once, game or not; with --wait-for-game only once the game runs.
 
 While Questlog runs, its tray icon is ours (a2qlinux/tray.py, drawn by KDE):
 Questlog's own icon is hidden because under Wine its menu opens only once.
-"Quit Questlog" there hides Questlog at once and ends it SAVE_WAIT seconds
-later, once it has saved; asking for it again before then keeps it running.
+"Quit Questlog" there ends Questlog once it has saved: at once if no game
+data reached it in the last SAVE_WAIT seconds, else hidden at once and ended
+SAVE_WAIT seconds after the last data; asking for it again before then keeps it running.
 The desktop entry asks this launcher through signals (the PID is in the lock
 file): SIGUSR1 = open Questlog's window, SIGUSR2 = keep Questlog running.
 """
@@ -281,6 +282,7 @@ def pump_records(stream, server, status):
             server.publish(header, record)
             if record is not None:
                 status["packets"] += 1
+                status["last_packet"] = time.monotonic()
         status["error"] = "dumpcap stopped. Check capture permission: dumpcap -D"
     except (ValueError, OSError) as error:
         status["error"] = f"Capture stream unreadable: {error}"
@@ -312,7 +314,7 @@ def session_lock(directory):
 # ----------------------------------------------------------- tray and quit
 
 CTL = BIN / "questlog_ctl.exe"
-SAVE_WAIT = 12   # s from "Quit Questlog" to its end: Questlog saves pending data within 10 s
+SAVE_WAIT = 10.5   # s after the last game data before Questlog may be ended: it saves pending data within 10 s
 
 
 class Requests:
@@ -338,50 +340,53 @@ class Requests:
 class QuitControl:
     """Quitting from our tray icon, and the requests that call it off.
 
-    "Quit Questlog" does not end Questlog at once: Electron's session end
-    (the only way to end it from outside) skips Questlog's own saving, and
-    Questlog writes pending data only every 10 s. So it is hidden at once -
-    our icon goes, its window closes to the background - and ended SAVE_WAIT
-    seconds later. Opening it again before then (SIGUSR1, our icon) or the
-    game being started from Steam (SIGUSR2) calls the quit off.
+    Electron's session end - the only way to end Questlog from outside - skips
+    Questlog's own saving, and Questlog writes pending data within 10 s of
+    receiving it. So Questlog is ended SAVE_WAIT seconds after the last game
+    data reached it: at once if that was long enough ago (no game, or the game
+    closed), otherwise hidden at once - our icon goes, its window closes to the
+    background - and ended when the time is up. Opening it again before then
+    (SIGUSR1, our icon) or the game being started from Steam (SIGUSR2) calls
+    the quit off.
 
     handle() returns the actions to carry out, in order:
       tray-off / tray-on   stop / start our tray icon
-      close-window         hide Questlog's main window
+      close-window         hide Questlog's main window (only when ending is not immediate)
       show-window          show Questlog's main window
     """
 
     def __init__(self, save_wait=SAVE_WAIT):
         self.save_wait = save_wait
-        self.quitting_since = None
+        self.due_at = None
 
     @property
     def quitting(self):
-        return self.quitting_since is not None
+        return self.due_at is not None
 
-    def handle(self, request, now):
+    def handle(self, request, now, last_data=None):
+        """last_data: monotonic time of the last game data Questlog received, or None."""
         if request == "quit":
             if self.quitting:
                 return []
-            self.quitting_since = now
-            return ["tray-off", "close-window"]
+            self.due_at = max(now, last_data + self.save_wait) if last_data is not None else now
+            return ["tray-off"] if self.due_at <= now else ["tray-off", "close-window"]
         if request == "open":
             if self.quitting:
-                self.quitting_since = None
+                self.due_at = None
                 return ["tray-on", "show-window"]
             return ["show-window"]
         if request == "keep":
             if self.quitting:
-                self.quitting_since = None
+                self.due_at = None
                 return ["tray-on"]
             return []
         raise ValueError(f"unknown request {request!r}")
 
     def due(self, now):
-        return self.quitting and now - self.quitting_since >= self.save_wait
+        return self.quitting and now >= self.due_at
 
     def reset(self):
-        self.quitting_since = None
+        self.due_at = None
 
 
 def run_ctl(protontricks, command, log_path):
@@ -801,7 +806,7 @@ def main():
                         run_ctl_async(protontricks, "show-tray", log_path)
                         continue
                     was_quitting = quit_control.quitting
-                    for action in quit_control.handle(request, time.monotonic()):
+                    for action in quit_control.handle(request, time.monotonic(), status.get("last_packet")):
                         if action == "tray-off":
                             tray.stop()
                         elif action == "tray-on":
@@ -811,8 +816,13 @@ def main():
                         elif action == "show-window":
                             show_questlog_window(start_again)
                     if request == "quit" and not was_quitting:
-                        log(f"Quitting Questlog: hidden now, ended in {SAVE_WAIT} s once it has saved. "
-                            "Open it again before then (its menu entry or icon) and it keeps running.")
+                        left = max(0.0, quit_control.due_at - time.monotonic())
+                        if left > 0.5:
+                            log(f"Quitting Questlog: hidden now, ended in {left:.0f} s, once it has saved the "
+                                "last game data. Open it again before then and it keeps running.")
+                        else:
+                            log("Quitting Questlog now (no game data in the last "
+                                f"{SAVE_WAIT:.0f} s, so nothing is waiting to be saved).")
                     elif request in ("open", "keep") and was_quitting:
                         log("Quit called off: Questlog was asked for again; it keeps running.")
                     elif request == "open":
@@ -822,7 +832,7 @@ def main():
                 if quit_control.due(time.monotonic()):
                     log("Ending Questlog's session now.")
                     run_ctl(protontricks, "end-session", log_path)
-                    wait_for_questlog_exit(f"it had {SAVE_WAIT} s to save")
+                    wait_for_questlog_exit(f"it had {SAVE_WAIT:.0f} s since the last game data to save")
                     try:
                         questlog.wait(timeout=30)
                     except subprocess.TimeoutExpired:

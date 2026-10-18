@@ -47,25 +47,33 @@ class InstallBridgeDllTest(unittest.TestCase):
 
 class QuitControlTest(unittest.TestCase):
     def setUp(self):
-        self.control = q.QuitControl(save_wait=12)
+        self.control = q.QuitControl(save_wait=10.5)
 
-    def test_quit_hides_at_once_and_ends_after_the_save_wait(self):
-        self.assertEqual(self.control.handle("quit", 100.0), ["tray-off", "close-window"])
-        self.assertFalse(self.control.due(111.9))
-        self.assertTrue(self.control.due(112.0))
+    def test_without_game_data_quit_is_immediate(self):
+        self.assertEqual(self.control.handle("quit", 100.0, last_data=None), ["tray-off"])
+        self.assertTrue(self.control.due(100.0))
+
+    def test_old_game_data_does_not_delay_the_quit(self):
+        self.assertEqual(self.control.handle("quit", 100.0, last_data=80.0), ["tray-off"])
+        self.assertTrue(self.control.due(100.0))
+
+    def test_recent_game_data_hides_now_and_ends_after_the_save_wait(self):
+        self.assertEqual(self.control.handle("quit", 100.0, last_data=99.0), ["tray-off", "close-window"])
+        self.assertFalse(self.control.due(109.4))
+        self.assertTrue(self.control.due(109.5))
 
     def test_second_quit_changes_nothing(self):
-        self.control.handle("quit", 100.0)
-        self.assertEqual(self.control.handle("quit", 105.0), [])
-        self.assertTrue(self.control.due(112.0))
+        self.control.handle("quit", 100.0, last_data=99.0)
+        self.assertEqual(self.control.handle("quit", 105.0, last_data=104.0), [])
+        self.assertTrue(self.control.due(109.5))
 
     def test_open_while_quitting_calls_the_quit_off_and_shows_the_window(self):
-        self.control.handle("quit", 100.0)
+        self.control.handle("quit", 100.0, last_data=99.0)
         self.assertEqual(self.control.handle("open", 103.0), ["tray-on", "show-window"])
         self.assertFalse(self.control.due(200.0))
 
     def test_keep_while_quitting_calls_the_quit_off_without_a_window(self):
-        self.control.handle("quit", 100.0)
+        self.control.handle("quit", 100.0, last_data=99.0)
         self.assertEqual(self.control.handle("keep", 103.0), ["tray-on"])
         self.assertFalse(self.control.due(200.0))
 

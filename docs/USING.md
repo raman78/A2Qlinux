@@ -73,16 +73,19 @@ its menu opens only once and then stops responding.
 |---|---|
 | left-click the icon, or **Open Questlog** | Questlog's window opens in front, after about 3 seconds |
 | close Questlog's window (X) | the window hides; Questlog keeps running in the background |
-| **Quit Questlog** | the icon and window disappear at once; Questlog finishes saving and ends about 12 seconds later; the status window then closes |
+| **Quit Questlog** | the icon and window disappear at once; Questlog ends within about a second, or, while the game is running, up to 10 seconds later once it has saved; the status window then closes |
 | start "Questlog (AION 2)" while Questlog runs | Questlog's window opens; no second copy starts |
 
-**Why quitting takes 12 seconds.** Questlog saves its data every few seconds,
-and the only way to end it from outside under Proton skips its last save. So
-A2Qlinux hides it first, gives it time to save everything, and only then
-ends it. The game is not touched.
+**Why quitting can take 10 seconds.** Questlog writes what it learns from the
+game to disk within 10 seconds, and the only way to end it from outside under
+Proton skips its last save. So A2Qlinux waits until 10 seconds have passed
+since the last game data reached Questlog. Without the game (or a while after
+closing it) that is already the case and Questlog ends at once; while you
+play, it is hidden first and ended when the 10 seconds are up. The game is
+not touched.
 
-**Changed your mind?** If you start "Questlog (AION 2)" from the menu within
-those 12 seconds, or press Play in Steam, the quit is called off: the icon
+**Changed your mind?** If you start "Questlog (AION 2)" from the menu during
+that wait, or press Play in Steam, the quit is called off: the icon
 comes back and Questlog keeps running. If it had already ended, a fresh
 Questlog starts.
 

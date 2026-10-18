@@ -362,13 +362,18 @@ where Questlog flushes pending data. Questlog writes that data on its own at
 most 10 s after it changes: the combat worker flushes every 10 s, and
 deferred saves wait 10 s.
 
-So "Quit Questlog" in our tray (`QuitControl` in `a2qlinux/launcher.py`) works
-in two stages:
+So "Quit Questlog" in our tray (`QuitControl` in `a2qlinux/launcher.py`)
+ends Questlog `SAVE_WAIT` (10.5 s) after the last game data reached it, not
+after the click. The launcher knows when that was: every packet passes
+through its bridge, and `pump_records` stamps the time
+(`status["last_packet"]`). Without the game, or with the game closed for
+10.5 s, nothing is pending and Questlog ends at once, in about 1 s. With the
+game running, packets keep arriving, so the quit takes up to 10.5 s:
 
 ```
- "quit" ---> tray-off, close-window (Questlog hides; keeps running)
-               |
-               |  SAVE_WAIT = 12 s
+ "quit" ---> tray-off (+ close-window if the end is not immediate:
+               |       Questlog hides, keeps running)
+               |  until SAVE_WAIT after the last game data (0 if long ago)
                v
              questlog_ctl.exe end-session      (WM_QUERYENDSESSION,
                |                                 WM_ENDSESSION -> its main
@@ -386,7 +391,7 @@ in two stages:
   program in the session.
 - Measured in the prefix and in a throwaway prefix: Questlog and all its
   processes are gone about 0.1 s after `end-session`.
-- An "open" (`SIGUSR1`, tray) or "keep" (`SIGUSR2`, Steam) during the 12 s
+- An "open" (`SIGUSR1`, tray) or "keep" (`SIGUSR2`, Steam) during the wait
   calls the quit off: the tray comes back, and for "open" the window is
   shown. Once `end-session` has been sent, such a request makes the launcher
   start Questlog again on the same bridge after it has gone.
@@ -684,7 +689,7 @@ in `a2qlinux/update.py` checks all of them before an automatic update
    should: `end-session` reaches only Questlog's window. Not yet observed with
    the game.
 2. Does Questlog keep its upload queue to questlog.gg (every 60 s) only in
-   memory? If so, the 12 s before the session end do not drain it.
+   memory? If so, the wait before the session end does not drain it.
 3. Questlog's desktop notifications for alerts do not work under Wine:
    `Windows.UI.Notifications.ToastNotificationManager` is missing, and
    Questlog logs `[alerts] Notifications are not supported, skipped <name>`.

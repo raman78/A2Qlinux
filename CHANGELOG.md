@@ -5,6 +5,11 @@ What changed for players, release by release. Technical details are in
 
 ## [Unreleased]
 
+### Changed
+- Quit Questlog ends it at once when no game data is waiting to be saved
+  (without the game, or a while after closing it); while playing, it still
+  waits until the last data is saved, at most about 10 seconds.
+
 ### Fixed
 - Steam no longer shows AION 2 as running after the game is closed while
   Questlog stays open: about 15 seconds after the game ends, Questlog restarts
