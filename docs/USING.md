@@ -16,12 +16,14 @@ traffic by itself. Your character appears in Questlog after you log in or
 change zone.
 
 **Together with the game, from Steam.** In Steam, open AION 2's Properties >
-General > Launch Options and paste the line `install.py` printed. It looks
-like this:
+General > Launch Options and paste the line `a2qlinux-setup` printed. It
+looks like this:
 
 ```
-/path/to/A2Qlinux/steam_launch.sh %command%
+/home/<you>/.local/bin/a2qlinux-steam %command%
 ```
+
+The full path matters: Steam does not look in `~/.local/bin` by itself.
 
 From then on, Play starts the game first and Questlog a moment later, once
 the game runs. If Questlog is already open when you press Play, the game
@@ -35,8 +37,11 @@ open with the message until you press Enter.
 
 **When the game ends**, Questlog stays open so you can look at your fights.
 Start the game again and the traffic flows to it again. If you would rather
-have Questlog close 15 seconds after the game, put `--close-with-game` before
-`%command%` in Steam's launch option.
+have Questlog close 15 seconds after the game, put `--close-with-game` between
+`a2qlinux-steam` and `%command%` in Steam's launch option.
+
+Tip: to see A2Qlinux's messages in the terminal you are in, instead of a new
+window, run `a2qlinux-run`.
 
 ## The tray icon
 

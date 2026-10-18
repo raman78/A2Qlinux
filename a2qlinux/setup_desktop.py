@@ -1,18 +1,18 @@
-#!/usr/bin/env python3
-"""Install A2Qlinux's desktop entry for Questlog (AION 2) and check what it needs.
+"""a2qlinux-setup: the menu entry for Questlog (AION 2), and a check of what A2Qlinux needs.
 
-    python3 install.py [--questlog-dir DIR] [--desktop-shortcut]
+    a2qlinux-setup [--questlog-dir DIR] [--desktop-shortcut]
 
 What it does, in order:
   1. Checks the programs A2Qlinux uses and names the missing ones; installs nothing.
-  2. Builds the Windows parts (bridge/build.sh) if they are not built yet.
+  2. Checks that the Windows parts are present: shipped in the package, built
+     by bridge/build.sh in a source checkout.
   3. Takes Questlog's icon from the installed Questlog (resources/icon.png in
      its app.asar) - the icon is Questlog's and is not shipped here.
   4. Writes the menu entry "Questlog (AION 2)" (and, with --desktop-shortcut,
-     the same on the desktop), pointing at this checkout.
+     the same on the desktop), running the `a2qlinux` command.
   5. Prints the Steam launch option to set by hand.
 
-Run it again after moving this checkout or Questlog's folder.
+Run it again after moving Questlog's folder.
 """
 
 import argparse
@@ -23,9 +23,9 @@ import struct
 import subprocess
 import sys
 
-from questlog_update import read_asar_file
+from .update import read_asar_file
 
-HERE = Path(__file__).resolve().parent
+BIN = Path(__file__).resolve().parent / "bin"
 DEFAULT_QUESTLOG_DIR = Path.home() / "Games" / "Questlog"
 ENTRY_ID = "questlog-aion2"
 ICON = Path.home() / ".local" / "share" / "icons" / f"{ENTRY_ID}.png"
@@ -42,7 +42,6 @@ NEEDED = {
     "systemd-run": "systemd",
 }
 NEEDED_PYTHON = {"PyQt6": "python-pyqt6", "Xlib": "python-xlib"}
-NEEDED_TO_BUILD = {"clang": "clang", "ld.lld": "lld"}
 
 
 def check_programs():
@@ -56,33 +55,94 @@ def check_programs():
     return missing
 
 
-def build_windows_parts():
-    built = [HERE / "bridge" / "wpcap.dll", HERE / "bridge" / "questlog_ctl.exe"]
-    if all(path.is_file() for path in built):
-        return None
-    missing = [f"{program} ({package})" for program, package in NEEDED_TO_BUILD.items() if not shutil.which(program)]
-    if not Path("/usr/include/wine/windows/windows.h").is_file():
-        missing.append("Wine's headers (wine)")
+def windows_parts_problem():
+    missing = [name for name in ("wpcap.dll", "questlog_ctl.exe") if not (BIN / name).is_file()]
     if missing:
-        return "cannot build the Windows parts, missing: " + ", ".join(missing)
-    result = subprocess.run(["bash", str(HERE / "bridge" / "build.sh")], capture_output=True, text=True)
-    if result.returncode:
-        return "bridge/build.sh failed:\n" + result.stdout + result.stderr
+        return (f"{', '.join(missing)} missing from {BIN}; in a source checkout run: bash bridge/build.sh "
+                "(needs clang, lld and wine)")
     return None
 
 
+def command(name):
+    """Absolute path of one of A2Qlinux's commands, as installed with this Python.
+
+    pipx links the commands into ~/.local/bin and keeps them in the
+    environment's bin folder; either works, the first is stable across upgrades.
+    """
+    found = shutil.which(name)
+    if found:
+        return found
+    beside = Path(sys.executable).parent / name
+    if beside.is_file():
+        return str(beside)
+    raise RuntimeError(f"the command {name} is not installed; install A2Qlinux with pipx first")
+
+
 def desktop_entry(questlog_dir):
-    command = f"python3 {HERE / 'questlog_desktop.py'}"
+    run = command("a2qlinux")
     if questlog_dir != DEFAULT_QUESTLOG_DIR:
-        command = f"env QUESTLOG_DIR={questlog_dir} {command}"
+        run = f"env QUESTLOG_DIR={questlog_dir} {run}"
     return ("[Desktop Entry]\n"
             "Type=Application\n"
             "Name=Questlog (AION 2)\n"
             "Comment=Questlog Desktop for AION 2 under Proton, fed with live game traffic\n"
-            f"Exec={command}\n"
+            f"Exec={run}\n"
             f"Icon={ICON}\n"
             "Terminal=false\n"
             "Categories=Game;\n")
+
+
+def desktop_shortcut_path():
+    folder = subprocess.run(["xdg-user-dir", "DESKTOP"], capture_output=True, text=True).stdout.strip()
+    return Path(folder or Path.home() / "Desktop") / f"{ENTRY_ID}.desktop"
+
+
+def entry_command(path):
+    """The program an existing entry runs (after any `env VAR=…`), or None."""
+    try:
+        text = Path(path).read_text()
+    except OSError:
+        return None
+    for line in text.splitlines():
+        if line.startswith("Exec="):
+            words = line[len("Exec="):].split()
+            if words and words[0] == "env":
+                words = [w for w in words[1:] if "=" not in w]
+            return words[0] if words else None
+    return None
+
+
+def refresh_entries(log=lambda text: None):
+    """Keep the menu entry (and an existing desktop shortcut) pointing at this installation.
+
+    Run on every start of `a2qlinux`, like sto-clare does for its own entry.
+    An entry whose command is this installation's `a2qlinux` is left alone,
+    with any options added to it by hand; any other - missing, from an older
+    layout (python3 …/questlog_desktop.py), or from an installation that was
+    moved or removed - is written again. The desktop shortcut is only
+    rewritten if it exists. Returns the paths written.
+    """
+    ours = command("a2qlinux")
+    questlog_dir = Path(os.environ.get("QUESTLOG_DIR") or DEFAULT_QUESTLOG_DIR).expanduser().resolve()
+    written = []
+    for path, create in ((MENU_ENTRY, True), (desktop_shortcut_path(), False)):
+        if not path.exists() and not create:
+            continue
+        if entry_command(path) == ours:
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(desktop_entry(questlog_dir))
+        if path != MENU_ENTRY:
+            path.chmod(0o755)
+        log(f"Rewrote {path}: it did not run this installation's a2qlinux.")
+        written.append(path)
+    if not ICON.exists():
+        try:
+            ICON.parent.mkdir(parents=True, exist_ok=True)
+            ICON.write_bytes(read_asar_file(questlog_dir / "resources" / "app.asar", "resources/icon.png"))
+        except (OSError, KeyError, ValueError, struct.error):
+            pass                  # the entry works without its icon; a2qlinux-setup reports why
+    return written
 
 
 def main():
@@ -99,9 +159,9 @@ def main():
     if missing:
         problems.append("missing: " + "; ".join(missing))
 
-    build_problem = build_windows_parts()
-    if build_problem:
-        problems.append(build_problem)
+    parts_problem = windows_parts_problem()
+    if parts_problem:
+        problems.append(parts_problem)
 
     asar = questlog_dir / "resources" / "app.asar"
     if not (questlog_dir / "Questlog.exe").is_file():
@@ -116,21 +176,23 @@ def main():
         except (OSError, KeyError, ValueError, struct.error) as error:
             problems.append(f"could not take Questlog's icon from {asar}: {error!r}")
 
-    entry = desktop_entry(questlog_dir)
+    try:
+        entry = desktop_entry(questlog_dir)
+    except RuntimeError as error:
+        print(f"a2qlinux-setup: {error}", file=sys.stderr)
+        return 1
     MENU_ENTRY.parent.mkdir(parents=True, exist_ok=True)
     MENU_ENTRY.write_text(entry)
     print(f"Menu entry: {MENU_ENTRY}")
     if args.desktop_shortcut:
-        desktop = Path(subprocess.run(["xdg-user-dir", "DESKTOP"], capture_output=True, text=True).stdout.strip()
-                       or Path.home() / "Desktop")
-        shortcut = desktop / f"{ENTRY_ID}.desktop"
+        shortcut = desktop_shortcut_path()
         shortcut.write_text(entry)
         shortcut.chmod(0o755)
         print(f"Desktop shortcut: {shortcut}")
 
     prefix = "" if questlog_dir == DEFAULT_QUESTLOG_DIR else f"QUESTLOG_DIR={questlog_dir} "
     print("\nSteam > AION 2 > Properties > General > Launch Options (optional, starts Questlog with the game):")
-    print(f"    {prefix}{HERE / 'steam_launch.sh'} %command%")
+    print(f"    {prefix}{command('a2qlinux-steam')} %command%")
 
     if problems:
         print("\nNot ready yet:", file=sys.stderr)

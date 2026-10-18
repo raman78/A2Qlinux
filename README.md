@@ -34,9 +34,12 @@ Status: in daily use on CachyOS, KDE Plasma 6 (Wayland), Proton 11
    [docs/INSTALL.md](docs/INSTALL.md#what-you-need-before-you-start).
 2. Unpack Questlog to `~/Games/Questlog` — see
    [Installing Questlog](docs/INSTALL.md#installing-questlog).
-3. In this folder: `python3 install.py --desktop-shortcut`
+3. Install A2Qlinux with pipx from the wheel of the newest release, then
+   create the menu entry — see
+   [Installing A2Qlinux](docs/INSTALL.md#installing-a2qlinux):
+   `pipx install ./a2qlinux-<version>-py3-none-any.whl && a2qlinux-setup --desktop-shortcut`
 4. Start **Questlog (AION 2)** from the menu, or set the Steam launch option
-   that `install.py` prints.
+   that `a2qlinux-setup` prints.
 
 ## Documentation
 
@@ -51,20 +54,22 @@ Status: in daily use on CachyOS, KDE Plasma 6 (Wayland), Proton 11
 
 | Path | What |
 |---|---|
-| `questlog_start.py` | launcher: capture, bridge, starting/quitting Questlog, tray |
-| `pcap_bridge.py` | TCP server that feeds captured packets to the DLL |
-| `questlog_desktop.py` | menu-entry and Steam entry point; one launcher at a time |
-| `questlog_tray.py` | tray icon (PyQt6) |
-| `questlog_update.py` | background Questlog updates: download, verify, check, install, roll back |
-| `steam_launch.sh` | Steam launch-option wrapper |
-| `install.py` | menu entry, icon, dependency check, build |
+| `a2qlinux/launcher.py` | launcher (`a2qlinux-run`): capture, bridge, starting/quitting Questlog, tray |
+| `a2qlinux/pcap_bridge.py` | TCP server that feeds captured packets to the DLL |
+| `a2qlinux/desktop.py` | `a2qlinux`: menu-entry entry point; one launcher at a time |
+| `a2qlinux/tray.py` | tray icon (PyQt6) |
+| `a2qlinux/update.py` | background Questlog updates: download, verify, check, install, roll back |
+| `a2qlinux/steam.py` | `a2qlinux-steam`: Steam launch-option wrapper |
+| `a2qlinux/setup_desktop.py` | `a2qlinux-setup`: menu entry, icon, dependency check |
+| `a2qlinux/bin/` | the built Windows parts (shipped in the package, not in git) |
 | `bridge/` | Windows parts in C: `wpcap.dll` stand-in, `questlog_ctl.exe`, their tests; `build.sh` |
 | `tests/` | Python tests: `python3 -m unittest` |
 | `tools/` | diagnostics: replay-file tools, TCP-owner probe |
 
 The Windows parts are built with `clang` against the installed Wine's headers
-(`bridge/build.sh`, run by `install.py`); built files are not kept in the
-repository.
+(`bridge/build.sh`) — by the release workflow for the packages, by hand in a
+source checkout; built files are not kept in the repository. Releasing:
+[docs/RELEASE.md](docs/RELEASE.md).
 
 ## Not affiliated
 

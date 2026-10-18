@@ -3,7 +3,7 @@
  * Questlog captures game traffic by calling a handful of libpcap functions in
  * C:\Windows\System32\Npcap\wpcap.dll. Npcap is a Windows driver and cannot
  * work under Wine, so this DLL takes its place: it hands Questlog the packets
- * that questlog_start.py captures with dumpcap on the Linux side, over a
+ * that A2Qlinux's launcher captures with dumpcap on the Linux side, over a
  * localhost TCP connection.
  *
  * Only the calls Questlog makes are implemented. Their behaviour follows what
@@ -14,7 +14,7 @@
  *   pcap_next_ex       1 = packet, 0 = none waiting (non-blocking), -1 = error
  *   pcap_compile/setfilter  accepted and ignored: dumpcap filters already
  *
- * Configuration comes from the environment, set by questlog_start.py:
+ * Configuration comes from the environment, set by the launcher:
  *   QUESTLOG_PROTON_BRIDGE=<host>:<port>:<token>:<local IPv4>
  * Without it every entry point fails with a message saying so, which Questlog
  * shows in its interface instead of silently counting nothing.
@@ -87,7 +87,7 @@ static int read_config(struct config *c, char *errbuf)
     DWORD n = GetEnvironmentVariableA("QUESTLOG_PROTON_BRIDGE", value, sizeof(value));
     int i;
     if (n == 0 || n >= sizeof(value)) {
-        set_error(errbuf, "No capture bridge: start Questlog with questlog_start.py%s", NULL);
+        set_error(errbuf, "No capture bridge: start Questlog with A2Qlinux%s", NULL);
         return -1;
     }
     p = value;
@@ -155,7 +155,7 @@ static int recv_exact(SOCKET s, unsigned char *dst, int len)
  * Wine has above it is moved directly below it, without activating it.
  * Overlay windows are left alone: they are topmost or non-activatable
  * (WS_EX_NOACTIVATE), and Questlog orders them itself. Every move is logged
- * to stderr, which questlog_start.py writes to questlog.log. */
+ * to stderr, which the launcher writes to questlog.log. */
 
 #define GUARD_INTERVAL_MS 50
 
@@ -233,14 +233,14 @@ static void guard_once(void)
         program_name(image, name, sizeof(name));
         if (SetWindowPos(w, foreground, 0, 0, 0, 0,
                          SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER)) {
-            guard_log("[questlog-proton] Questlog window %p was above the foreground window %p (%s) "
+            guard_log("[a2qlinux] Questlog window %p was above the foreground window %p (%s) "
                       "in Wine's window order, so clicks there would reach Questlog; moved it below.",
                       (void *)w, (void *)foreground, name);
             failed_window = NULL;
         } else if (w != failed_window || GetLastError() != failed_error) {
             failed_window = w;
             failed_error = GetLastError();
-            guard_log("[questlog-proton] Questlog window %p is above the foreground window %p (%s) "
+            guard_log("[a2qlinux] Questlog window %p is above the foreground window %p (%s) "
                       "in Wine's window order and could not be moved below it (error %lu); "
                       "clicks there will reach Questlog.",
                       (void *)w, (void *)foreground, name, failed_error);
@@ -270,14 +270,14 @@ static void start_window_guard(void)
     if (InterlockedExchange(&started, 1))
         return;
     if (!QueryFullProcessImageNameW(GetCurrentProcess(), 0, own_image, &size)) {
-        guard_log("[questlog-proton] Window-order guard not started: cannot read Questlog's program path "
+        guard_log("[a2qlinux] Window-order guard not started: cannot read Questlog's program path "
                   "(error %lu); clicks in the game may reach Questlog's window.", GetLastError());
         return;
     }
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
                             (LPCWSTR)start_window_guard, &self)
         || !(thread = CreateThread(NULL, 0, guard_thread, NULL, 0, NULL))) {
-        guard_log("[questlog-proton] Window-order guard not started (error %lu); "
+        guard_log("[a2qlinux] Window-order guard not started (error %lu); "
                   "clicks in the game may reach Questlog's window.", GetLastError());
         return;
     }
@@ -318,7 +318,7 @@ __declspec(dllexport) int pcap_findalldevs(pcap_if_t **alldevs, char *errbuf)
     sin->sin_addr.s_addr = ip;
     addr->addr = (struct sockaddr *)sin;
     dev->name = _strdup("\\Device\\NPF_QuestlogProtonBridge");
-    dev->description = _strdup("Linux capture bridge (questlog_start.py)");
+    dev->description = _strdup("Linux capture bridge (A2Qlinux)");
     dev->addresses = addr;
     *alldevs = dev;
     return 0;
@@ -367,13 +367,13 @@ __declspec(dllexport) pcap_t *pcap_open_live(const char *device, int snaplen, in
     server.sin_addr.s_addr = inet_addr(c.host);
     if (connect(s, (struct sockaddr *)&server, sizeof(server)) != 0) {
         closesocket(s);
-        set_error(errbuf, "Capture bridge not reachable (is questlog_start.py running?)%s", NULL);
+        set_error(errbuf, "Capture bridge not reachable (is A2Qlinux running?)%s", NULL);
         return NULL;
     }
     snprintf(hello, sizeof(hello), "QLPB1 %s\n", c.token);
     if (send(s, hello, (int)strlen(hello), 0) != (int)strlen(hello) || recv_exact(s, header, 24) != 0) {
         closesocket(s);
-        set_error(errbuf, "Capture bridge closed the connection at start - see the questlog_start.py window%s", NULL);
+        set_error(errbuf, "Capture bridge closed the connection at start - see the A2Qlinux window%s", NULL);
         return NULL;
     }
     memcpy(&magic, header, 4);
@@ -485,7 +485,7 @@ __declspec(dllexport) int pcap_next_ex(pcap_t *p, struct pcap_pkthdr **header, c
             continue;
         }
         if (n == 0) {
-            snprintf(p->err, sizeof(p->err), "Capture bridge closed the connection (questlog_start.py stopped?)");
+            snprintf(p->err, sizeof(p->err), "Capture bridge closed the connection (A2Qlinux stopped?)");
             return -1;
         }
         if (WSAGetLastError() == WSAEWOULDBLOCK)

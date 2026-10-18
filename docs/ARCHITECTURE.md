@@ -31,40 +31,47 @@ Terms used below:
 - **Wine session** — the set of Windows processes served by one `wineserver`.
   Questlog has to be in the game's session: it finds the game's connection
   with `GetExtendedTcpTable` and positions its overlays from the game window.
-- **launcher** — `questlog_start.py`, which runs for as long as Questlog runs.
+- **launcher** — `a2qlinux/launcher.py`, which runs for as long as Questlog runs.
 - **bridge** — the TCP link from the launcher (`BridgeServer` in
-  `pcap_bridge.py`) to our `wpcap.dll` inside Questlog.
+  `a2qlinux/pcap_bridge.py`) to our `wpcap.dll` inside Questlog.
 
 ## 2. Context
 
 ```
  Linux, normal user                           Proton prefix 3393110
  +-------------------------------------+     +-------------------------------+
- | questlog_start.py  (launcher)       |     | AION2.exe                     |
+ | a2qlinux.launcher                   |     | AION2.exe                     |
  |  +- dumpcap (TCP port 13328)        |     |                               |
  |  |   +- BridgeServer 127.0.0.1:port +---->| Questlog.exe --no-sandbox     |
- |  |      (pcap_bridge.py, token)     | TCP |  +- wpcap.dll (ours, in       |
- |  +- Tray -> questlog_tray.py (KDE)  |     |  |   System32\Npcap)          |
+ |  |      (pcap_bridge, token)        | TCP |  +- wpcap.dll (ours, in       |
+ |  +- Tray -> a2qlinux.tray (KDE)     |     |  |   System32\Npcap)          |
  |  +- protontricks-launch ------------+---->|  |   pcap_next_ex every 25 ms |
  |  +- protontricks-launch ------------+---->|  +- window-order guard thread |
  |       questlog_ctl.exe <command>    |     | questlog_ctl.exe (short-lived)|
  +-------------------------------------+     +-------------------------------+
         ^ SIGUSR1 / SIGUSR2
         |
- questlog_desktop.py  <- menu entry, desktop icon, steam_launch.sh
+ a2qlinux.desktop  <- `a2qlinux` (menu entry, desktop icon), a2qlinux-steam
 ```
 
-| Program | Runs where | Role |
+All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
+(§12). Its commands are console scripts declared in `pyproject.toml`:
+`a2qlinux` (`a2qlinux.desktop:main`), `a2qlinux-run`
+(`a2qlinux.launcher:run`, the launcher in the current terminal),
+`a2qlinux-setup` (`a2qlinux.setup_desktop:main`) and `a2qlinux-steam`
+(`a2qlinux.steam:main`).
+
+| Module or file | Runs where | Role |
 |---|---|---|
-| `questlog_start.py` | Linux | launcher: capture, bridge, starting and quitting Questlog, tray |
-| `pcap_bridge.py` | Linux, in the launcher | `BridgeServer`: hands captured packets to every connected DLL |
-| `questlog_desktop.py` | Linux | entry point of the menu entry and of `steam_launch.sh`; one launcher at a time |
-| `questlog_tray.py` | Linux, child of the launcher | our tray icon (PyQt6, drawn by KDE) |
-| `steam_launch.sh` | Linux, as Steam's launch option | starts the launcher with the game; lets the game join a running Questlog |
-| `questlog_update.py` | Linux, in the launcher | stages new Questlog versions in the background, installs them at the next start (§6.6) |
-| `install.py` | Linux, by hand | menu entry, icon, dependency check, build |
-| `bridge/wpcap.dll` | prefix, in Questlog's NodeService process | libpcap stand-in; window-order guard |
-| `bridge/questlog_ctl.exe` | prefix, started per command | hides/shows Questlog's tray icon, closes its window, ends its session |
+| `a2qlinux/launcher.py` | Linux | launcher: capture, bridge, starting and quitting Questlog, tray |
+| `a2qlinux/pcap_bridge.py` | Linux, in the launcher | `BridgeServer`: hands captured packets to every connected DLL |
+| `a2qlinux/desktop.py` | Linux | entry point of the menu entry and of `a2qlinux-steam`; one launcher at a time |
+| `a2qlinux/tray.py` | Linux, child of the launcher | our tray icon (PyQt6, drawn by KDE) |
+| `a2qlinux/steam.py` (`a2qlinux-steam`) | Linux, as Steam's launch option | starts the launcher with the game; lets the game join a running Questlog |
+| `a2qlinux/update.py` | Linux, in the launcher | stages new Questlog versions in the background, installs them at the next start (§6.6) |
+| `a2qlinux/setup_desktop.py` (`a2qlinux-setup`) | Linux, by hand; `refresh_entries` on every `a2qlinux` start | menu entry, icon, dependency check; keeps the menu entry (and an existing desktop shortcut) running this installation's `a2qlinux` |
+| `a2qlinux/bin/wpcap.dll` (from `bridge/wpcap_bridge.c`) | prefix, in Questlog's NodeService process | libpcap stand-in; window-order guard |
+| `a2qlinux/bin/questlog_ctl.exe` (from `bridge/questlog_ctl.c`) | prefix, started per command | hides/shows Questlog's tray icon, closes its window, ends its session |
 
 ## 3. Invariants
 
@@ -88,7 +95,7 @@ Terms used below:
 
 ## 4. Data flow: capture
 
-1. `questlog_start.py` takes the lock (I1), checks that `dumpcap` is the
+1. `a2qlinux/launcher.py` takes the lock (I1), checks that `dumpcap` is the
    distribution's root-owned binary (`system_dumpcap`), and chooses the
    network interface: the only one besides `lo` with an IPv4 address, or
    `--interface`.
@@ -97,10 +104,11 @@ Terms used below:
    A thread (`pump_records`) passes each record to `BridgeServer.publish`.
 3. It finds the prefix (`game_prefix`): from a running `AION2.exe`'s
    environment, else from Steam's `libraryfolders.vdf`. Then it installs
-   `bridge/wpcap.dll` as `drive_c/windows/system32/Npcap/wpcap.dll`
+   `a2qlinux/bin/wpcap.dll` as `drive_c/windows/system32/Npcap/wpcap.dll`
    (`install_bridge_dll`). It replaces only an empty marker or an older build
    of ours, recognised by the string `questlog-proton bridge`
-   (`BRIDGE_SIGNATURE`). Any other file there, such as a real Npcap, is left
+   (`BRIDGE_SIGNATURE`, kept from the project's first name: a new string
+   would make an installed build look foreign). Any other file there, such as a real Npcap, is left
    alone and reported.
 4. It starts Questlog in the prefix through `protontricks-launch`
    (`launch_questlog`), with:
@@ -129,7 +137,7 @@ Terms used below:
 
 | Call | Behaviour |
 |---|---|
-| `pcap_findalldevs` | one device carrying the address from `QUESTLOG_PROTON_BRIDGE`; without that variable, the error "No capture bridge: start Questlog with questlog_start.py", which Questlog shows |
+| `pcap_findalldevs` | one device carrying the address from `QUESTLOG_PROTON_BRIDGE`; without that variable, the error "No capture bridge: start Questlog with A2Qlinux", which Questlog shows |
 | `pcap_open_live` | connect to the bridge, authenticate, read the pcap header |
 | `pcap_next_ex` | 1 = packet, 0 = none waiting (non-blocking), -1 = connection lost, reason in `pcap_geterr` |
 | `pcap_compile`, `pcap_setfilter`, `pcap_freecode` | accepted, no effect; `dumpcap` already filters |
@@ -171,10 +179,11 @@ until nothing runs in the prefix. A Questlog started before the game keeps
 the prefix busy, so the game would wait for as long as Questlog runs. Steam
 then shows "launching" with no end.
 
-`steam_launch.sh`, set as the game's Steam launch option, handles this:
+`a2qlinux-steam`, set as the game's Steam launch option, handles this:
 
 1. It records whether a launcher holds the lock **before** starting anything.
-2. It starts `questlog_desktop.py --wait-for-game` through
+2. It starts `a2qlinux.desktop --wait-for-game` (with any launcher options
+   given before `%command%`: `--close-with-game`, `--no-auto-update`) through
    `systemd-run --user`. Started that way, the launcher and its terminal get
    the desktop session's environment instead of Steam's (overlay
    `LD_PRELOAD`, container variables), and Steam does not count them as part
@@ -191,7 +200,7 @@ then Play. The game started at once, with one `wineserver` shared by both.
 
 ### 5.2 Fallback without the launch option
 
-When Play is pressed without `steam_launch.sh`, the launcher sees a pending
+When Play is pressed without `a2qlinux-steam`, the launcher sees a pending
 launch (`steam_launch_pending`). It looks for Proton's own process,
 `python3 …/proton waitforexitandrun …AION2.exe`, with the game's app id in
 its environment, while no `AION2.exe` runs yet. It then closes Questlog
@@ -201,14 +210,14 @@ launch), Questlog comes back without the game.
 
 Only Proton's process counts, in exactly that shape. An earlier version
 matched any process whose command line contained `waitforexitandrun`. Steam
-runs the launch option first in the chain, so `steam_launch.sh` itself
+runs the launch option first in the chain, so `a2qlinux-steam` itself
 briefly carried the original command line. That version sent `wineboot -e`
 into the session where the game was starting, which closed Questlog and
 aborted the game.
 
 ### 5.3 `--wait-for-game`
 
-With `--wait-for-game` (always used by `steam_launch.sh`), the launcher
+With `--wait-for-game` (always used by `a2qlinux-steam`), the launcher
 starts Questlog only once `AION2.exe` has run for 2 s (`wait_for_game`). This
 way the game and Questlog never bring up the prefix's Wine at the same
 moment.
@@ -261,7 +270,7 @@ reacts only once switched to (Alt+Tab, the taskbar).
   main window has `0x100`.
 - *Logging (I3):* each move is written to stderr, which ends up in
   `proton-stream/questlog.log`:
-  `[questlog-proton] Questlog window … moved it below.` A failed move is
+  `[a2qlinux] Questlog window … moved it below.` A failed move is
   logged once per window and error code; a guard that cannot start says so.
 
 Tested with `bridge/tests/zorder_guard_test.c` (§9): passes with the guard,
@@ -303,10 +312,10 @@ upstream Wine included. Trace: `set_foreground_window hwnd <icon window> …
 -> ret 1` for the first menu, `-> ret 0` for the next.
 
 **Replacement.** The launcher shows its own icon instead
-(`questlog_tray.py`, `QSystemTrayIcon`, which KDE serves as a
+(`a2qlinux/tray.py`, `QSystemTrayIcon`, which KDE serves as a
 StatusNotifierItem). Its menu is drawn by KDE, outside Wine's foreground
 rules. The tray process only prints `open` or `quit` on stdout; class `Tray`
-in `questlog_start.py` reads that into `Requests`. The tray runs in its own
+in `a2qlinux/launcher.py` reads that into `Requests`. The tray runs in its own
 session, so a Ctrl+C for the launcher does not reach it. It ends when its
 stdin closes.
 
@@ -353,7 +362,7 @@ where Questlog flushes pending data. Questlog writes that data on its own at
 most 10 s after it changes: the combat worker flushes every 10 s, and
 deferred saves wait 10 s.
 
-So "Quit Questlog" in our tray (`QuitControl` in `questlog_start.py`) works
+So "Quit Questlog" in our tray (`QuitControl` in `a2qlinux/launcher.py`) works
 in two stages:
 
 ```
@@ -393,16 +402,16 @@ switched off (§6.6), and the session end would skip it anyway.
 
 ### 6.5 Signals between the menu entry and the launcher
 
-`questlog_desktop.py` is what the menu entry, the desktop icon and
-`steam_launch.sh` run. If no launcher holds the lock, it opens Konsole with
-`questlog_start.py`. Otherwise it signals the PID read from the lock file
-(`launcher_pid`), after checking that the process's command line is
-`questlog_start.py`, so a stale or reused PID is never signalled:
+`a2qlinux/desktop.py` is what the menu entry, the desktop icon and
+`a2qlinux-steam` run. If no launcher holds the lock, it opens Konsole with
+`a2qlinux/launcher.py`. Otherwise it signals the PID read from the lock file
+(`launcher_pid`), after checking that the process's command line contains
+`a2qlinux.launcher`, so a stale or reused PID is never signalled:
 
 | Caller | Signal | Launcher's response |
 |---|---|---|
 | menu entry, desktop icon | `SIGUSR1` | show Questlog's window; call off a pending quit |
-| `steam_launch.sh` (`--wait-for-game`) | `SIGUSR2` | keep Questlog running; call off a pending quit; no window |
+| `a2qlinux-steam` (`--wait-for-game`) | `SIGUSR2` | keep Questlog running; call off a pending quit; no window |
 
 The handlers are installed before the PID is published, since the default
 action of both signals would end the launcher. Handlers and the tray reader
@@ -418,7 +427,7 @@ Questlog updates itself with electron-updater: every 5 minutes it reads
 `https://cdn.questlog.gg/desktop/latest.yml`, downloads a newer installer in
 the background, and runs it on quit or from an "install" button in its
 window. Under Wine that installer stops (§7.5), so a downloaded update is
-never installed. `questlog_update.py` does the update instead, the same way as
+never installed. `a2qlinux/update.py` does the update instead, the same way as
 a manual update, which therefore remains the fallback (`docs/UPDATING.md`,
 "Updating by hand"):
 
@@ -438,7 +447,7 @@ a manual update, which therefore remains the fallback (`docs/UPDATING.md`,
    `[updater] … ENOENT … app-update.yml` every 5 minutes and does nothing
    else: it downloads nothing and never shows its "update ready" prompt,
    which appears only after a download. Tested in a throwaway prefix.
-2. **`stage`**, in a thread (`check_for_updates` in `questlog_start.py`): first
+2. **`stage`**, in a thread (`check_for_updates` in `a2qlinux/launcher.py`): first
    check 60 s after the start, then every `UPDATE_CHECK_EVERY` (6 h). While
    `AION2.exe` runs it waits instead (`UPDATE_CHECK_DEFER`, 10 min), so the
    115 MB download never competes with the game's connection. It reads the
@@ -490,14 +499,14 @@ removed `app-update.yml`.
 | Symptom | Cause | Where to look |
 |---|---|---|
 | Questlog quits at once, "GPU process isn't usable" | Chromium's sandbox inside Steam's container (§7.1) | `questlog.log` |
-| Questlog shows "No capture bridge: start Questlog with questlog_start.py" | Questlog started without the launcher | start it from the menu entry |
-| "Capture bridge not reachable (is questlog_start.py running?)" | launcher not running (terminal closed) | Konsole window |
+| Questlog shows "No capture bridge: start Questlog with A2Qlinux" | Questlog started without the launcher | start it from the menu entry |
+| "Capture bridge not reachable (is A2Qlinux running?)" | launcher not running (terminal closed) | Konsole window |
 | "Capture bridge closed the connection …" | launcher stopped, or it dropped a connection | Konsole window |
 | Steam "launching" forever while Questlog runs | Proton waiting for an idle prefix (§5.1) | `steam_launch.log`; set the launch option |
-| click in the game activates Questlog | §6.1; guard not running | `questlog.log`, `[questlog-proton]` lines |
+| click in the game activates Questlog | §6.1; guard not running | `questlog.log`, `[a2qlinux]` lines |
 | two Questlog tray icons | `hide-tray` failed | Konsole window, `Questlog control:` lines |
 | "Aion 2's traffic can't be read" before logging in | §7.3, harmless | — |
-| "questlog_start.py is already running in another window" | second launcher refused (I1) | use the running one |
+| "A2Qlinux is already running in another window" | second launcher refused (I1) | use the running one |
 | "Questlog is already running in the game prefix without the capture bridge" | Questlog started outside A2Qlinux | quit it from its own tray icon |
 | Tracker Map overlay blank after restarting Questlog mid-game | Questlog learns the character's zone only at login or zone change | change zone |
 | "Questlog update check failed (…)" | no network, CDN change | none; retried at the next check |
@@ -536,7 +545,7 @@ connection. The first game packet clears it.
 ### 7.4 Finding Questlog's processes
 
 Chromium renames its processes (`CrBrowserMain`, `CrGpuMain`, …), so
-`pgrep -x Questlog.exe` finds nothing. `program_name` in `questlog_start.py`
+`pgrep -x Questlog.exe` finds nothing. `program_name` in `a2qlinux/launcher.py`
 reads the Windows path from `argv[0]`, and `game_processes` keeps only
 processes whose environment points at the game's prefix. Never use
 `wineserver -k` in the prefix: it ends the game too.
@@ -547,7 +556,7 @@ The NSIS installer checks through PowerShell whether Questlog runs. Wine's
 PowerShell is a stub that answers "running", so the installer tries to close
 Questlog and gives up with code 2. Questlog is therefore installed by
 unpacking its files (`docs/INSTALL.md`, "Installing Questlog"), and updated
-by `questlog_update.py` (§6.6). Its own updater downloads new versions fine
+by `a2qlinux/update.py` (§6.6). Its own updater downloads new versions fine
 but would start that same installer, so it is switched off.
 
 ## 8. Decisions and rejected alternatives
@@ -577,13 +586,13 @@ one** — §6.4.
 
 | What | How |
 |---|---|
-| launcher, bridge, quit logic, updates | `python3 -m unittest` in the repository root; the update tests build a fake installer with `7z` and run feed → download (`file://`) → checks → swap → rollback offline |
+| launcher, bridge, quit logic, updates, Steam verb switch | `python3 -m unittest` in the repository root (after `bash bridge/build.sh`; CI runs both on every push, §12); the update tests build a fake installer with `7z` and run feed → download (`file://`) → checks → swap → rollback offline |
 | DLL against a live bridge | `bridge/tests/bridge_client_test.exe` in a throwaway prefix, with a running `BridgeServer` and `WINEDLLOVERRIDES=wpcap=n`; report in `C:\bridge_client_test.txt` (packets, delay) |
-| window-order guard | copy `bridge/tests/zorder_guard_test.exe` and `bridge/wpcap.dll` to an empty folder, then `WINEPREFIX=<throwaway> xvfb-run -a wine zorder_guard_test.exe 'Z:\<folder>\wpcap.dll'`; prints the order before and after, `PASS`/`FAIL` |
-| `questlog_ctl.exe` by hand | `protontricks-launch --appid 3393110 bridge/questlog_ctl.exe hide-tray` (or `show-tray`, `close-window`, `end-session`) |
+| window-order guard | copy `bridge/tests/zorder_guard_test.exe` and `a2qlinux/bin/wpcap.dll` to an empty folder, then `WINEPREFIX=<throwaway> xvfb-run -a wine zorder_guard_test.exe 'Z:\<folder>\wpcap.dll'`; prints the order before and after, `PASS`/`FAIL` |
+| `questlog_ctl.exe` by hand | `protontricks-launch --appid 3393110 <package>/a2qlinux/bin/questlog_ctl.exe hide-tray` (or `show-tray`, `close-window`, `end-session`); `<package>` is printed by `python -c 'import a2qlinux; print(a2qlinux.__path__[0])'` in A2Qlinux's environment |
 | `questlog_ctl.exe` without the game prefix | Questlog in a throwaway prefix: `wine Questlog.exe --no-sandbox --disable-gpu` under `xvfb-run`, then the commands through `wine` |
 | who owns the game connection | `tools/tcp_owner_probe.exe` in the prefix |
-| Wine's view of windows and focus | run the launcher with `WINEDEBUG=+event,+x11drv,+win`; the log grows about 40 KB/s, so only briefly |
+| Wine's view of windows and focus | run `WINEDEBUG=+event,+x11drv,+win a2qlinux-run`; the log grows about 40 KB/s, so only briefly |
 
 Logs: the launcher's messages in its Konsole window; Questlog's and Wine's
 output, including the guard's lines, in `proton-stream/questlog.log`,
@@ -597,7 +606,7 @@ own files.
 ## 10. What Questlog updates can break
 
 A2Qlinux depends on these properties of Questlog. `compatibility_problems`
-in `questlog_update.py` checks all of them before an automatic update
+in `a2qlinux/update.py` checks all of them before an automatic update
 (§6.6); for a manual update, check them by hand (`docs/UPDATING.md`,
 "Updating by hand"):
 
@@ -607,7 +616,7 @@ in `questlog_update.py` checks all of them before an automatic update
 | Electron 44.5.1 (`KNOWN_ELECTRON`): tray icon id 3, `WM_ENDSESSION` ending the process | `questlog_ctl.exe` | `grep -aoE 'Electron/[0-9.]+' Questlog.exe`; for another version read `notify_icon_host.cc` and `native_window_views_win.cc` |
 | `second-instance` shows the window | §6.3 | `grep -oE 'on\("second-instance",[^)]*\)' main.cjs` |
 | overlay windows non-activatable (`focusable: false`) | §6.1 | `grep -c 'focusable:!1' main.cjs` |
-| `resources/icon.png` in `app.asar` | `install.py` | rerun `install.py` |
+| `resources/icon.png` in `app.asar` | `a2qlinux-setup` | rerun `a2qlinux-setup` |
 
 ## 11. Open questions
 
@@ -625,3 +634,49 @@ in `questlog_update.py` checks all of them before an automatic update
    match was corrected.
 5. Questlog's keyboard shortcuts while the game has focus have not been
    tested.
+
+## 12. Packaging and releases
+
+A2Qlinux ships as the Python package `a2qlinux`, installed with pipx. The
+layout follows the author's `sto-warp` project, so both are released the same
+way. The step-by-step release procedure is `docs/RELEASE.md`; this section
+records how the pieces fit and why.
+
+**Package.** `pyproject.toml` (hatchling) declares the four commands of §2 and
+the two dependencies that are not part of a desktop system: PyQt6 (tray) and
+python-xlib (finding Questlog's window). The version comes from the git tag
+through hatch-vcs (`v0.1.0` → 0.1.0; between tags `0.1.devN`), written to
+`a2qlinux/_version.py` at build time and read by `a2qlinux.__version__`.
+
+**Windows parts.** `wpcap.dll` and `questlog_ctl.exe` are built by
+`bridge/build.sh` into `a2qlinux/bin/` and shipped inside the package, so a
+user needs neither clang nor Wine's headers. They are ignored by git, so
+`pyproject.toml` lists them as hatchling `artifacts`, for both the sdist and
+the wheel. Both matter: `python -m build` builds the wheel *from* the sdist,
+and an sdist without the binaries gave a wheel without them, which installed
+cleanly and failed only when the launcher looked for the DLL. The test
+programs and `tools/` probes stay out of the packages.
+
+**CI** (`.github/workflows/`), both in an `archlinux:latest` container so that
+the toolchain is the one `bridge/build.sh` is used with (Wine is in Arch's
+`extra`):
+
+| Workflow | When | What |
+|---|---|---|
+| `tests.yml` | every push to `develop` or `main`, pull requests | `bridge/build.sh`, `python -m unittest` |
+| `release.yml` | a published GitHub Release; or by hand | build, tests, sdist + wheel, check that the wheel holds both Windows parts and that its version equals the tag, attach both packages to the release (by hand: keep them as a workflow artifact) |
+
+In the container, `git` is installed before `actions/checkout`, which
+otherwise downloads a tarball without history, leaving hatch-vcs no tag to
+read. The checkout is marked `safe.directory`, because it belongs to another
+user there.
+
+**PyPI** is prepared but off (`pypi` job, `if: false`) while the repository
+is private, since a package on PyPI is public. Turning it on takes a public
+repository, a Trusted Publisher for `release.yml` on pypi.org, and removing
+the `if: false`.
+
+**Branches.** Work happens on `develop`; a release fast-forwards `main` to it
+and tags `main` (`docs/RELEASE.md`). `main` therefore always equals the last
+release.
+

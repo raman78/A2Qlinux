@@ -4,14 +4,14 @@
 Questlog's own tray icon is a Windows icon shown through Wine, and under Wine
 its menu opens only once: Electron gives up on the menu when it cannot bring
 its window to the foreground, and Wine's explorer.exe never grants that
-(docs/ARCHITECTURE.md §6.2). questlog_start.py hides that icon and runs this one instead, for
+(docs/ARCHITECTURE.md §6.2). the launcher (a2qlinux/launcher.py) hides that icon and runs this one instead, for
 as long as Questlog runs.
 
 This process only reports what was chosen, one word per line on stdout:
     open    left click, or "Open Questlog"
     quit    "Quit Questlog"
-questlog_start.py does the rest. It ends when its stdin closes, i.e. when
-questlog_start.py stops it or ends itself.
+the launcher (a2qlinux/launcher.py) does the rest. It ends when its stdin closes, i.e. when
+the launcher (a2qlinux/launcher.py) stops it or ends itself.
 """
 
 from pathlib import Path
@@ -21,7 +21,7 @@ from PyQt6.QtCore import QSocketNotifier
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-ICON = Path.home() / ".local" / "share" / "icons" / "questlog-aion2.png"   # written by install.py
+ICON = Path.home() / ".local" / "share" / "icons" / "questlog-aion2.png"   # written by a2qlinux-setup
 
 
 def report(action):
@@ -34,7 +34,7 @@ def main():
     app.setDesktopFileName("questlog-aion2")
     app.setQuitOnLastWindowClosed(False)
     if not QSystemTrayIcon.isSystemTrayAvailable():
-        print("questlog_tray: the desktop has no system tray", file=sys.stderr)
+        print("a2qlinux tray: the desktop has no system tray", file=sys.stderr)
         return 1
 
     tray = QSystemTrayIcon(QIcon(str(ICON)), app)

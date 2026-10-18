@@ -8,4 +8,5 @@ Start with the guide that matches what you want to do.
 | [USING.md](USING.md) | players | starting Questlog (menu, Steam), the tray icon, playing with it |
 | [UPDATING.md](UPDATING.md) | players | automatic Questlog updates, updating by hand |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | players | messages and symptoms, what to do; FAQ |
+| [RELEASE.md](RELEASE.md) | maintainers | cutting a release: changelog, develop → main, tag, GitHub Release, checks |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | developers | how the capture bridge, the Wine-session handling, the tray replacement, quitting and automatic Questlog updates work, and why; failure modes; tests; what Questlog updates can break |

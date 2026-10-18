@@ -5,11 +5,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import questlog_desktop as d
+from a2qlinux import desktop as d
 
 
 class LauncherPidTest(unittest.TestCase):
-    """The desktop entry signals only a process that really is questlog_start.py."""
+    """The desktop entry signals only a process that really is the launcher."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -21,7 +21,7 @@ class LauncherPidTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_pid_of_a_running_launcher(self):
-        launcher = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)", "questlog_start.py"])
+        launcher = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)", "-m", "a2qlinux.launcher"])
         try:
             d.LOCK.write_text(f"{launcher.pid}\n")
             self.assertEqual(d.launcher_pid(), launcher.pid)
@@ -30,7 +30,7 @@ class LauncherPidTest(unittest.TestCase):
             launcher.wait()
 
     def test_pid_of_another_program_is_refused(self):
-        d.LOCK.write_text(f"{os.getpid()}\n")       # this test runner, not questlog_start.py
+        d.LOCK.write_text(f"{os.getpid()}\n")       # this test runner, not the launcher
         self.assertIsNone(d.launcher_pid())
 
     def test_empty_or_missing_lock_gives_none(self):

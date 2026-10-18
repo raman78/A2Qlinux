@@ -1,0 +1,81 @@
+name: Release
+
+# Published GitHub Release -> build, test, attach the packages to the release.
+# Run by hand (workflow_dispatch) -> the same, packages kept as a workflow artifact.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install tools
+        run: pacman -Syu --noconfirm --needed git clang lld wine python python-pip p7zip github-cli
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0     # hatch-vcs reads the version from the tag
+
+      - name: Trust the checkout (owned by another user in the container)
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Build the Windows parts
+        run: bash bridge/build.sh
+
+      - name: Run tests
+        run: python -m unittest
+
+      - name: Build sdist and wheel
+        run: |
+          python -m venv /tmp/build-env
+          /tmp/build-env/bin/pip install --quiet build
+          /tmp/build-env/bin/python -m build
+
+      - name: Check the wheel
+        run: |
+          WHEEL=$(ls dist/*.whl)
+          for part in a2qlinux/bin/wpcap.dll a2qlinux/bin/questlog_ctl.exe; do
+            python -m zipfile -l "$WHEEL" | grep -q "^$part " || { echo "::error::$part missing from $WHEEL"; exit 1; }
+          done
+          if [ "$GITHUB_EVENT_NAME" = "release" ]; then
+            BUILT=$(basename "$WHEEL" | sed -E 's/^a2qlinux-([^-]+)-.*/\1/')
+            TAG="${GITHUB_REF_NAME#v}"
+            echo "wheel $BUILT | tag $TAG"
+            [ "$BUILT" = "$TAG" ] || { echo "::error::wheel version $BUILT does not match tag $TAG"; exit 1; }
+          fi
+
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY"
+
+      - name: Keep as workflow artifact
+        if: github.event_name != 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # PyPI publishing, off while the repository is private: a package on PyPI is
+  # public. To turn on: make the repository public, add a Trusted Publisher for
+  # this workflow on pypi.org, and remove the `if: false` below.
+  pypi:
+    if: false
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Download the release packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern 'a2qlinux-*' --dir dist
+      - uses: pypa/gh-action-pypi-publish@release/v1

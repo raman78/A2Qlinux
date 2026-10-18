@@ -13,7 +13,7 @@ Questlog then runs its normal live capture loop, as on Windows.
 Run it as your normal user (dumpcap through the `wireshark` group). Questlog
 opens at once, game or not; with --wait-for-game only once the game runs.
 
-While Questlog runs, its tray icon is ours (questlog_tray.py, drawn by KDE):
+While Questlog runs, its tray icon is ours (a2qlinux/tray.py, drawn by KDE):
 Questlog's own icon is hidden because under Wine its menu opens only once.
 "Quit Questlog" there hides Questlog at once and ends it SAVE_WAIT seconds
 later, once it has saved; asking for it again before then keeps it running.
@@ -35,21 +35,24 @@ import sys
 import threading
 import time
 
-from pcap_bridge import BridgeServer, read_records
-import questlog_update
+from . import update as questlog_update
+from .pcap_bridge import BridgeServer, read_records
 
 APPID = 3393110
 GAME_PORT = 13328
-HERE = Path(__file__).resolve().parent
-BRIDGE_DLL = HERE / "bridge" / "wpcap.dll"
+# The Windows parts, built by bridge/build.sh and shipped in the package.
+BIN = Path(__file__).resolve().parent / "bin"
+BRIDGE_DLL = BIN / "wpcap.dll"
+# Marks our DLL in the prefix (kept from the project's first name: changing it
+# would make install_bridge_dll take an installed build for a foreign file).
 BRIDGE_SIGNATURE = b"questlog-proton bridge"
-# Where Questlog's files were unpacked; QUESTLOG_DIR overrides (see install.py).
+# Where Questlog's files were unpacked; QUESTLOG_DIR overrides (see a2qlinux-setup).
 QUESTLOG_DIR = Path(os.environ.get("QUESTLOG_DIR") or Path.home() / "Games" / "Questlog").expanduser()
 DEFAULT_EXE = QUESTLOG_DIR / "Questlog.exe"
 
 
 def log(message):
-    print(f"[questlog-proton] {message}", flush=True)
+    print(f"[a2qlinux] {message}", flush=True)
 
 
 # ---------------------------------------------------------------- processes
@@ -130,7 +133,7 @@ def install_bridge_dll(prefix):
     reported, since overwriting it is not ours to decide.
     """
     if not BRIDGE_DLL.is_file():
-        raise RuntimeError(f"{BRIDGE_DLL} is missing; build it with: bash {HERE / 'bridge' / 'build.sh'}")
+        raise RuntimeError(f"{BRIDGE_DLL} is missing; in a source checkout build it with: bash bridge/build.sh")
     ours = BRIDGE_DLL.read_bytes()
     target = prefix / "drive_c" / "windows" / "system32" / "Npcap" / "wpcap.dll"
     if target.exists():
@@ -166,7 +169,7 @@ def steam_launch_pending(appid):
         args = _read(f"/proc/{entry.name}/cmdline", 8192).split("\0")
         # Only Proton's own process counts: python3 <...>/proton waitforexitandrun <...>AION2.exe.
         # Steam's reaper and the runtime container carry the original command
-        # line too, even after steam_launch.sh has switched Proton to "run".
+        # line too, even after the a2qlinux-steam wrapper has switched Proton to "run".
         if len(args) < 4 or not Path(args[0]).name.startswith("python") or not args[1].endswith("/proton") \
                 or args[2] != "waitforexitandrun" or not args[3].lower().endswith("aion2.exe"):
             continue
@@ -299,7 +302,7 @@ def session_lock(directory):
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         os.close(fd)
-        raise RuntimeError("questlog_start.py is already running in another window; use that one.") from None
+        raise RuntimeError("A2Qlinux is already running in another window; use that one.") from None
     # The desktop entry signals this PID (SIGUSR1/SIGUSR2) instead of starting a second launcher.
     os.ftruncate(fd, 0)
     os.pwrite(fd, f"{os.getpid()}\n".encode(), 0)
@@ -308,8 +311,7 @@ def session_lock(directory):
 
 # ----------------------------------------------------------- tray and quit
 
-CTL = HERE / "bridge" / "questlog_ctl.exe"
-TRAY = HERE / "questlog_tray.py"
+CTL = BIN / "questlog_ctl.exe"
 SAVE_WAIT = 12   # s from "Quit Questlog" to its end: Questlog saves pending data within 10 s
 
 
@@ -426,7 +428,7 @@ def hide_questlog_tray_icon(protontricks, log_path, timeout=60):
 
 
 class Tray:
-    """Our tray icon (questlog_tray.py); what is chosen there goes into requests.
+    """Our tray icon (a2qlinux/tray.py); what is chosen there goes into requests.
 
     It runs in its own session, so a Ctrl+C meant for this launcher does not
     reach it; it ends when its stdin closes. If it ends by itself, "tray-died"
@@ -442,7 +444,7 @@ class Tray:
         if self.process and self.process.poll() is None:
             return
         self.stopping = False
-        self.process = subprocess.Popen([sys.executable, str(TRAY)], stdin=subprocess.PIPE,
+        self.process = subprocess.Popen([sys.executable, "-m", "a2qlinux.tray"], stdin=subprocess.PIPE,
                                         stdout=subprocess.PIPE, start_new_session=True)
         threading.Thread(target=self._read, args=(self.process,), daemon=True).start()
 
@@ -642,7 +644,7 @@ def main():
         if running:
             fed = any("QUESTLOG_PROTON_BRIDGE=" in _read(f"/proc/{pid}/environ") for pid in running)
             if fed:
-                raise RuntimeError("Questlog is already running and fed by another questlog_start.py "
+                raise RuntimeError("Questlog is already running and fed by another A2Qlinux "
                                    "(another terminal window). Nothing to do here.")
             raise RuntimeError("Questlog is already running in the game prefix without the capture bridge. "
                                "Quit it (tray icon > Quit) and run this again.")
@@ -798,13 +800,19 @@ def main():
             server.stop()
             stop_process(capture)
     except (OSError, RuntimeError) as error:
-        print(f"questlog-proton: {error}", file=sys.stderr)
+        print(f"a2qlinux: {error}", file=sys.stderr)
         return 1
 
 
-if __name__ == "__main__":
+def run():
+    """Entry point (python -m a2qlinux.launcher, a2qlinux-run)."""
     try:
-        sys.exit(main())
+        return main()
     except KeyboardInterrupt:
-        print("\nStopped. Questlog keeps running without live traffic; quit it from its tray icon.", file=sys.stderr)
-        sys.exit(130)
+        print("\nStopped. Questlog keeps running without live traffic; quit it from its own tray icon, "
+              "which is shown again.", file=sys.stderr)
+        return 130
+
+
+if __name__ == "__main__":
+    sys.exit(run())

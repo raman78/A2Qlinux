@@ -24,3 +24,9 @@ notes/
 
 # Runtime
 *.log
+
+# Packaging
+a2qlinux/_version.py
+dist/
+build/
+*.egg-info/

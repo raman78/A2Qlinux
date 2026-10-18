@@ -37,8 +37,10 @@ settings are not in these folders, so an update does not touch them.
 Tip: the status window shows which version is running in its
 `Starting Questlog …` line.
 
-To turn automatic updates off, start A2Qlinux with `--no-auto-update` (in
-Steam's launch option, before `%command%`). Then update by hand.
+To turn automatic updates off, start A2Qlinux with `--no-auto-update`: in
+Steam's launch option between `a2qlinux-steam` and `%command%`, and for the
+menu entry by adding it after `a2qlinux` in the entry's command (KDE:
+right-click the entry > Edit Application). Then update by hand.
 
 ### Updating by hand
 
@@ -60,3 +62,17 @@ Steam's launch option, before `%command%`). Then update by hand.
    `Starting Questlog <new version>.`, and the tray should show one icon.
 6. If all is well, delete `~/Games/Questlog-old` and `/tmp/qlupd`. If not,
    swap the folders back.
+
+## Updating A2Qlinux itself
+
+A2Qlinux does not update itself. When a new release is out (the project's
+GitHub page, Releases), download its `a2qlinux-<version>-py3-none-any.whl`
+and replace the old one with it:
+
+```
+pipx uninstall a2qlinux && pipx install ./a2qlinux-<version>-py3-none-any.whl
+```
+
+Quit Questlog first. The menu entry, the Steam launch option and Questlog
+itself stay as they are; only A2Qlinux's own files are replaced. Which
+version you have: `pipx list`.

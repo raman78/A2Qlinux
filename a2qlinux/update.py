@@ -141,7 +141,7 @@ def compatibility_problems(app_dir):
     try:
         read_asar_file(asar, "resources/icon.png")
     except (KeyError, OSError):
-        problems.append("its icon resources/icon.png is gone (install.py takes it from there)")
+        problems.append("its icon resources/icon.png is gone (a2qlinux-setup takes it from there)")
     return problems
 
 

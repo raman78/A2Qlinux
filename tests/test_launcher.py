@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import questlog_start as q
+from a2qlinux import launcher as q
 
 
 class InstallBridgeDllTest(unittest.TestCase):
@@ -97,9 +97,9 @@ class SessionLockTest(unittest.TestCase):
             try:
                 self.assertEqual((directory / ".lock").read_text(), f"{q.os.getpid()}\n")
                 child = q.subprocess.run([q.sys.executable, "-c",
-                                          "import sys, questlog_start as q; from pathlib import Path\n"
+                                          "import sys; from a2qlinux import launcher as q; from pathlib import Path\n"
                                           "try: q.session_lock(Path(sys.argv[1]))\n"
-                                          "except RuntimeError: sys.exit(3)", tmp], cwd=q.HERE)
+                                          "except RuntimeError: sys.exit(3)", tmp], cwd=Path(q.__file__).parents[1])
                 self.assertEqual(child.returncode, 3)
             finally:
                 q.os.close(fd)

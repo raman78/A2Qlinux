@@ -33,10 +33,12 @@ work reliably under Proton.
 |---|---|
 | `wireshark-cli` | captures the game's traffic (`dumpcap`) |
 | `protontricks` | starts Questlog inside the game's Proton environment |
-| `python-pyqt6`, `python-xlib` | the tray icon, bringing Questlog's window to the front |
+| `python-pipx` | installs A2Qlinux in its own environment |
 | `xdotool`, `libnotify`, `konsole` | window activation, notifications, the status window |
-| `clang`, `lld`, `wine` | building the small Windows parts of A2Qlinux, once |
-| `p7zip` | unpacking Questlog's installer |
+| `p7zip` | unpacking Questlog's installer, also for its updates |
+
+The rest A2Qlinux needs (the tray icon library, among others) comes with it
+when pipx installs it.
 
 - Your user in the `wireshark` group, so that capturing works without
   administrator rights. Run this once, then log out and back in:
@@ -86,20 +88,42 @@ Tip: if you keep Questlog somewhere else, tell A2Qlinux with
 
 ## Installing A2Qlinux
 
-1. Put the A2Qlinux folder where it will stay. The menu entry points at it,
-   so moving it later means running the installer again.
-2. In that folder, run:
-   ```
-   python3 install.py --desktop-shortcut
-   ```
-   Leave out `--desktop-shortcut` if you only want the menu entry.
+A2Qlinux is installed with pipx, which keeps it and the libraries it uses in
+a folder of their own and puts its commands in `~/.local/bin`.
 
-The installer checks the packages from the list above and names any that are
-missing. It builds the Windows parts the first time and takes Questlog's icon
-from your Questlog folder; A2Qlinux does not ship Questlog's logo. Then it
-creates the "Questlog (AION 2)" entry. At the end it prints the line for
-Steam's launch options (see [USING.md](USING.md)) and either "Ready" or a list of what is
-still missing. It installs no packages and changes nothing in the game.
+1. Download the file `a2qlinux-<version>-py3-none-any.whl` from the newest
+   release on the project's GitHub page (Releases).
+2. Install it:
+   ```
+   pipx install ./a2qlinux-<version>-py3-none-any.whl
+   ```
+3. Create the menu entry (and, with `--desktop-shortcut`, a desktop icon):
+   ```
+   a2qlinux-setup --desktop-shortcut
+   ```
+
+`a2qlinux-setup` checks the packages from the list above and names any that
+are missing. It takes Questlog's icon from your Questlog folder (A2Qlinux
+does not ship Questlog's logo) and creates the "Questlog (AION 2)" entry. At
+the end it prints the line for Steam's launch options (see
+[USING.md](USING.md)) and either "Ready" or a list of what is still missing.
+It installs no packages and changes nothing in the game.
+
+The entry keeps itself up to date: each time `a2qlinux` starts, it checks
+that the menu entry (and the desktop icon, if you have one) still runs this
+installation, and writes it again if not, for example after A2Qlinux was
+reinstalled elsewhere. Options you added to the entry by hand stay.
+
+Tip: if `a2qlinux-setup` is not found, run `pipx ensurepath` once and open a
+new terminal.
+
+**From the source code instead** (for changing A2Qlinux itself): in a copy of
+the repository, build the small Windows parts once (needs `clang`, `lld` and
+`wine`), then install that copy so that your changes take effect at once:
+```
+bash bridge/build.sh && pipx install --editable .
+```
+Then run `a2qlinux-setup` as above.
 
 Next: [USING.md](USING.md).
 
@@ -107,14 +131,19 @@ Next: [USING.md](USING.md).
 
 1. Quit Questlog from the tray icon.
 2. Clear AION 2's launch options in Steam.
-3. Delete the menu entry, the desktop shortcut and the icon:
+3. Uninstall A2Qlinux:
+   ```
+   pipx uninstall a2qlinux
+   ```
+4. Delete the menu entry, the desktop shortcut and the icon:
    ```
    rm ~/.local/share/applications/questlog-aion2.desktop ~/Desktop/questlog-aion2.desktop ~/.local/share/icons/questlog-aion2.png
    ```
-4. Delete A2Qlinux's capture library from the game's Proton environment, the
+5. Delete A2Qlinux's capture library from the game's Proton environment, the
    folder `drive_c/windows/system32/Npcap` inside
    `steamapps/compatdata/3393110/pfx` in your Steam library.
-5. Delete the A2Qlinux folder and, if you no longer want Questlog,
-   `~/Games/Questlog` and the previous version A2Qlinux kept next to it
-   after an update (for example `~/Games/Questlog-0.1.34`). Questlog's fights and settings live in the game's
-   Proton environment under `drive_c/users/steamuser/AppData/Roaming/Questlog`.
+6. If you no longer want Questlog either, delete `~/Games/Questlog` and the
+   previous version A2Qlinux kept next to it after an update (for example
+   `~/Games/Questlog-0.1.34`). Questlog's fights and settings live in the
+   game's Proton environment under
+   `drive_c/users/steamuser/AppData/Roaming/Questlog`.

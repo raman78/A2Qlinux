@@ -1,12 +1,12 @@
 /* questlog_ctl.exe - act on a running Questlog from inside its Wine session.
  *
- * questlog_start.py runs this with protontricks-launch in the game prefix:
+ * The launcher (a2qlinux/launcher.py) runs this with protontricks-launch in the game prefix:
  *   questlog_ctl.exe hide-tray     hide Questlog's own tray icon (only that one)
  *   questlog_ctl.exe show-tray     show it again (when our icon is gone)
  *   questlog_ctl.exe close-window  close Questlog's main window (it hides to the tray)
  *   questlog_ctl.exe end-session   tell Questlog the Windows session is ending
  *
- * Questlog's tray icon is replaced by questlog_tray.py: under Wine its menu
+ * Questlog's tray icon is replaced by a2qlinux/tray.py: under Wine its menu
  * opens only once, because Electron gives up on the menu when it cannot bring
  * its window to the foreground, and Wine's explorer.exe never grants that
  * (docs/ARCHITECTURE.md §6.2). The icon is hidden with the documented per-icon state NIS_HIDDEN,
@@ -17,7 +17,7 @@
  *
  * end-session is what Windows sends at log-off: WM_QUERYENDSESSION, then
  * WM_ENDSESSION. Questlog lets its window close on it, and Electron then ends
- * the browser process at once, without its normal quit. questlog_start.py
+ * the browser process at once, without its normal quit. the launcher
  * therefore waits until Questlog has saved before sending it.
  *
  * Questlog's windows are found by program: owned by a process whose image is

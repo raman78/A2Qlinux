@@ -1,0 +1,69 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "a2qlinux"
+description = "Questlog Desktop (AION 2 damage meter) on Linux under Proton, with live game traffic."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "raman78" }]
+keywords = ["aion2", "questlog", "proton", "wine", "dps-meter", "linux"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: POSIX :: Linux",
+    "Environment :: X11 Applications :: Qt",
+    "Topic :: Games/Entertainment",
+    "Development Status :: 3 - Alpha",
+    "Natural Language :: English",
+]
+dependencies = [
+    "PyQt6>=6.5",        # tray icon
+    "python-xlib>=0.33", # finding Questlog's window to bring it to the front
+]
+dynamic = ["version"]
+
+[project.urls]
+homepage = "https://github.com/raman78/A2Qlinux"
+repository = "https://github.com/raman78/A2Qlinux"
+issues = "https://github.com/raman78/A2Qlinux/issues"
+
+[project.scripts]
+a2qlinux = "a2qlinux.desktop:main"
+a2qlinux-run = "a2qlinux.launcher:run"
+a2qlinux-setup = "a2qlinux.setup_desktop:main"
+a2qlinux-steam = "a2qlinux.steam:main"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "a2qlinux/_version.py"
+
+[tool.hatch.version.raw-options]
+# Tags look like 'v0.1.0'; no local "+g<hash>" part, so builds between tags stay PEP 440 clean.
+local_scheme = "no-local-version"
+
+[tool.hatch.build]
+# The Windows parts are built (bridge/build.sh, or CI) and ignored by git, so
+# they are listed as artifacts to get into both the sdist and the wheel (the
+# wheel is built from the sdist). Hatchling does not complain when they are
+# missing; the release workflow checks the wheel instead.
+artifacts = ["a2qlinux/bin/wpcap.dll", "a2qlinux/bin/questlog_ctl.exe"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["a2qlinux"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "a2qlinux/",
+    "bridge/",
+    "tests/",
+    "tools/",
+    "docs/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+]
+exclude = ["bridge/tests/*.exe", "tools/*.exe"]

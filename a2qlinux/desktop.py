@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Desktop and menu entry point: open questlog_start.py in a terminal, once.
+"""Desktop and menu entry point: open the launcher (a2qlinux.launcher) in a terminal, once.
 
-Arguments are passed on to questlog_start.py, e.g. --close-with-game.
+Arguments are passed on to the launcher (a2qlinux.launcher), e.g. --close-with-game.
 
-If questlog_start.py is already running (its lock is held), no second one is
+If the launcher (a2qlinux.launcher) is already running (its lock is held), no second one is
 started; the running one is asked instead, by a signal to the PID in its lock
 file:
   - from the icon or menu: SIGUSR1, "open Questlog's window" - which also calls
@@ -22,13 +22,12 @@ import subprocess
 import sys
 import time
 
-HERE = Path(__file__).resolve().parent
 QUESTLOG_DIR = Path(os.environ.get("QUESTLOG_DIR") or Path.home() / "Games" / "Questlog").expanduser()
 LOCK = QUESTLOG_DIR / "proton-stream" / ".lock"
 
 
 def launcher_running():
-    """True if questlog_start.py holds its lock right now."""
+    """True if the launcher (a2qlinux.launcher) holds its lock right now."""
     try:
         fd = os.open(LOCK, os.O_RDWR | os.O_CLOEXEC)
     except FileNotFoundError:
@@ -46,7 +45,7 @@ HANDOVER_WAIT = 10   # s for a launcher that was ending to let go of its lock
 
 
 def launcher_pid():
-    """PID of the running questlog_start.py, from its lock file; None if it cannot be told.
+    """PID of the running the launcher (a2qlinux.launcher), from its lock file; None if it cannot be told.
 
     Checked against the process's command line, so a stale or reused PID is
     never signalled.
@@ -56,7 +55,7 @@ def launcher_pid():
         command = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
     except (OSError, ValueError):
         return None
-    return pid if any(arg.endswith(b"questlog_start.py") for arg in command) else None
+    return pid if b"a2qlinux.launcher" in command else None
 
 
 def ask_running_launcher(game_starting):
@@ -84,16 +83,21 @@ def notify(text):
 
 
 def main():
+    try:
+        from .setup_desktop import refresh_entries
+        refresh_entries(lambda text: print(f"a2qlinux: {text}", file=sys.stderr))
+    except (OSError, RuntimeError) as error:   # never in the way of starting Questlog
+        print(f"a2qlinux: could not check the menu entry: {error}", file=sys.stderr)
     if launcher_running() and ask_running_launcher("--wait-for-game" in sys.argv[1:]):
         return 0
     # The window closes by itself when the launcher ends normally (Questlog
     # closed after the game); on an error it stays open until Enter, so the
     # message can be read.
-    # Any arguments (e.g. --close-with-game) are passed on to questlog_start.py.
+    # Any arguments (e.g. --close-with-game) are passed on to the launcher (a2qlinux.launcher).
     script = ('"$0" "$@"; code=$?; if [ $code -ne 0 ]; then echo; '
-              'read -rp "questlog_start.py ended with code $code - press Enter to close. "; fi')
+              'read -rp "A2Qlinux ended with code $code - press Enter to close. "; fi')
     os.execvp("konsole", ["konsole", "-e", "bash", "-c", script, sys.executable,
-                          str(HERE / "questlog_start.py"), *sys.argv[1:]])
+                          "-m", "a2qlinux.launcher", *sys.argv[1:]])
 
 
 if __name__ == "__main__":

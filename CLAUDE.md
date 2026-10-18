@@ -13,8 +13,11 @@ Steam with `proton-cachyos-slr`.
 | installing, daily use, tray icon, updating Questlog, troubleshooting (user guides) | `docs/INSTALL.md`, `docs/USING.md`, `docs/UPDATING.md`, `docs/TROUBLESHOOTING.md` |
 | other meters, NotMeter, game rules, network diagnostics, own-program idea (private, Polish, not in git) | `notes/README.md` |
 
-Tests: `python3 -m unittest` in the repository root. Windows parts:
-`bash bridge/build.sh` (also after a Wine update).
+Code: the package `a2qlinux/` (commands `a2qlinux`, `a2qlinux-run`,
+`a2qlinux-setup`, `a2qlinux-steam`), C sources in `bridge/`. Tests:
+`python3 -m unittest` in the repository root, after `bash bridge/build.sh`
+(also after a Wine update). Installed here with `pipx install --editable .`.
+Work on `develop`; releases per `docs/RELEASE.md` (`main` = last release).
 
 A change to the code is not finished until `docs/ARCHITECTURE.md` and, where
 users see it, the user guide concerned match it — in the same commit. When something

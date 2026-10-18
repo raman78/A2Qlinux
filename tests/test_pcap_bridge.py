@@ -4,8 +4,8 @@ import struct
 import time
 import unittest
 
-import pcap_bridge
-from pcap_bridge import BridgeServer, read_records
+from a2qlinux import pcap_bridge
+from a2qlinux.pcap_bridge import BridgeServer, read_records
 
 GLOBAL = struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 262144, 1)
 

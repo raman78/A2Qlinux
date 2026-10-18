@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 import unittest
 
-import questlog_update as u
+from a2qlinux import update as u
 
 FEED_0134 = """version: 0.1.34
 files:
