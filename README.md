@@ -31,17 +31,19 @@ Status: in daily use on CachyOS, KDE Plasma 6 (Wayland), Proton 11
 ## Quick start
 
 1. Install the requirements and join the `wireshark` group — see
-   [docs/MANUAL.md](docs/MANUAL.md#what-you-need-before-you-start).
+   [docs/INSTALL.md](docs/INSTALL.md#what-you-need-before-you-start).
 2. Unpack Questlog to `~/Games/Questlog` — see
-   [Installing Questlog](docs/MANUAL.md#installing-questlog).
+   [Installing Questlog](docs/INSTALL.md#installing-questlog).
 3. In this folder: `python3 install.py --desktop-shortcut`
 4. Start **Questlog (AION 2)** from the menu, or set the Steam launch option
    that `install.py` prints.
 
 ## Documentation
 
-- [docs/MANUAL.md](docs/MANUAL.md) — installing, daily use, tray icon,
-  updating Questlog, troubleshooting, removal.
+- [docs/INSTALL.md](docs/INSTALL.md) — requirements, installing, removal.
+- [docs/USING.md](docs/USING.md) — starting, tray icon, playing.
+- [docs/UPDATING.md](docs/UPDATING.md) — Questlog updates.
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — problems, FAQ.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how it works and why, failure
   modes, tests, what a Questlog update can break.
 

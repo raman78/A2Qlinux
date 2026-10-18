@@ -10,14 +10,14 @@ Steam with `proton-cachyos-slr`.
 | Question | Document |
 |---|---|
 | how it works, why, failure modes, tests, what a Questlog update can break | `docs/ARCHITECTURE.md` |
-| installing, daily use, tray icon, updating Questlog, troubleshooting | `docs/MANUAL.md` |
+| installing, daily use, tray icon, updating Questlog, troubleshooting (user guides) | `docs/INSTALL.md`, `docs/USING.md`, `docs/UPDATING.md`, `docs/TROUBLESHOOTING.md` |
 | other meters, NotMeter, game rules, network diagnostics, own-program idea (private, Polish, not in git) | `notes/README.md` |
 
 Tests: `python3 -m unittest` in the repository root. Windows parts:
 `bash bridge/build.sh` (also after a Wine update).
 
 A change to the code is not finished until `docs/ARCHITECTURE.md` and, where
-users see it, `docs/MANUAL.md` match it — in the same commit. When something
+users see it, the user guide concerned match it — in the same commit. When something
 about the machine's setup changes (Questlog version, paths, launch method),
 update the "Stan" section of `notes/README.md`.
 

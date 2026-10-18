@@ -2,7 +2,7 @@
 
 How A2Qlinux runs Questlog Desktop (a closed-source, Windows-only Electron
 combat meter for AION 2) under Proton on Linux: what each part does, in what
-order, and why it is shaped that way. Daily use is in `docs/MANUAL.md`; this
+order, and why it is shaped that way. Daily use is in the user guides (`docs/README.md`); this
 document is for changing or debugging the code.
 
 Measured on CachyOS, KDE Plasma 6 on Wayland (X11 programs through XWayland),
@@ -44,7 +44,7 @@ Terms used below:
  |  +- dumpcap (TCP port 13328)        |     |                               |
  |  |   +- BridgeServer 127.0.0.1:port +---->| Questlog.exe --no-sandbox     |
  |  |      (pcap_bridge.py, token)     | TCP |  +- wpcap.dll (ours, in       |
- |  +- Tray -> questlog_tray.py (KDE)  |     |  |   System32\Npcap)           |
+ |  +- Tray -> questlog_tray.py (KDE)  |     |  |   System32\Npcap)          |
  |  +- protontricks-launch ------------+---->|  |   pcap_next_ex every 25 ms |
  |  +- protontricks-launch ------------+---->|  +- window-order guard thread |
  |       questlog_ctl.exe <command>    |     | questlog_ctl.exe (short-lived)|
@@ -156,7 +156,7 @@ Look at the trend over a session, not at one fight. Encounters that end
 without a kill close only after 15 s without hits, so they do not measure
 anything.
 
-Load over 30 s with the game running (Ryzen 7 7700X, RTX 3060 Ti): Questlog's
+Load over 30 s with the game running (8-core desktop CPU, 8 GB GPU): Questlog's
 nine processes 0.07 of a core and 37 MB of GPU memory; the shared
 `wineserver` 0.04; the launcher 0.01; `dumpcap` about 0. `dumpcap` reads a
 copy of the traffic and does not affect the connection to the game server.
@@ -419,17 +419,18 @@ Questlog updates itself with electron-updater: every 5 minutes it reads
 the background, and runs it on quit or from an "install" button in its
 window. Under Wine that installer stops (§7.5), so a downloaded update is
 never installed. `questlog_update.py` does the update instead, the same way as
-a manual update, which therefore remains the fallback (`docs/MANUAL.md`,
-"Updating Questlog"):
+a manual update, which therefore remains the fallback (`docs/UPDATING.md`,
+"Updating by hand"):
 
 ```
- launcher start ── disable_builtin_updater ── install_staged ── Questlog runs
-                                                   ^                  |
-                                                   |   60 s, then every 6 h,
-                                                   |   deferred while AION2.exe runs
-                                                   |                  v
-           <state>/update/<version>/app  <──── stage(): feed -> download ->
-           <state>/update/staged.json           size + SHA-512 -> 7z -> checks
+ at every launch:  disable_builtin_updater -> install_staged -> Questlog
+                                                     ^
+                                                     | a staged version
+ in the background (60 s after start, then every     | that fits
+ 6 h; deferred while AION2.exe runs):                |
+   stage(): feed -> download -> size + SHA-512 -> 7z -> checks
+            -> <state>/update/<version>/app
+            -> <state>/update/staged.json  (verdict: fits / why not)
 ```
 
 1. **`disable_builtin_updater`** removes `resources/app-update.yml`, the only
@@ -545,7 +546,7 @@ processes whose environment points at the game's prefix. Never use
 The NSIS installer checks through PowerShell whether Questlog runs. Wine's
 PowerShell is a stub that answers "running", so the installer tries to close
 Questlog and gives up with code 2. Questlog is therefore installed by
-unpacking its files (`docs/MANUAL.md`, "Installing Questlog"), and updated
+unpacking its files (`docs/INSTALL.md`, "Installing Questlog"), and updated
 by `questlog_update.py` (§6.6). Its own updater downloads new versions fine
 but would start that same installer, so it is switched off.
 
@@ -597,8 +598,8 @@ own files.
 
 A2Qlinux depends on these properties of Questlog. `compatibility_problems`
 in `questlog_update.py` checks all of them before an automatic update
-(§6.6); for a manual update, check them by hand (`docs/MANUAL.md`, "Updating
-Questlog"):
+(§6.6); for a manual update, check them by hand (`docs/UPDATING.md`,
+"Updating by hand"):
 
 | Property | Used by | How to check |
 |---|---|---|

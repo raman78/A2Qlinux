@@ -106,7 +106,7 @@ def main():
     asar = questlog_dir / "resources" / "app.asar"
     if not (questlog_dir / "Questlog.exe").is_file():
         problems.append(f"Questlog.exe not found in {questlog_dir}; unpack Questlog there "
-                        "(docs/MANUAL.md, 'Installing Questlog') or pass --questlog-dir")
+                        "(docs/INSTALL.md, 'Installing Questlog') or pass --questlog-dir")
     else:
         try:
             icon = read_asar_file(asar, "resources/icon.png")

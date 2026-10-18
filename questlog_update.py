@@ -3,7 +3,7 @@
 Questlog updates itself with electron-updater: it downloads the new installer
 in the background and runs it on quit. Under Wine that installer stops with
 code 2 (docs/ARCHITECTURE.md §7.5), so the launcher does the update instead,
-the way docs/MANUAL.md describes doing it by hand:
+the way docs/UPDATING.md describes doing it by hand:
 
   while Questlog runs   stage(): read the feed, download the installer, check
                         size and SHA-512, unpack it, check that the new
@@ -111,7 +111,7 @@ def parse_feed(text):
 def compatibility_problems(app_dir):
     """What in an unpacked Questlog would break A2Qlinux; an empty list means it fits.
 
-    The same checks docs/MANUAL.md lists for a manual update.
+    The checks listed in docs/ARCHITECTURE.md §10.
     """
     app_dir = Path(app_dir)
     asar = app_dir / "resources" / "app.asar"
