@@ -1,0 +1,6 @@
+# Built by bridge/build.sh
+*.exe
+*.dll
+__pycache__/
+*.pyc
+.idea/
