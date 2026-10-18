@@ -1,6 +1,26 @@
-# Built by bridge/build.sh
+# Built by bridge/build.sh (Windows parts, test programs, tools)
 *.exe
 *.dll
+
+# Python
 __pycache__/
 *.pyc
+
+# IDE
 .idea/
+.vscode/
+
+# Claude Code local config (skills, local settings) — kept per-machine, not committed
+.claude/
+
+# Private notes (Polish): other meters, game rules, network diagnostics of this
+# machine. Kept locally, never committed.
+notes/
+
+# Editor / OS
+*.bak
+*.orig
+.DS_Store
+
+# Runtime
+*.log
