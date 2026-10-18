@@ -68,6 +68,7 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
 | `a2qlinux/desktop.py` | Linux | entry point of the menu entry and of `a2qlinux-steam`; one launcher at a time |
 | `a2qlinux/tray.py` | Linux, child of the launcher | our tray icon (PyQt6, drawn by KDE) |
 | `a2qlinux/steam.py` (`a2qlinux-steam`) | Linux, as Steam's launch option | starts the launcher with the game; lets the game join a running Questlog |
+| `a2qlinux/config.py` | Linux, in every command | user settings from `~/.config/a2qlinux/config.toml` (§13) |
 | `a2qlinux/update.py` | Linux, in the launcher | stages new Questlog versions in the background, installs them at the next start (§6.6) |
 | `a2qlinux/setup_desktop.py` (`a2qlinux-setup`) | Linux, by hand; `refresh_entries` on every `a2qlinux` start | menu entry, icon, dependency check; keeps the menu entry (and an existing desktop shortcut) running this installation's `a2qlinux` |
 | `a2qlinux/bin/wpcap.dll` (from `bridge/wpcap_bridge.c`) | prefix, in Questlog's NodeService process | libpcap stand-in; window-order guard |
@@ -183,7 +184,8 @@ then shows "launching" with no end.
 
 1. It records whether a launcher holds the lock **before** starting anything.
 2. It starts `a2qlinux.desktop --wait-for-game` (with any launcher options
-   given before `%command%`: `--close-with-game`, `--no-auto-update`) through
+   given before `%command%`: `--close-with-game`, `--no-auto-update`,
+   which override the settings file, §13) through
    `systemd-run --user`. Started that way, the launcher and its terminal get
    the desktop session's environment instead of Steam's (overlay
    `LD_PRELOAD`, container variables), and Steam does not count them as part
@@ -396,8 +398,9 @@ game running, packets keep arriving, so the quit takes up to 10.5 s:
   shown. Once `end-session` has been sent, such a request makes the launcher
   start Questlog again on the same bridge after it has gone.
 
-`--close-with-game` uses `close_questlog` instead: `wineboot -e` 15 s
-(`GAME_EXIT_GRACE`) after `AION2.exe` has gone, by which time nothing is left
+`after_game = "close"` (§13) or `--close-with-game` uses `close_questlog`
+instead: `wineboot -e` `GAME_EXIT_GRACE` seconds (setting `after_game_delay`,
+15 by default) after `AION2.exe` has gone, by which time nothing is left
 but Questlog. It was written before `questlog_ctl.exe` existed and is kept for
 that case. `wineboot -e` must never be sent while the game runs or is
 starting (§5.2).
@@ -453,7 +456,8 @@ a manual update, which therefore remains the fallback (`docs/UPDATING.md`,
    else: it downloads nothing and never shows its "update ready" prompt,
    which appears only after a download. Tested in a throwaway prefix.
 2. **`stage`**, in a thread (`check_for_updates` in `a2qlinux/launcher.py`): first
-   check 60 s after the start, then every `UPDATE_CHECK_EVERY` (6 h). While
+   check 60 s after the start, then every `UPDATE_CHECK_EVERY` (setting
+   `update_check_hours`, 6 by default). While
    `AION2.exe` runs it waits instead (`UPDATE_CHECK_DEFER`, 10 min), so the
    115 MB download never competes with the game's connection. It reads the
    feed (`parse_feed`) and compares versions numerically. For a newer
@@ -481,7 +485,7 @@ a manual update, which therefore remains the fallback (`docs/UPDATING.md`,
 
 A busy lock (`BUSY`) keeps an install from meeting a half-written stage; an
 install that finds a stage in progress waits for a later start.
-`--no-auto-update` turns off steps 2–4. Step 1 stays, since the built-in
+`auto_update = false` (§13) or `--no-auto-update` turns off steps 2–4. Step 1 stays, since the built-in
 updater cannot install under Wine anyway.
 
 **Why "at the next start".** That is when Questlog does not run, so the swap
@@ -520,13 +524,16 @@ later (`server_shutdown_timeout`). Questlog would die about 5 s after the
 game, and at once when started without it. A Wine process cannot move to
 another session either; it is bound to its wineserver for life.
 
-**What the launcher does.** `GAME_EXIT_GRACE` (15 s) after `AION2.exe` is
-gone, unless `--close-with-game` or a quit is in progress:
+**What the launcher does.** `GAME_EXIT_GRACE` seconds (setting
+`after_game_delay`, 15 by default) after `AION2.exe` is gone, unless
+`after_game = "close"` (or `--close-with-game`) or a quit is in progress:
 
 1. `find_questlog_window` records whether Questlog's main window is shown.
 2. `move_to_fresh_session`: `questlog_ctl.exe end-session`, then
    `wait_for_questlog_exit`. No extra save wait: with the game gone no new
-   data arrives, and 15 s covers Questlog's 10 s flush.
+   data arrives, and the delay covers Questlog's 10 s flush. That is why
+   `after_game_delay` may not go below `MIN_AFTER_GAME_DELAY` (10.5 s, equal
+   to `SAVE_WAIT`).
 3. It waits up to `SESSION_END_WAIT` (30 s) until `wine_session_running`
    finds no `wineserver` for the prefix (by `WINEPREFIX`, else
    `STEAM_COMPAT_DATA_PATH/pfx`). The session is then over. If another
@@ -744,4 +751,39 @@ the `if: false`.
 **Branches.** Work happens on `develop`; a release fast-forwards `main` to it
 and tags `main` (`docs/RELEASE.md`). `main` therefore always equals the last
 release.
+
+## 13. Settings
+
+`a2qlinux/config.py` reads `~/.config/a2qlinux/config.toml` (or under
+`$XDG_CONFIG_HOME`) with the standard library's `tomllib`. `a2qlinux-setup`
+writes it when missing (`config.template`), with every setting at its
+default and a comment for each; it never rewrites an existing file.
+
+| Setting | Default | Replaces | Read by |
+|---|---|---|---|
+| `questlog_dir` | `~/Games/Questlog` | the `QUESTLOG_DIR` default | launcher (`--exe`), `a2qlinux.desktop` (lock file), `a2qlinux-steam`, `a2qlinux-setup` |
+| `interface` | `""` (automatic) | — | launcher (`--interface`) |
+| `after_game` | `"restart"` | — | launcher: §6.7 or `close_questlog` |
+| `after_game_delay` | `15`, at least 10.5 | `GAME_EXIT_GRACE` | launcher |
+| `auto_update` | `true` | — | launcher, §6.6 |
+| `update_check_hours` | `6`, at least 0.25 | `UPDATE_CHECK_EVERY` | launcher, §6.6 |
+
+**Precedence**, highest first: a command-line option (`--exe`,
+`--interface`, `--close-with-game`, `--no-auto-update`), the environment
+(`QUESTLOG_DIR`), the file, the default. Options stay because they are what
+the Steam launch option and a one-off start can pass.
+
+**What is deliberately not a setting.** Values that follow from how Questlog,
+Electron or Wine behave, not from preference: `SAVE_WAIT` (Questlog saves
+within 10 s; a smaller value loses data), `SESSION_END_WAIT`,
+`STEAM_HELPER_WAIT`, `QUESTLOG_QUIT_WAIT`, `HANDOVER_WAIT`,
+`CLIENT_QUEUE_RECORDS`, `GUARD_INTERVAL_MS`. They are named constants next to
+the code they govern and are described in the sections above.
+
+**Errors** never stop A2Qlinux and are never dropped: `config.load` returns
+each one with the file and line (an unknown name, a value of the wrong type,
+a value outside its choices or below its minimum, a file that is not valid
+TOML), and the setting concerned keeps its default. The launcher logs each
+problem (`Settings: …`) and sends one desktop notification. A `true`/`false`
+where a number is expected is refused rather than read as 1/0.
 

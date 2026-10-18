@@ -18,6 +18,9 @@ Code: the package `a2qlinux/` (commands `a2qlinux`, `a2qlinux-run`,
 `python3 -m unittest` in the repository root, after `bash bridge/build.sh`
 (also after a Wine update). Installed here with `pipx install --editable .`.
 Work on `develop`; releases per `docs/RELEASE.md` (`main` = last release).
+User settings: `~/.config/a2qlinux/config.toml` (`a2qlinux/config.py`,
+`docs/ARCHITECTURE.md` §13); values that follow from how Questlog/Wine work
+stay named constants, not settings.
 
 A change to the code is not finished until `docs/ARCHITECTURE.md` and, where
 users see it, the user guide concerned match it — in the same commit. When something

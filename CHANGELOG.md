@@ -5,6 +5,12 @@ What changed for players, release by release. Technical details are in
 
 ## [Unreleased]
 
+### Added
+- A settings file, `~/.config/a2qlinux/config.toml`, created by `a2qlinux-setup`:
+  Questlog's folder, what happens after the game (restart in the background or
+  close) and after how long, and automatic updates. Mistakes in it are
+  reported with their line, and the default is used meanwhile.
+
 ### Changed
 - Quit Questlog ends it at once when no game data is waiting to be saved
   (without the game, or a while after closing it); while playing, it still

@@ -47,12 +47,36 @@ Windows environment, and Questlog runs in it because that is the only way it
 can see the game. Restarted, Questlog is in an environment of its own until
 you press Play again.
 
-If you would rather have Questlog close for good 15 seconds after the game,
-put `--close-with-game` between `a2qlinux-steam` and `%command%` in Steam's
-launch option.
+If you would rather have Questlog close for good after the game, set
+`after_game = "close"` in the settings file (next section).
 
 Tip: to see A2Qlinux's messages in the terminal you are in, instead of a new
 window, run `a2qlinux-run`.
+
+## Settings
+
+A2Qlinux reads its settings from `~/.config/a2qlinux/config.toml`, a text
+file `a2qlinux-setup` creates with every setting at its default and a line
+explaining each. Change a value, save, and start Questlog again; settings
+are read when A2Qlinux starts.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `questlog_dir` | `"~/Games/Questlog"` | folder with Questlog |
+| `interface` | `""` | network interface the game uses; empty: chosen automatically when there is only one |
+| `after_game` | `"restart"` | after the game: `"restart"` keeps Questlog (restarting it in the background so Steam sees the game as closed), `"close"` closes it |
+| `after_game_delay` | `15` | seconds after the game before that happens; at least 10.5, so that Questlog has saved |
+| `auto_update` | `true` | update Questlog automatically ([UPDATING.md](UPDATING.md)) |
+| `update_check_hours` | `6` | hours between checks for a new Questlog |
+
+A mistake in the file (an unknown name, a wrong value, a missing quote) does
+not stop A2Qlinux: that setting keeps its default, and the status window and
+a notification say which line is wrong.
+
+The same can be set for a single start with an option, which wins over the
+file: `--close-with-game`, `--no-auto-update`, `--interface <name>`. Put it
+after `a2qlinux` in the menu entry's command, or between `a2qlinux-steam` and
+`%command%` in Steam's launch option.
 
 ## The tray icon
 

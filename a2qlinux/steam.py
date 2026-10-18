@@ -4,8 +4,8 @@ Steam > AION 2 > Properties > General > Launch Options:
     a2qlinux-steam %command%
 Launcher options go before %command%, e.g.
     a2qlinux-steam --close-with-game %command%
-Questlog unpacked somewhere other than ~/Games/Questlog: put QUESTLOG_DIR=<dir>
-in front.
+Where Questlog is, and what happens after the game, come from
+~/.config/a2qlinux/config.toml (a2qlinux.config).
 
 The launcher is started through the user's systemd manager, not as a child of
 this process: it then runs with the desktop session's environment instead of

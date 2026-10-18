@@ -16,17 +16,16 @@ Run it again after moving Questlog's folder.
 """
 
 import argparse
-import os
 from pathlib import Path
 import shutil
 import struct
 import subprocess
 import sys
 
+from . import config
 from .update import read_asar_file
 
 BIN = Path(__file__).resolve().parent / "bin"
-DEFAULT_QUESTLOG_DIR = Path.home() / "Games" / "Questlog"
 ENTRY_ID = "questlog-aion2"
 ICON = Path.home() / ".local" / "share" / "icons" / f"{ENTRY_ID}.png"
 MENU_ENTRY = Path.home() / ".local" / "share" / "applications" / f"{ENTRY_ID}.desktop"
@@ -79,9 +78,7 @@ def command(name):
 
 
 def desktop_entry(questlog_dir):
-    run = command("a2qlinux")
-    if questlog_dir != DEFAULT_QUESTLOG_DIR:
-        run = f"env QUESTLOG_DIR={questlog_dir} {run}"
+    run = command("a2qlinux")      # where Questlog is comes from the settings file
     return ("[Desktop Entry]\n"
             "Type=Application\n"
             "Name=Questlog (AION 2)\n"
@@ -123,7 +120,7 @@ def refresh_entries(log=lambda text: None):
     rewritten if it exists. Returns the paths written.
     """
     ours = command("a2qlinux")
-    questlog_dir = Path(os.environ.get("QUESTLOG_DIR") or DEFAULT_QUESTLOG_DIR).expanduser().resolve()
+    questlog_dir = config.questlog_dir().resolve()
     written = []
     for path, create in ((MENU_ENTRY, True), (desktop_shortcut_path(), False)):
         if not path.exists() and not create:
@@ -148,12 +145,23 @@ def refresh_entries(log=lambda text: None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--questlog-dir", type=Path,
-                        default=Path(os.environ.get("QUESTLOG_DIR") or DEFAULT_QUESTLOG_DIR),
-                        help=f"folder with Questlog.exe (default {DEFAULT_QUESTLOG_DIR})")
+                        default=None,
+                        help=f"folder with Questlog.exe (default: from {config.CONFIG_PATH}, else ~/Games/Questlog); "
+                             "written into a new settings file")
     parser.add_argument("--desktop-shortcut", action="store_true", help="also put the entry on the desktop")
     args = parser.parse_args()
-    questlog_dir = args.questlog_dir.expanduser().resolve()
-    problems = []
+    settings, config_problems = config.load()
+    questlog_dir = (args.questlog_dir or settings.questlog_dir).expanduser().resolve()
+    problems = list(config_problems)
+    if not config.CONFIG_PATH.exists():
+        config.CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        config.CONFIG_PATH.write_text(config.template(questlog_dir))
+        print(f"Settings: {config.CONFIG_PATH} (every setting at its default, with comments)")
+    elif questlog_dir != settings.questlog_dir.resolve():
+        problems.append(f"--questlog-dir {questlog_dir} differs from {settings.questlog_dir} in "
+                        f"{config.CONFIG_PATH}; set questlog_dir there, which A2Qlinux reads")
+    else:
+        print(f"Settings: {config.CONFIG_PATH}")
 
     missing = check_programs()
     if missing:
@@ -190,9 +198,8 @@ def main():
         shortcut.chmod(0o755)
         print(f"Desktop shortcut: {shortcut}")
 
-    prefix = "" if questlog_dir == DEFAULT_QUESTLOG_DIR else f"QUESTLOG_DIR={questlog_dir} "
     print("\nSteam > AION 2 > Properties > General > Launch Options (optional, starts Questlog with the game):")
-    print(f"    {prefix}{command('a2qlinux-steam')} %command%")
+    print(f"    {command('a2qlinux-steam')} %command%")
 
     if problems:
         print("\nNot ready yet:", file=sys.stderr)

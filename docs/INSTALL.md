@@ -83,8 +83,9 @@ Do **not** install Npcap itself into the game's Proton environment. It is a
 Windows driver and does not work there. A2Qlinux provides what Questlog needs
 instead.
 
-Tip: if you keep Questlog somewhere else, tell A2Qlinux with
-`--questlog-dir` when installing (next section).
+Tip: if you keep Questlog somewhere else, give the folder once as
+`a2qlinux-setup --questlog-dir <folder>` (next section); it is written into
+A2Qlinux's settings file.
 
 ## Installing A2Qlinux
 
@@ -102,8 +103,9 @@ a folder of their own and puts its commands in `~/.local/bin`.
    a2qlinux-setup --desktop-shortcut
    ```
 
-`a2qlinux-setup` checks the packages from the list above and names any that
-are missing. It takes Questlog's icon from your Questlog folder (A2Qlinux
+`a2qlinux-setup` creates A2Qlinux's settings file (see "Settings" in
+[USING.md](USING.md)) unless it exists, checks the packages from the list above
+and names any that are missing. It takes Questlog's icon from your Questlog folder (A2Qlinux
 does not ship Questlog's logo) and creates the "Questlog (AION 2)" entry. At
 the end it prints the line for Steam's launch options (see
 [USING.md](USING.md)) and either "Ready" or a list of what is still missing.

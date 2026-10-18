@@ -36,6 +36,7 @@ import sys
 import threading
 import time
 
+from . import config
 from . import update as questlog_update
 from .pcap_bridge import BridgeServer, read_records
 
@@ -47,9 +48,6 @@ BRIDGE_DLL = BIN / "wpcap.dll"
 # Marks our DLL in the prefix (kept from the project's first name: changing it
 # would make install_bridge_dll take an installed build for a foreign file).
 BRIDGE_SIGNATURE = b"questlog-proton bridge"
-# Where Questlog's files were unpacked; QUESTLOG_DIR overrides (see a2qlinux-setup).
-QUESTLOG_DIR = Path(os.environ.get("QUESTLOG_DIR") or Path.home() / "Games" / "Questlog").expanduser()
-DEFAULT_EXE = QUESTLOG_DIR / "Questlog.exe"
 
 
 def log(message):
@@ -535,7 +533,7 @@ def show_questlog_window(start_again):
 
 # ------------------------------------------------------------------- launch
 
-UPDATE_CHECK_EVERY = 6 * 3600   # s between checks for a new Questlog
+UPDATE_CHECK_EVERY = 6 * 3600   # s between checks for a new Questlog; set from config (update_check_hours)
 UPDATE_CHECK_DEFER = 600        # s to wait while the game runs: no 115 MB download during play
 UPDATE_TRIAL = 60               # s: a just-updated Questlog that exits sooner is rolled back
 
@@ -558,7 +556,7 @@ def check_for_updates(questlog_dir, state_dir):
         time.sleep(UPDATE_CHECK_EVERY)
 
 
-GAME_EXIT_GRACE = 15      # s without AION2.exe before Questlog is closed
+GAME_EXIT_GRACE = 15      # s without AION2.exe before Questlog restarts or closes; set from config (after_game_delay)
 QUESTLOG_QUIT_WAIT = 20   # s for Questlog to quit after the session end
 
 
@@ -702,9 +700,16 @@ def launch_questlog(executable, server, address, protontricks, log_path, hidden=
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--exe", type=Path, default=DEFAULT_EXE, help=f"Questlog.exe (default {DEFAULT_EXE})")
-    parser.add_argument("--interface", help="network interface carrying the game connection")
+    global GAME_EXIT_GRACE, UPDATE_CHECK_EVERY
+    settings, config_problems = config.load()
+    GAME_EXIT_GRACE = settings.after_game_delay
+    UPDATE_CHECK_EVERY = settings.update_check_hours * 3600
+    default_exe = settings.questlog_dir / "Questlog.exe"
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     epilog=f"Settings file: {config.CONFIG_PATH} (options here override it).")
+    parser.add_argument("--exe", type=Path, default=default_exe, help=f"Questlog.exe (default {default_exe})")
+    parser.add_argument("--interface", default=settings.interface or None,
+                        help="network interface carrying the game connection")
     parser.add_argument("--wait-for-game", action="store_true",
                         help="start Questlog only once AION 2 runs (the Steam launch option uses this); "
                              "default: start it at once, e.g. to look through saved fights")
@@ -715,6 +720,13 @@ def main():
                         help=f"close Questlog {GAME_EXIT_GRACE} s after AION 2 exits "
                              "(default: Questlog stays open, e.g. to look through fights afterwards)")
     args = parser.parse_args()
+    close_with_game = args.close_with_game or settings.after_game == "close"
+    auto_update = settings.auto_update and not args.no_auto_update
+    for problem in config_problems:
+        log(f"Settings: {problem}")
+    if config_problems:
+        notify(f"{len(config_problems)} problem(s) in {config.CONFIG_PATH}; defaults used for those settings. "
+               "Details in the A2Qlinux window.")
     if os.geteuid() == 0:
         parser.error("Run as your normal user, without sudo.")
     executable = args.exe.expanduser().resolve()
@@ -769,7 +781,7 @@ def main():
                 # A fresh Questlog shows its window (unless hidden); earlier "open" requests are answered by that.
                 requests.take()
                 questlog_update.disable_builtin_updater(executable.parent, log)
-                if not args.no_auto_update and questlog_update.install_staged(executable.parent, state_dir, log):
+                if auto_update and questlog_update.install_staged(executable.parent, state_dir, log):
                     trial["until"] = time.monotonic() + UPDATE_TRIAL
                 log(f"Starting Questlog {questlog_update.installed_version(executable.parent) or '(version unknown)'}.")
                 started = launch_questlog(executable, server, address, protontricks, log_path, hidden=hidden)
@@ -781,7 +793,7 @@ def main():
                 return launch_questlog(executable, server, address, protontricks, log_path)
 
             questlog = start_questlog()
-            if not args.no_auto_update:
+            if auto_update:
                 threading.Thread(target=check_for_updates, args=(executable.parent, state_dir), daemon=True).start()
             told = False
             game_gone_since = None
@@ -876,17 +888,17 @@ def main():
                     pass
                 elif game_gone_since is None:
                     game_gone_since = time.monotonic()
-                    if args.close_with_game:
+                    if close_with_game:
                         log(f"AION 2 has exited; closing Questlog in {GAME_EXIT_GRACE} s unless the game comes back.")
                     else:
                         log(f"AION 2 has exited. In {GAME_EXIT_GRACE} s Questlog restarts in the background, "
                             "out of the game's Wine session, so that Steam sees the game as closed; it stays "
                             "usable and waits for the next start of the game.")
-                elif args.close_with_game and not closing and time.monotonic() - game_gone_since >= GAME_EXIT_GRACE:
+                elif close_with_game and not closing and time.monotonic() - game_gone_since >= GAME_EXIT_GRACE:
                     closing = True
                     tray.stop()
                     close_questlog(prefix, protontricks, log_path)
-                elif not args.close_with_game and not quit_control.quitting \
+                elif not close_with_game and not quit_control.quitting \
                         and time.monotonic() - game_gone_since >= GAME_EXIT_GRACE:
                     shown = find_questlog_window() is not None
                     log("Moving Questlog out of the game's Wine session; back in a few seconds"

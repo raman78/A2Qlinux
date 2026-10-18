@@ -58,6 +58,7 @@ Status: in daily use on CachyOS, KDE Plasma 6 (Wayland), Proton 11
 | `a2qlinux/pcap_bridge.py` | TCP server that feeds captured packets to the DLL |
 | `a2qlinux/desktop.py` | `a2qlinux`: menu-entry entry point; one launcher at a time |
 | `a2qlinux/tray.py` | tray icon (PyQt6) |
+| `a2qlinux/config.py` | settings from `~/.config/a2qlinux/config.toml` |
 | `a2qlinux/update.py` | background Questlog updates: download, verify, check, install, roll back |
 | `a2qlinux/steam.py` | `a2qlinux-steam`: Steam launch-option wrapper |
 | `a2qlinux/setup_desktop.py` | `a2qlinux-setup`: menu entry, icon, dependency check |

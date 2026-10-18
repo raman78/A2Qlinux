@@ -22,8 +22,9 @@ import subprocess
 import sys
 import time
 
-QUESTLOG_DIR = Path(os.environ.get("QUESTLOG_DIR") or Path.home() / "Games" / "Questlog").expanduser()
-LOCK = QUESTLOG_DIR / "proton-stream" / ".lock"
+from .config import questlog_dir
+
+LOCK = questlog_dir() / "proton-stream" / ".lock"
 
 
 def launcher_running():

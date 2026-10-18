@@ -37,10 +37,9 @@ settings are not in these folders, so an update does not touch them.
 Tip: the status window shows which version is running in its
 `Starting Questlog …` line.
 
-To turn automatic updates off, start A2Qlinux with `--no-auto-update`: in
-Steam's launch option between `a2qlinux-steam` and `%command%`, and for the
-menu entry by adding it after `a2qlinux` in the entry's command (KDE:
-right-click the entry > Edit Application). Then update by hand.
+To turn automatic updates off, set `auto_update = false` in the settings file
+(see "Settings" in [USING.md](USING.md)); `update_check_hours` there sets how
+often A2Qlinux checks. Then update by hand.
 
 ### Updating by hand
 
