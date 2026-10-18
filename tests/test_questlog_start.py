@@ -11,9 +11,14 @@ class InstallBridgeDllTest(unittest.TestCase):
         self.prefix = Path(self.tmp.name)
         self.target = self.prefix / "drive_c" / "windows" / "system32" / "Npcap" / "wpcap.dll"
         self.target.parent.parent.mkdir(parents=True)
-        self.ours = q.BRIDGE_DLL.read_bytes()
+        # A stand-in for the built DLL, so the tests do not depend on bridge/build.sh having run.
+        self.ours = b"MZ current build " + q.BRIDGE_SIGNATURE + b" ..."
+        self.saved_dll = q.BRIDGE_DLL
+        q.BRIDGE_DLL = Path(self.tmp.name) / "built-wpcap.dll"
+        q.BRIDGE_DLL.write_bytes(self.ours)
 
     def tearDown(self):
+        q.BRIDGE_DLL = self.saved_dll
         self.tmp.cleanup()
 
     def test_installs_when_missing(self):
