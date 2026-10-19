@@ -8,7 +8,7 @@ started; the running one is asked instead, by a signal to the PID in its lock
 file:
   - from the icon or menu: SIGUSR1, "open Questlog's window" - which also calls
     off a quit chosen in our tray icon a moment before;
-  - from the Steam launch option (--wait-for-game; the game is starting):
+  - from the Steam launch option (--for-game; the game is starting):
     SIGUSR2, "keep Questlog running" - calls off such a quit, opens nothing.
 If the launcher was just ending, it lets go of the lock instead of answering;
 a new one is then started here.
@@ -89,7 +89,10 @@ def main():
         refresh_entries(lambda text: print(f"a2qlinux: {text}", file=sys.stderr))
     except (OSError, RuntimeError) as error:   # never in the way of starting Questlog
         print(f"a2qlinux: could not check the menu entry: {error}", file=sys.stderr)
-    if launcher_running() and ask_running_launcher("--wait-for-game" in sys.argv[1:]):
+    # --for-game only tells who is asking; the launcher starts Questlog at once either way.
+    for_game = "--for-game" in sys.argv[1:]
+    options = [arg for arg in sys.argv[1:] if arg != "--for-game"]
+    if launcher_running() and ask_running_launcher(for_game):
         return 0
     # The window closes by itself when the launcher ends normally (Questlog
     # closed after the game); on an error it stays open until Enter, so the
@@ -98,7 +101,7 @@ def main():
     script = ('"$0" "$@"; code=$?; if [ $code -ne 0 ]; then echo; '
               'read -rp "A2Qlinux ended with code $code - press Enter to close. "; fi')
     os.execvp("konsole", ["konsole", "-e", "bash", "-c", script, sys.executable,
-                          "-m", "a2qlinux.launcher", *sys.argv[1:]])
+                          "-m", "a2qlinux.launcher", *options])
 
 
 if __name__ == "__main__":

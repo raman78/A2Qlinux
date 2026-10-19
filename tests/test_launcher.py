@@ -113,7 +113,7 @@ class SessionLockTest(unittest.TestCase):
                 q.os.close(fd)
 
 
-class OrphanedSteamHelperTest(unittest.TestCase):
+class GameSteamHelperTest(unittest.TestCase):
     """Only a steam.exe carrying the game's app id is ended."""
 
     def test_ends_the_games_steam_exe_and_nothing_else(self):
@@ -126,7 +126,7 @@ class OrphanedSteamHelperTest(unittest.TestCase):
                 if ours.pid in q.game_processes(q.APPID, ["steam.exe"])["steam.exe"]:
                     break
                 q.time.sleep(0.02)
-            self.assertEqual(q.end_orphaned_steam_helper(), 1)
+            self.assertEqual(q.end_game_steam_helper("in a test"), 1)
             self.assertIsNotNone(ours.wait(timeout=5))
             self.assertIsNone(other.poll())
         finally:
@@ -134,6 +134,117 @@ class OrphanedSteamHelperTest(unittest.TestCase):
                 if process.poll() is None:
                     process.kill()
                     process.wait()
+
+
+# Process tables shaped like those seen with the real game (20 October 2026):
+# {pid: (parent, kernel name, argv[0])}.
+STEAM_CLIENT = {1215: (1, "systemd", "/usr/lib/systemd/systemd"),
+                5000: (1215, "steam", "/home/u/.local/share/Steam/ubuntu12_32/steam")}
+GAME_LAUNCH = {   # reaper -> container -> Proton's script -> steam.exe
+    83705: (5000, "reaper", "/home/u/.local/share/Steam/ubuntu12_32/reaper"),
+    83709: (83705, "srt-bwrap", "/home/u/Games/steamapps/common/SteamLinuxRuntime_4/.../srt-bwrap"),
+    83778: (83709, "pv-adverb", "/usr/lib/pressure-vessel/from-host/libexec/steam-runtime-tools-0/pv-adverb"),
+    83811: (83778, "python3", "python3"),
+    83812: (83811, "steam.exe", "c:\\windows\\system32\\steam.exe"),
+}
+QUESTLOG_LAUNCH = {   # protontricks-launch -> container, holding the session's wineserver and Questlog
+    80900: (1215, "protontricks-la", "/usr/bin/python"),
+    80960: (80900, "pv-adverb", "/usr/lib/pressure-vessel/from-host/libexec/steam-runtime-tools-0/pv-adverb"),
+    81141: (80960, "wineserver", "/run/host/usr/share/steam/compatibilitytools.d/proton-cachyos-slr/files/bin/wineserver"),
+    81148: (80960, "winedevice.exe", "C:\\windows\\system32\\winedevice.exe"),
+    81195: (80960, "CrBrowserMain", "Z:\\home\\u\\Games\\Questlog\\Questlog.exe"),
+}
+
+
+class GameLaunchStateTest(unittest.TestCase):
+    """Whose launch holds the Wine session decides between ending steam.exe and restarting Questlog."""
+
+    def test_game_joined_questlogs_session_only_steam_exe_left(self):
+        table = {**STEAM_CLIENT, **GAME_LAUNCH, **QUESTLOG_LAUNCH}
+        self.assertEqual(q.game_launch_state(table, {83812}), ("release", {83812}))
+
+    def test_game_programs_still_ending(self):
+        table = {**STEAM_CLIENT, **GAME_LAUNCH, **QUESTLOG_LAUNCH,
+                 84458: (83778, "EpicWebHelper.e", "Z:/home/u/Games/steamapps/common/AION2/Engine/EpicWebHelper.exe")}
+        self.assertEqual(q.game_launch_state(table, {83812}), ("wait", ["epicwebhelper.exe"]))
+
+    def test_session_started_by_the_game(self):
+        table = {**STEAM_CLIENT, **GAME_LAUNCH,
+                 83900: (83778, "wineserver", "/run/host/usr/share/steam/.../bin/wineserver"),
+                 83901: (83778, "explorer.exe", "C:\\windows\\system32\\explorer.exe"),
+                 81195: (80960, "CrBrowserMain", "Z:\\home\\u\\Games\\Questlog\\Questlog.exe")}
+        state, _ = q.game_launch_state(table, {83812})
+        self.assertEqual(state, "restart")
+
+    def test_steam_exe_without_a_reaper_is_not_ended(self):
+        table = {**STEAM_CLIENT, 83812: (1215, "steam.exe", "c:\\windows\\system32\\steam.exe")}
+        state, _ = q.game_launch_state(table, {83812})
+        self.assertEqual(state, "restart")
+
+    def test_no_steam_exe_left(self):
+        self.assertEqual(q.game_launch_state({**STEAM_CLIENT, **QUESTLOG_LAUNCH}, set()), ("free", None))
+
+
+class AfterGameTest(unittest.TestCase):
+    def test_steam_exe_is_ended_once_it_has_been_alone_for_the_settle_time(self):
+        after = q.AfterGame(exited_at=100.0, settle=2)
+        self.assertIsNone(after.next("wait", 100.5))
+        self.assertIsNone(after.next("release", 101.0))
+        self.assertIsNone(after.next("release", 102.5))
+        self.assertEqual(after.next("release", 103.0), "release")
+
+    def test_settle_time_starts_again_when_other_programs_reappear(self):
+        after = q.AfterGame(exited_at=100.0, settle=2)
+        after.next("release", 101.0)
+        after.next("wait", 102.0)
+        self.assertIsNone(after.next("release", 103.5))
+        self.assertEqual(after.next("release", 105.5), "release")
+
+    def test_restart_waits_until_the_last_data_is_saved(self):
+        after = q.AfterGame(exited_at=100.0, save_wait=10.5)
+        self.assertIsNone(after.next("restart", 105.0, last_data=99.0))
+        self.assertEqual(after.next("restart", 109.5, last_data=99.0), "restart")
+
+    def test_restart_at_once_without_recent_data(self):
+        after = q.AfterGame(exited_at=100.0, save_wait=10.5)
+        self.assertEqual(after.next("restart", 100.0, last_data=50.0), "restart")
+        self.assertEqual(q.AfterGame(exited_at=100.0).next("restart", 100.0), "restart")
+
+    def test_free_needs_nothing(self):
+        self.assertEqual(q.AfterGame(exited_at=100.0).next("free", 100.0), "free")
+
+
+class ReleaseSteamAfterQuestlogTest(unittest.TestCase):
+    """After Questlog is ended with the game gone, a steam.exe left over is ended once the session closes."""
+
+    def setUp(self):
+        self.saved = q.game_processes, q.wine_session_running, q.end_game_steam_helper
+        self.ended = []
+        q.end_game_steam_helper = lambda why, pids=None: self.ended.append(why) or 1
+
+    def tearDown(self):
+        q.game_processes, q.wine_session_running, q.end_game_steam_helper = self.saved
+
+    def fake(self, game, steam_exe, session):
+        q.game_processes = lambda appid, names: {"aion2.exe": game, "steam.exe": steam_exe}
+        q.wine_session_running = lambda prefix: session
+
+    def test_left_over_steam_exe_is_ended_once_the_session_is_gone(self):
+        self.fake(game=set(), steam_exe={83812}, session=False)
+        self.assertTrue(q.release_steam_after_questlog(Path("/pfx")))
+        self.assertEqual(len(self.ended), 1)
+
+    def test_nothing_while_the_game_runs(self):
+        self.fake(game={83816}, steam_exe={83812}, session=False)
+        self.assertTrue(q.release_steam_after_questlog(Path("/pfx")))
+        self.assertEqual(self.ended, [])
+
+    def test_no_wait_without_a_steam_exe(self):
+        self.fake(game=set(), steam_exe=set(), session=True)
+        started = q.time.monotonic()
+        self.assertTrue(q.release_steam_after_questlog(Path("/pfx")))
+        self.assertLess(q.time.monotonic() - started, 0.5)
+        self.assertEqual(self.ended, [])
 
 
 class WineSessionRunningTest(unittest.TestCase):

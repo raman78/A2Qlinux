@@ -11,7 +11,7 @@ bridge/wpcap_bridge.c) and feeds it from dumpcap on the Linux side:
 Questlog then runs its normal live capture loop, as on Windows.
 
 Run it as your normal user (dumpcap through the `wireshark` group). Questlog
-opens at once, game or not; with --wait-for-game only once the game runs.
+opens at once, game or not.
 
 While Questlog runs, its tray icon is ours (a2qlinux/tray.py, drawn by KDE):
 Questlog's own icon is hidden because under Wine its menu opens only once.
@@ -71,7 +71,11 @@ def program_name(pid):
     is no use here: Chromium renames its processes (CrBrowserMain,
     CrGpuMain, ...), so Questlog never shows up under its own name there.
     """
-    argv0 = _read(f"/proc/{pid}/cmdline", 4096).split("\0", 1)[0]
+    return exe_name(_read(f"/proc/{pid}/cmdline", 4096).split("\0", 1)[0])
+
+
+def exe_name(argv0):
+    """Lower-case file name in a Windows or Linux path."""
     return argv0.replace("\\", "/").rsplit("/", 1)[-1].lower()
 
 
@@ -196,25 +200,6 @@ def wait_for_game_or_cancel(appid):
         time.sleep(0.5)
     time.sleep(2)
     log("AION 2 is running; reopening Questlog.")
-
-
-def wait_for_game(appid):
-    """Return once AION2.exe has been running for two seconds."""
-    seen_since = None
-    told = False
-    while True:
-        running = game_processes(appid, ["aion2.exe"])["aion2.exe"]
-        now = time.monotonic()
-        if running:
-            seen_since = seen_since or now
-            if now - seen_since >= 2:
-                return
-        else:
-            seen_since = None
-            if not told:
-                log("Waiting for AION 2. Press Play in Steam; Questlog opens once the game runs.")
-                told = True
-        time.sleep(0.5)
 
 
 # ------------------------------------------------------------------ capture
@@ -556,7 +541,7 @@ def check_for_updates(questlog_dir, state_dir):
         time.sleep(UPDATE_CHECK_EVERY)
 
 
-GAME_EXIT_GRACE = 15      # s without AION2.exe before Questlog restarts or closes; set from config (after_game_delay)
+GAME_EXIT_GRACE = 15      # s without AION2.exe before Questlog closes with the game; set from config (after_game_delay)
 QUESTLOG_QUIT_WAIT = 20   # s for Questlog to quit after the session end
 
 
@@ -597,20 +582,122 @@ def wine_session_running(prefix):
 
 
 SESSION_END_WAIT = 30   # s for the game's Wine session to close once Questlog has gone
-STEAM_HELPER_WAIT = 5   # s for an orphaned steam.exe to end after SIGTERM
+STEAM_HELPER_WAIT = 5   # s for the game's steam.exe to end after SIGTERM
+RELEASE_SETTLE = 2      # s the game's steam.exe must be alone in its launch before it is ended
 
 
-def end_orphaned_steam_helper():
-    """End the game's steam.exe if it outlived its Wine session. Returns how many were ended.
+def process_table():
+    """{pid: (parent pid, kernel name, argv[0])} of this user's processes."""
+    table = {}
+    uid = str(os.getuid())
+    with os.scandir("/proc") as entries:
+        for entry in entries:
+            if not entry.name.isdigit():
+                continue
+            status = dict(line.split(":", 1) for line in _read(f"/proc/{entry.name}/status").splitlines() if ":" in line)
+            if status.get("Uid", "").split()[:1] != [uid] or status.get("State", "").strip()[:1] in {"Z", "X"}:
+                continue
+            table[int(entry.name)] = (int(status.get("PPid", "0").strip() or 0), status.get("Name", "").strip(),
+                                      _read(f"/proc/{entry.name}/cmdline", 4096).split("\0", 1)[0])
+    return table
 
-    Call only once the game's session is gone. Proton's steam.exe waits for
-    the session's "no user process left" event; with Proton's ntsync waits it
-    was seen sleeping on after the session's wineserver had exited, never
-    woken, and Steam showed AION 2 as running until it was ended - by hand, or
-    here. SIGTERM ends it and, with it, Proton's script, the runtime container
-    and Steam's reaper, exactly as Steam's own Stop does (tested).
+
+def is_windows_program(argv0):
+    """Wine puts the program's Windows path (C:\\…, Z:/…) in argv[0]."""
+    return bool(re.match(r"[A-Za-z]:[\\/]", argv0))
+
+
+def game_launch_state(table, steam_pids):
+    """What is left of Steam's launch of the game once AION2.exe has gone: (state, detail).
+
+    Steam counts the game as running until its `reaper` for the game ends,
+    and that waits for every process below it (the runtime container's
+    pv-adverb is a subreaper and lets nothing go). Below it are Proton's
+    script and steam.exe, which waits until no ordinary program is left in
+    the Wine session (docs/ARCHITECTURE.md §6.7). Whose launch started the
+    session's wineserver decides what can be done:
+
+      "free"     no steam.exe of the game is left: Steam already sees the game as closed
+      "release"  only steam.exe is left in the game's launch: ending it releases Steam;
+                 Questlog's session is elsewhere and stays (detail: steam.exe PIDs)
+      "wait"     other Windows programs of the game's launch still run (detail: their names)
+      "restart"  the Wine session itself was started by the game's launch, so it lives in
+                 the launch until Questlog leaves it; or the launch cannot be told
+                 (detail: why)
     """
-    orphans = game_processes(APPID, ["steam.exe"])["steam.exe"]
+    if not steam_pids:
+        return "free", None
+    reapers = set()
+    for pid in steam_pids:
+        ancestor = table.get(pid, (0,))[0]
+        while ancestor in table and table[ancestor][1] != "reaper":
+            ancestor = table[ancestor][0]
+        if ancestor not in table:
+            return "restart", f"steam.exe {pid} has no Steam reaper above it"
+        reapers.add(ancestor)
+    children = collections.defaultdict(list)
+    for pid, (parent, _, _) in table.items():
+        children[parent].append(pid)
+    below, todo = [], list(reapers)
+    while todo:
+        pid = todo.pop()
+        for child in children[pid]:
+            below.append(child)
+            todo.append(child)
+    if any(table[pid][1] == "wineserver" for pid in below):
+        return "restart", "the game's launch started the Wine session Questlog runs in"
+    others = sorted({exe_name(table[pid][2]) for pid in below
+                     if is_windows_program(table[pid][2]) and pid not in steam_pids})
+    if others:
+        return "wait", others
+    return "release", set(steam_pids)
+
+
+class AfterGame:
+    """What to do after the game has exited, from game_launch_state, polled.
+
+    next() returns one action, or None while there is nothing to do yet:
+      "free"     Steam sees the game as closed already; Questlog stays as it is
+      "release"  end the game's steam.exe; Questlog stays as it is
+      "restart"  move Questlog out of the game's session and start it again
+
+    steam.exe must have been alone for `settle` seconds before it is ended:
+    a game that restarts itself goes through it. A restart ends Questlog
+    without letting it save, so it waits until `save_wait` after the last
+    game data reached Questlog (with the game closed, that is about when it
+    closed).
+    """
+
+    def __init__(self, exited_at, save_wait=SAVE_WAIT, settle=RELEASE_SETTLE):
+        self.exited_at = exited_at
+        self.save_wait = save_wait
+        self.settle = settle
+        self.alone_since = None
+
+    def restart_at(self, last_data=None):
+        return max(self.exited_at, last_data + self.save_wait) if last_data is not None else self.exited_at
+
+    def next(self, state, now, last_data=None):
+        if state == "free":
+            return "free"
+        if state != "release":
+            self.alone_since = None
+            return "restart" if state == "restart" and now >= self.restart_at(last_data) else None
+        if self.alone_since is None:
+            self.alone_since = now
+        return "release" if now - self.alone_since >= self.settle else None
+
+
+def end_game_steam_helper(why, pids=None):
+    """End the game's steam.exe (those in `pids`, else every one of the game's). Returns how many were ended.
+
+    SIGTERM ends it and, with it, Proton's script, the runtime container and
+    Steam's reaper, exactly as Steam's own Stop does. Tested both after the
+    game's Wine session had closed (where steam.exe was seen sleeping on in
+    ntsync waits the server's exit does not wake) and with Questlog's session
+    still running, which it leaves alone (§6.7).
+    """
+    orphans = set(pids) if pids is not None else game_processes(APPID, ["steam.exe"])["steam.exe"]
     for pid in orphans:
         try:
             os.kill(pid, signal.SIGTERM)
@@ -622,7 +709,7 @@ def end_orphaned_steam_helper():
     left = game_processes(APPID, ["steam.exe"])["steam.exe"] & orphans
     if orphans:
         log(f"Ended {len(orphans) - len(left)} of {len(orphans)} steam.exe left over from the game's launch "
-            "after its Wine session had closed; Steam sees AION 2 as closed now."
+            f"{why}; Steam sees AION 2 as closed now."
             + (f" Still running: {sorted(left)} - use Stop in Steam." if left else ""))
     return len(orphans) - len(left)
 
@@ -637,17 +724,30 @@ def move_to_fresh_session(prefix, protontricks, log_path):
     then starts Questlog again in a session of its own.
     """
     run_ctl(protontricks, "end-session", log_path)
-    wait_for_questlog_exit("the game had been closed for "
-                           f"{GAME_EXIT_GRACE} s, so its data was saved")
+    wait_for_questlog_exit(f"it had {SAVE_WAIT:.0f} s since the last game data to save")
+    return release_steam_after_questlog(prefix, "Questlog starts again anyway.")
+
+
+def release_steam_after_questlog(prefix, then=""):
+    """Once Questlog has been ended with the game gone: let Steam see the game end. True if it does.
+
+    Ending Questlog lets the game's Wine session close, but the game's
+    steam.exe was seen sleeping on after that, never woken (§6.7, step 3b),
+    and Steam then shows AION 2 as running for hours. So wait for the session
+    to close and end any steam.exe of the game left over. Nothing to do, and
+    no wait, while the game runs or when no steam.exe of it is left.
+    """
+    if game_processes(APPID, ["aion2.exe"])["aion2.exe"] or not game_processes(APPID, ["steam.exe"])["steam.exe"]:
+        return True
     deadline = time.monotonic() + SESSION_END_WAIT
     while time.monotonic() < deadline:
         if not wine_session_running(prefix):
-            end_orphaned_steam_helper()
+            end_game_steam_helper("after its Wine session had closed")
             return True
         time.sleep(0.5)
     log(f"The game's Wine session is still open {SESSION_END_WAIT} s after Questlog left it: another "
         "program in the prefix keeps it (e.g. a second meter), and Steam shows AION 2 as running "
-        "until that program ends. Questlog starts again anyway.")
+        f"until that program ends. {then}".rstrip())
     return False
 
 
@@ -710,9 +810,6 @@ def main():
     parser.add_argument("--exe", type=Path, default=default_exe, help=f"Questlog.exe (default {default_exe})")
     parser.add_argument("--interface", default=settings.interface or None,
                         help="network interface carrying the game connection")
-    parser.add_argument("--wait-for-game", action="store_true",
-                        help="start Questlog only once AION 2 runs (the Steam launch option uses this); "
-                             "default: start it at once, e.g. to look through saved fights")
     parser.add_argument("--no-auto-update", action="store_true",
                         help="do not download or install new Questlog versions (default: download them "
                              "in the background and install them at the next start)")
@@ -760,9 +857,6 @@ def main():
         tray = None
         try:
             game_seen = bool(game_processes(APPID, ["aion2.exe"])["aion2.exe"])
-            if args.wait_for_game and not game_seen:
-                wait_for_game(APPID)
-                game_seen = True
             prefix = game_prefix(APPID)
             install_bridge_dll(prefix)
             if game_seen:
@@ -797,6 +891,8 @@ def main():
                 threading.Thread(target=check_for_updates, args=(executable.parent, state_dir), daemon=True).start()
             told = False
             game_gone_since = None
+            after_exit = None
+            told_waiting = False
             closing = False
             while True:
                 if questlog.poll() is not None:
@@ -845,6 +941,7 @@ def main():
                     log("Ending Questlog's session now.")
                     run_ctl(protontricks, "end-session", log_path)
                     wait_for_questlog_exit(f"it had {SAVE_WAIT:.0f} s since the last game data to save")
+                    release_steam_after_questlog(prefix)
                     try:
                         questlog.wait(timeout=30)
                     except subprocess.TimeoutExpired:
@@ -884,35 +981,59 @@ def main():
                         log("AION 2 is running again.")
                     game_seen = True
                     game_gone_since = None
+                    after_exit = None
                 elif not game_seen:
                     pass
                 elif game_gone_since is None:
                     game_gone_since = time.monotonic()
+                    after_exit = AfterGame(game_gone_since)
+                    told_waiting = False
                     if close_with_game:
                         log(f"AION 2 has exited; closing Questlog in {GAME_EXIT_GRACE} s unless the game comes back.")
                     else:
-                        log(f"AION 2 has exited. In {GAME_EXIT_GRACE} s Questlog restarts in the background, "
-                            "out of the game's Wine session, so that Steam sees the game as closed; it stays "
-                            "usable and waits for the next start of the game.")
-                elif close_with_game and not closing and time.monotonic() - game_gone_since >= GAME_EXIT_GRACE:
-                    closing = True
-                    tray.stop()
-                    close_questlog(prefix, protontricks, log_path)
-                elif not close_with_game and not quit_control.quitting \
-                        and time.monotonic() - game_gone_since >= GAME_EXIT_GRACE:
-                    shown = find_questlog_window() is not None
-                    log("Moving Questlog out of the game's Wine session; back in a few seconds"
-                        + (" with its window open." if shown else ", in the tray."))
-                    move_to_fresh_session(prefix, protontricks, log_path)
-                    try:
-                        questlog.wait(timeout=30)
-                    except subprocess.TimeoutExpired:
-                        log("The previous Questlog launcher did not end; continuing anyway.")
-                    questlog = start_questlog(hidden=not shown)
-                    game_seen = False
-                    game_gone_since = None
-                    told = False
-                    continue
+                        log("AION 2 has exited; Questlog stays open and waits for the next start of the game.")
+                elif close_with_game:
+                    if not closing and time.monotonic() - game_gone_since >= GAME_EXIT_GRACE:
+                        closing = True
+                        tray.stop()
+                        close_questlog(prefix, protontricks, log_path)
+                        release_steam_after_questlog(prefix)
+                elif not quit_control.quitting:
+                    steam_pids = game_processes(APPID, ["steam.exe"])["steam.exe"]
+                    state, detail = game_launch_state(process_table(), steam_pids)
+                    action = after_exit.next(state, time.monotonic(), status.get("last_packet"))
+                    if state == "wait" and not told_waiting \
+                            and time.monotonic() - game_gone_since >= RELEASE_SETTLE + 3:
+                        log(f"Steam shows AION 2 as running while {', '.join(detail)} from the game's launch "
+                            "still runs; it is ended as soon as that program ends.")
+                        told_waiting = True
+                    elif state == "restart" and not told_waiting:
+                        left = max(0.0, after_exit.restart_at(status.get("last_packet")) - time.monotonic())
+                        log(f"Questlog restarts in {left:.0f} s, once it has saved the last game data: {detail}, "
+                            "so Steam shows AION 2 as running for as long as Questlog stays in that session.")
+                        told_waiting = True
+                    if action == "free":
+                        log("Steam sees AION 2 as closed; Questlog keeps running.")
+                    elif action == "release":
+                        end_game_steam_helper("- the only thing left of it, as Questlog's Wine session is "
+                                              "its own; Questlog keeps running", detail)
+                    elif action == "restart":
+                        shown = find_questlog_window() is not None
+                        log("Moving Questlog out of the game's Wine session; back in a few seconds"
+                            + (" with its window open." if shown else ", in the tray."))
+                        move_to_fresh_session(prefix, protontricks, log_path)
+                        try:
+                            questlog.wait(timeout=30)
+                        except subprocess.TimeoutExpired:
+                            log("The previous Questlog launcher did not end; continuing anyway.")
+                        questlog = start_questlog(hidden=not shown)
+                        told = False
+                    if action:
+                        game_seen = False
+                        game_gone_since = None
+                        after_exit = None
+                        if action == "restart":
+                            continue
                 time.sleep(0.5)
             log(f"Questlog has exited (code {questlog.returncode}); its output is in {log_path}.")
             return 0

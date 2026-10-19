@@ -85,7 +85,10 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
   prefix (the game, other meters such as NotMeter). Per-object Windows calls
   (one icon, one window) are used instead of prefix- or session-wide switches.
   The one exception, `wineboot -e` in `close_questlog`, runs only when the
-  game has been gone for `GAME_EXIT_GRACE` seconds (see §6.4).
+  game has been gone for `GAME_EXIT_GRACE` seconds (see §6.4). After the game,
+  the game's own `steam.exe` is ended (§6.7), as Steam's Stop would; only once
+  `AION2.exe` is gone and only the `steam.exe` below Steam's reaper for the
+  game.
 - **I3 — nothing dropped silently.** Each failure of the bridge, the guard,
   `questlog_ctl.exe` or the tray is reported: to Questlog's interface (DLL
   errors through `pcap_geterr`), to the launcher's terminal, or to
@@ -180,22 +183,37 @@ until nothing runs in the prefix. A Questlog started before the game keeps
 the prefix busy, so the game would wait for as long as Questlog runs. Steam
 then shows "launching" with no end.
 
-`a2qlinux-steam`, set as the game's Steam launch option, handles this:
+`a2qlinux-steam`, set as the game's Steam launch option, handles this by
+always starting Questlog first and letting the game join it:
 
-1. It records whether a launcher holds the lock **before** starting anything.
-2. It starts `a2qlinux.desktop --wait-for-game` (with any launcher options
+1. It starts `a2qlinux.desktop --for-game` (with any launcher options
    given before `%command%`: `--close-with-game`, `--no-auto-update`,
    which override the settings file, §13) through
    `systemd-run --user`. Started that way, the launcher and its terminal get
    the desktop session's environment instead of Steam's (overlay
    `LD_PRELOAD`, container variables), and Steam does not count them as part
    of the game. If this fails, the game still starts, with a notification.
-3. If a launcher was running, it replaces only Proton's own verb
-   `waitforexitandrun` with `run`. `run` sets up drive letters for the game
-   and Steam folders and starts the game without waiting, so the game joins
-   Questlog's session. The runtime container keeps
-   `--verb=waitforexitandrun`, which marks it as the game's main container.
-   Each switch is logged to `proton-stream/steam_launch.log`.
+   `--for-game` only tells `a2qlinux.desktop` who is asking (§6.5): a
+   running launcher gets `SIGUSR2`, a new one starts Questlog at once.
+2. It waits until Questlog runs in the prefix (`wait_for_questlog`, at most
+   `QUESTLOG_UP_WAIT`, 60 s). Questlog's launch has then brought up the
+   prefix's Wine session.
+3. It replaces only Proton's own verb `waitforexitandrun` with `run`. `run`
+   sets up drive letters for the game and Steam folders and starts the game
+   without waiting, so the game joins Questlog's session. The runtime
+   container keeps `--verb=waitforexitandrun`, which marks it as the game's
+   main container. Each switch, and a Questlog that did not come up in time
+   (the game then starts unchanged, and §5.2 takes over), is logged to
+   `proton-stream/steam_launch.log`.
+
+Why Questlog first: whichever launch starts the session's `wineserver` keeps
+it, together with the session's services (`explorer.exe`, `services.exe`, …),
+among its descendants. Started by Questlog's launch, the session stays out of
+the game's launch, and after the game Steam can be released without touching
+Questlog (§6.7). The game starts a few seconds later than without Questlog,
+the time Questlog's Wine session takes to come up. Waiting for it also keeps
+the two from bringing up the prefix's Wine at the same moment, which could
+make two separate sessions.
 
 Checked with the game (17 October 2026): Questlog opened without the game,
 then Play. The game started at once, with one `wineserver` shared by both.
@@ -217,12 +235,10 @@ briefly carried the original command line. That version sent `wineboot -e`
 into the session where the game was starting, which closed Questlog and
 aborted the game.
 
-### 5.3 `--wait-for-game`
-
-With `--wait-for-game` (always used by `a2qlinux-steam`), the launcher
-starts Questlog only once `AION2.exe` has run for 2 s (`wait_for_game`). This
-way the game and Questlog never bring up the prefix's Wine at the same
-moment.
+An earlier version started the launcher with `--wait-for-game`, which
+started Questlog only once `AION2.exe` had run for 2 s. The game's launch
+then owned the Wine session, and after every game Questlog had to be
+restarted to release Steam (§6.7).
 
 ## 6. Living with the game in one session
 
@@ -405,6 +421,14 @@ but Questlog. It was written before `questlog_ctl.exe` existed and is kept for
 that case. `wineboot -e` must never be sent while the game runs or is
 starting (§5.2).
 
+After either way of ending Questlog with the game gone,
+`release_steam_after_questlog` waits up to `SESSION_END_WAIT` for the Wine
+session to close and ends any `steam.exe` of the game left over (§6.7, step
+3b). Without that, a quit in the two seconds before the launcher releases
+Steam after the game would leave Steam showing AION 2 as running. While the
+game runs, or with no `steam.exe` of the game left, it does nothing and does
+not wait.
+
 Electron's auto-update would install on quit (`autoInstallOnAppQuit`); it is
 switched off (§6.6), and the session end would skip it anyway.
 
@@ -419,7 +443,7 @@ switched off (§6.6), and the session end would skip it anyway.
 | Caller | Signal | Launcher's response |
 |---|---|---|
 | menu entry, desktop icon | `SIGUSR1` | show Questlog's window; call off a pending quit |
-| `a2qlinux-steam` (`--wait-for-game`) | `SIGUSR2` | keep Questlog running; call off a pending quit; no window |
+| `a2qlinux-steam` (`--for-game`) | `SIGUSR2` | keep Questlog running; call off a pending quit; no window |
 
 The handlers are installed before the PID is published, since the default
 action of both signals would end the launcher. Handlers and the tray reader
@@ -509,13 +533,16 @@ removed `app-update.yml`.
 (and counting play time, with Stop instead of Play) for as long as Questlog
 runs.
 
-**Cause** (Proton's `steam_helper/steam.c`, Wine's `server/process.c`). The
-game is started by Proton's `steam.exe`, which marks itself a Wine *system*
+**Cause** (Proton's `steam_helper/steam.c` and `proton` script, Wine's
+`server/process.c`, pressure-vessel's `pv-adverb`). Steam counts the game as
+running until its `reaper` for the game ends. Below the reaper are the
+runtime container, whose `pv-adverb` is a subreaper that by default waits for
+every descendant (`--no-terminate-with-main`), Proton's script, and the
+`steam.exe` that starts the game. `steam.exe` marks itself a Wine *system*
 process (`ProcessWineMakeProcessSystem`) and waits on the event that request
-returns. Wineserver signals that event when no *user* process is left in the
-session. Questlog is a user process in the game's session, so `steam.exe`, the
-`proton` script above it and Steam's `reaper` wait for Questlog. This follows
-from sharing the session (§1), which Questlog needs to see the game.
+returns, which the server signals when no *user* process is left in the
+session. Questlog is a user process in the game's session (§1), so
+`steam.exe`, and everything above it, waits for Questlog.
 
 **Rejected: marking Questlog as a system process.** The server would accept
 it (`make_process_system` takes any process handle), but when the last user
@@ -524,47 +551,69 @@ later (`server_shutdown_timeout`). Questlog would die about 5 s after the
 game, and at once when started without it. A Wine process cannot move to
 another session either; it is bound to its wineserver for life.
 
-**What the launcher does.** `GAME_EXIT_GRACE` seconds (setting
-`after_game_delay`, 15 by default) after `AION2.exe` is gone, unless
-`after_game = "close"` (or `--close-with-game`) or a quit is in progress:
+**What decides the remedy** is which launch started the session's
+`wineserver`. It stays a descendant of that launch's container for life,
+with the session's services (`explorer.exe`, `services.exe`, `winedevice.exe`,
+…):
 
-1. `find_questlog_window` records whether Questlog's main window is shown.
-2. `move_to_fresh_session`: `questlog_ctl.exe end-session`, then
-   `wait_for_questlog_exit`. No extra save wait: with the game gone no new
-   data arrives, and the delay covers Questlog's 10 s flush. That is why
-   `after_game_delay` may not go below `MIN_AFTER_GAME_DELAY` (10.5 s, equal
-   to `SAVE_WAIT`).
-3. It waits up to `SESSION_END_WAIT` (30 s) until `wine_session_running`
-   finds no `wineserver` for the prefix (by `WINEPREFIX`, else
-   `STEAM_COMPAT_DATA_PATH/pfx`). The session is then over. If another
-   program keeps the session open (a second meter, say), this is logged,
-   since Steam then stays "running" because of that program, and step 4
-   follows without step 3b.
-3b. `end_orphaned_steam_helper`: any `steam.exe` with the game's app id still
-   alive at this point gets SIGTERM. Observed with the real game: the
-   session's wineserver had exited, yet `steam.exe` slept on in the kernel
-   (all three threads in `ntsync_schedule`: Proton's ntsync waits do not go
-   through the server, so the server's exit does not wake them), and Steam
-   showed the game running for hours. Why the server had not set the
-   shutdown event before exiting is not known. SIGTERM ended `steam.exe`, the
-   `proton` script, the runtime container and Steam's `reaper` within a
-   second, and Steam showed Play again, the same result as Steam's own Stop.
-   Only processes carrying the game's app id are touched, and only once its
-   session is gone.
-4. `start_questlog(hidden=not shown)` starts Questlog again on the same
-   bridge, with Questlog's own `--hidden` switch if its window was not shown.
-   It runs in a new session; the next Play joins that one (§5.1).
+| Session started by | Left of the game's launch once `AION2.exe` is gone | Remedy |
+|---|---|---|
+| Questlog's launch (the normal case, §5.1) | Proton's script and `steam.exe` | end `steam.exe`; Questlog stays as it is |
+| the game's launch (Play without the launch option, §5.2; or Questlog not up in time) | also the `wineserver` and the session's services | Questlog has to leave the session: restart it |
 
-Checked with a stand-in game (a process named `AION2.exe` with
-`SteamAppId=3393110`): exit seen, Questlog ended and restarted with its window
-as before, a new `wineserver`, one tray icon. With the real game the session
-ended as intended, but Steam stayed "running" until step 3b, which was added
-after that run and tested by hand on the orphaned `steam.exe` (18 October
-2026); the full sequence with the game is still to be run.
+**What the launcher does**, unless `after_game = "close"` (or
+`--close-with-game`) or a quit is in progress. Every 0.5 s once `AION2.exe`
+is gone, `game_launch_state` reads the process table (`process_table`),
+walks up from the game's `steam.exe` to Steam's `reaper`, and looks at
+everything below it. `AfterGame` turns the answer into an action:
 
-**Edge.** If Play is pressed in the few seconds while the old session shuts
-down, the game may join a session that is closing. Not observed; the window
-is a few seconds once in a session.
+- **`release`** — below the reaper, no `wineserver` and no Windows program
+  besides `steam.exe`. Once that has held for `RELEASE_SETTLE` (2 s; a game
+  that restarts itself goes through `steam.exe`),
+  `end_game_steam_helper` sends `steam.exe` SIGTERM. Proton's script, the
+  container and the reaper end with it within a second, and Steam shows Play.
+  Questlog is not touched and loses nothing. Checked with the game
+  (20 October 2026): 2 s after `AION2.exe` exited only the script and
+  `steam.exe` were left; 0.5 s after the SIGTERM the reaper was gone, while
+  Questlog's eight processes and its session ran on.
+- **`wait`** — other Windows programs of the game's launch still run (the
+  game's `EpicWebHelper.exe`, say). Nothing is done; `steam.exe` would wait
+  for them too. If it lasts, the launcher names them.
+- **`restart`** — a `wineserver` is below the reaper, or `steam.exe` has no
+  reaper above it and the launch cannot be told. The restart comes
+  `SAVE_WAIT` (10.5 s) after the last game data reached Questlog
+  (`status["last_packet"]`, as for the quit in §6.4), since ending the session
+  skips Questlog's own save; with the game closed that is about 10.5 s after
+  it closed.
+  1. `find_questlog_window` records whether Questlog's main window is shown.
+  2. `move_to_fresh_session`: `questlog_ctl.exe end-session`, then
+     `wait_for_questlog_exit`.
+  3. It waits up to `SESSION_END_WAIT` (30 s) until `wine_session_running`
+     finds no `wineserver` for the prefix (by `WINEPREFIX`, else
+     `STEAM_COMPAT_DATA_PATH/pfx`). If another program keeps the session
+     open (a second meter, say), this is logged, since Steam then stays
+     "running" because of that program, and step 4 follows without step 3b.
+  3b. `end_game_steam_helper` (through `release_steam_after_questlog`, also
+     used after a quit, §6.4): any `steam.exe` with the game's app id still
+     alive at this point gets SIGTERM. Observed with the real game: the
+     session's wineserver had exited, yet `steam.exe` slept on in the kernel
+     (all three threads in `ntsync_schedule`: Proton's ntsync waits do not
+     go through the server, so the server's exit does not wake them), and
+     Steam showed the game running for hours.
+  4. `start_questlog(hidden=not shown)` starts Questlog again on the same
+     bridge, with Questlog's own `--hidden` switch if its window was not
+     shown. It runs in a session of its own, so the next game joins that one
+     and ends with `release`.
+- **`free`** — no `steam.exe` of the game is left (Stop was pressed in Steam,
+  say). Nothing to do.
+
+The restart path was checked with a stand-in game and, up to step 3b, with
+the real game (18 October 2026); step 3b by hand on the orphaned `steam.exe`.
+
+**Edge.** If Play is pressed in the few seconds while an old session shuts
+down during a restart, the game may join a session that is closing. Not
+observed; the window is a few seconds, and only after a game that started
+the session itself.
 
 ## 7. Failure modes
 
@@ -706,6 +755,9 @@ in `a2qlinux/update.py` checks all of them before an automatic update
    match was corrected.
 5. Questlog's keyboard shortcuts while the game has focus have not been
    tested.
+6. The full Steam start of §5.1 (Questlog first, then the game) has not yet
+   been run with the game. The release of §6.7 was checked with the game
+   joining an already running Questlog, which is the same session layout.
 
 ## 12. Packaging and releases
 
@@ -763,8 +815,8 @@ default and a comment for each; it never rewrites an existing file.
 |---|---|---|---|
 | `questlog_dir` | `~/Games/Questlog` | the `QUESTLOG_DIR` default | launcher (`--exe`), `a2qlinux.desktop` (lock file), `a2qlinux-steam`, `a2qlinux-setup` |
 | `interface` | `""` (automatic) | — | launcher (`--interface`) |
-| `after_game` | `"restart"` | — | launcher: §6.7 or `close_questlog` |
-| `after_game_delay` | `15`, at least 10.5 | `GAME_EXIT_GRACE` | launcher |
+| `after_game` | `"keep"` | — | launcher: §6.7 (`"keep"`) or `close_questlog` (`"close"`) |
+| `after_game_delay` | `15`, at least 10.5 | `GAME_EXIT_GRACE` | launcher, with `after_game = "close"` only |
 | `auto_update` | `true` | — | launcher, §6.6 |
 | `update_check_hours` | `6`, at least 0.25 | `UPDATE_CHECK_EVERY` | launcher, §6.6 |
 
@@ -776,7 +828,7 @@ the Steam launch option and a one-off start can pass.
 **What is deliberately not a setting.** Values that follow from how Questlog,
 Electron or Wine behave, not from preference: `SAVE_WAIT` (Questlog saves
 within 10 s; a smaller value loses data), `SESSION_END_WAIT`,
-`STEAM_HELPER_WAIT`, `QUESTLOG_QUIT_WAIT`, `HANDOVER_WAIT`,
+`STEAM_HELPER_WAIT`, `RELEASE_SETTLE`, `QUESTLOG_UP_WAIT`, `QUESTLOG_QUIT_WAIT`, `HANDOVER_WAIT`,
 `CLIENT_QUEUE_RECORDS`, `GUARD_INTERVAL_MS`. They are named constants next to
 the code they govern and are described in the sections above.
 

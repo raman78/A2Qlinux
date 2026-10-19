@@ -22,7 +22,7 @@ import re
 import tomllib
 
 CONFIG_PATH = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "a2qlinux" / "config.toml"
-# Restarting Questlog after the game does not wait for it to save, so the delay
+# Closing Questlog after the game does not wait for it to save, so the delay
 # must cover the time Questlog takes to save game data (see launcher.SAVE_WAIT).
 MIN_AFTER_GAME_DELAY = 10.5
 
@@ -41,13 +41,13 @@ SETTINGS = {
                             "Folder with Questlog.exe (the QUESTLOG_DIR environment variable overrides it)."),
     "interface": Setting("", str,
                          "Network interface carrying the game's traffic; empty: the only one besides lo."),
-    "after_game": Setting("restart", str,
-                          '"restart": Questlog restarts in the background after the game, so that Steam sees '
-                          'the game as closed; "close": Questlog closes with the game.',
-                          choices=("restart", "close")),
+    "after_game": Setting("keep", str,
+                          '"keep": Questlog stays open after the game, and Steam sees the game as closed; '
+                          '"close": Questlog closes with the game.',
+                          choices=("keep", "close")),
     "after_game_delay": Setting(15, (int, float),
-                                "Seconds after the game exits before that happens (a game restarted sooner "
-                                f"keeps Questlog as it is). At least {MIN_AFTER_GAME_DELAY:g}.",
+                                'With after_game = "close": seconds after the game exits before Questlog closes '
+                                f"(a game restarted sooner keeps it open). At least {MIN_AFTER_GAME_DELAY:g}.",
                                 minimum=MIN_AFTER_GAME_DELAY),
     "auto_update": Setting(True, bool, "Download new Questlog versions in the background and install them "
                                        "at the next start."),

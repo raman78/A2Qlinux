@@ -25,9 +25,9 @@ looks like this:
 
 The full path matters: Steam does not look in `~/.local/bin` by itself.
 
-From then on, Play starts the game first and Questlog a moment later, once
-the game runs. If Questlog is already open when you press Play, the game
-joins it; nothing restarts.
+From then on, Play starts Questlog first and the game a few seconds later,
+once Questlog runs. If Questlog is already open when you press Play, the game
+starts at once and joins it; nothing restarts.
 
 Keep the status window open while you use Questlog. It carries the traffic
 to Questlog, and it shows what A2Qlinux is doing. The line
@@ -39,13 +39,19 @@ open with the message until you press Enter.
 use the database or the map. It also waits for the game: start it again and
 the traffic flows to Questlog again, whichever way you start it.
 
-About 15 seconds after the game ends, Questlog briefly closes and comes back,
-as it was: with its window open if it was open, otherwise only in the tray.
-This is what lets Steam see the game as closed. Under Proton, Steam
-counts the game as running for as long as anything else runs in the game's
-Windows environment, and Questlog runs in it because that is the only way it
-can see the game. Restarted, Questlog is in an environment of its own until
-you press Play again.
+A moment after the game ends, Steam shows it as closed again, and Questlog
+is not touched. Under Proton, a small helper that starts the game waits for
+everything else in the game's Windows environment to end, Questlog included,
+and Steam counts the game as running until then. A2Qlinux ends that helper
+once the game has gone, the same way Steam's own Stop button does.
+
+One case still needs Questlog to restart: when the game was started before
+Questlog (Play without the launch option above). Then the game's start owns
+the Windows environment Questlog runs in. About 10 seconds after the game
+ends, once Questlog has saved the last fight, Questlog briefly closes and
+comes back as it was: with its window open if it was open, otherwise only in
+the tray. After that, the next game joins Questlog again and nothing
+restarts.
 
 If you would rather have Questlog close for good after the game, set
 `after_game = "close"` in the settings file (next section).
@@ -64,8 +70,8 @@ are read when A2Qlinux starts.
 |---|---|---|
 | `questlog_dir` | `"~/Games/Questlog"` | folder with Questlog |
 | `interface` | `""` | network interface the game uses; empty: chosen automatically when there is only one |
-| `after_game` | `"restart"` | after the game: `"restart"` keeps Questlog (restarting it in the background so Steam sees the game as closed), `"close"` closes it |
-| `after_game_delay` | `15` | seconds after the game before that happens; at least 10.5, so that Questlog has saved |
+| `after_game` | `"keep"` | after the game: `"keep"` keeps Questlog open, `"close"` closes it |
+| `after_game_delay` | `15` | with `"close"`: seconds after the game before Questlog closes; at least 10.5, so that Questlog has saved |
 | `auto_update` | `true` | update Questlog automatically ([UPDATING.md](UPDATING.md)) |
 | `update_check_hours` | `6` | hours between checks for a new Questlog |
 

@@ -26,7 +26,7 @@ class LoadTest(unittest.TestCase):
     def test_missing_file_gives_defaults_and_no_problems(self):
         settings, problems = config.load(self.path)
         self.assertEqual(problems, [])
-        self.assertEqual(settings.after_game, "restart")
+        self.assertEqual(settings.after_game, "keep")
         self.assertEqual(settings.after_game_delay, 15.0)
         self.assertTrue(settings.auto_update)
         self.assertEqual(settings.questlog_dir, Path.home() / "Games" / "Questlog")
@@ -45,13 +45,13 @@ class LoadTest(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("line 2", problems[0])
         self.assertIn("after_gaem", problems[0])
-        self.assertEqual(settings.after_game, "restart")
+        self.assertEqual(settings.after_game, "keep")
 
     def test_wrong_type_wrong_choice_and_too_small_use_the_default(self):
         settings, problems = self.load('auto_update = "yes"\nafter_game = "never"\nafter_game_delay = 5\n')
         self.assertEqual(len(problems), 3)
         self.assertTrue(settings.auto_update)
-        self.assertEqual(settings.after_game, "restart")
+        self.assertEqual(settings.after_game, "keep")
         self.assertEqual(settings.after_game_delay, 15.0)
         self.assertIn("at least 10.5", problems[2])
 
@@ -64,7 +64,7 @@ class LoadTest(unittest.TestCase):
         settings, problems = self.load('after_game = "close\n')
         self.assertEqual(len(problems), 1)
         self.assertIn("not valid TOML", problems[0])
-        self.assertEqual(settings.after_game, "restart")
+        self.assertEqual(settings.after_game, "keep")
 
     def test_environment_overrides_the_file(self):
         os.environ["QUESTLOG_DIR"] = "/env/ql"
@@ -75,7 +75,7 @@ class LoadTest(unittest.TestCase):
         settings, problems = self.load(config.template(Path("/games/Questlog")))
         self.assertEqual(problems, [])
         self.assertEqual(settings.questlog_dir, Path("/games/Questlog"))
-        self.assertEqual(settings.after_game, "restart")
+        self.assertEqual(settings.after_game, "keep")
 
 
 if __name__ == "__main__":

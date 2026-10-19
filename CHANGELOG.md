@@ -7,20 +7,24 @@ What changed for players, release by release. Technical details are in
 
 ### Added
 - A settings file, `~/.config/a2qlinux/config.toml`, created by `a2qlinux-setup`:
-  Questlog's folder, what happens after the game (restart in the background or
-  close) and after how long, and automatic updates. Mistakes in it are
+  Questlog's folder, what happens after the game (Questlog stays or closes,
+  and after how long it closes), and automatic updates. Mistakes in it are
   reported with their line, and the default is used meanwhile.
 
 ### Changed
+- Play in Steam (with the launch option) now starts Questlog first and the
+  game a few seconds later, once Questlog runs, instead of the other way
+  round. That is what lets the game end without disturbing Questlog.
 - Quit Questlog ends it at once when no game data is waiting to be saved
   (without the game, or a while after closing it); while playing, it still
   waits until the last data is saved, at most about 10 seconds.
 
 ### Fixed
 - Steam no longer shows AION 2 as running after the game is closed while
-  Questlog stays open: about 15 seconds after the game ends, Questlog restarts
-  on its own, as it was (window open or only in the tray), and keeps waiting
-  for the next start of the game.
+  Questlog stays open: a moment after the game ends, Steam shows Play again,
+  and Questlog keeps running untouched. Only when the game was started
+  before Questlog does Questlog restart, about 10 seconds after the game, as
+  it was (window open or only in the tray).
 
 ## [0.1.0] — 2026-10-18
 

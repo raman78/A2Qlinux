@@ -1,5 +1,6 @@
 import unittest
 
+from a2qlinux import steam
 from a2qlinux.steam import switch_proton_verb
 
 STEAM_COMMAND = [
@@ -21,6 +22,27 @@ class SwitchProtonVerbTest(unittest.TestCase):
     def test_leaves_other_commands_alone(self):
         other = ["/usr/bin/game", "waitforexitandrun"]                 # not after .../proton
         self.assertEqual(switch_proton_verb(other), (other, False))
+
+
+class WaitForQuestlogTest(unittest.TestCase):
+    def setUp(self):
+        self.saved = steam.game_processes
+
+    def tearDown(self):
+        steam.game_processes = self.saved
+
+    def test_returns_once_questlog_runs(self):
+        answers = iter([set(), set(), {4242}])
+        steam.game_processes = lambda appid, names: {"questlog.exe": next(answers)}
+        self.assertTrue(steam.wait_for_questlog(timeout=5))
+
+    def test_gives_up_after_the_timeout(self):
+        steam.game_processes = lambda appid, names: {"questlog.exe": set()}
+        self.assertFalse(steam.wait_for_questlog(timeout=0.3))
+
+    def test_no_timeout_still_looks_once(self):
+        steam.game_processes = lambda appid, names: {"questlog.exe": {4242}}
+        self.assertTrue(steam.wait_for_questlog(timeout=0))
 
 
 if __name__ == "__main__":
