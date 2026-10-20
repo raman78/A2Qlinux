@@ -217,6 +217,10 @@ make two separate sessions.
 
 Checked with the game (17 October 2026): Questlog opened without the game,
 then Play. The game started at once, with one `wineserver` shared by both.
+Checked with the game from Play alone (20 October 2026): Questlog came up in
+a second, the game joined its session, and after the game Steam was released
+by ending `steam.exe` (§6.7) while Questlog and its `wineserver` ran on, not
+restarted.
 
 ### 5.2 Fallback without the launch option
 
@@ -755,9 +759,6 @@ in `a2qlinux/update.py` checks all of them before an automatic update
    match was corrected.
 5. Questlog's keyboard shortcuts while the game has focus have not been
    tested.
-6. The full Steam start of §5.1 (Questlog first, then the game) has not yet
-   been run with the game. The release of §6.7 was checked with the game
-   joining an already running Questlog, which is the same session layout.
 
 ## 12. Packaging and releases
 
