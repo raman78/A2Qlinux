@@ -127,6 +127,51 @@ bash bridge/build.sh && pipx install --editable .
 ```
 Then run `a2qlinux-setup` as above.
 
+## Starting Questlog with the game from Steam (optional)
+
+You can start Questlog from the menu entry and play next to it. If you
+would rather have it come up by itself whenever you start AION 2, give
+Steam a launch option (a command Steam runs in place of the game, which then
+starts the game itself). With it, Play starts Questlog first and the game a
+few seconds later, inside the Windows environment Questlog already runs in.
+That order matters: started this way, the game cannot wait on Questlog, and
+Steam sees the game as closed as soon as you leave it, while Questlog stays
+open. Why this is so is in [USING.md](USING.md).
+
+1. Find the line to paste. `a2qlinux-setup` printed it at the end, under
+   "Steam > AION 2 > Properties > General > Launch Options". It looks like
+   this, with your user name:
+   ```
+   /home/<you>/.local/bin/a2qlinux-steam %command%
+   ```
+   If you no longer have it, `command -v a2qlinux-steam` prints the first
+   part; add ` %command%` after it.
+2. In Steam's Library, right-click **AION 2** and choose **Properties…**.
+3. On the **General** page, find the **Launch Options** field at the bottom.
+4. Paste the line into the field and close the window.
+
+Keep the full path. Steam does not look in `~/.local/bin` by itself, so a
+bare `a2qlinux-steam %command%` is not found. `%command%` stands for the
+game's own start command, and Steam fills it in; leave it as it is.
+
+```
+┌─ AION 2 — Properties ───────────────────────────────────────────┐
+│  General      │  ...                                            │
+│  Compatibility│                                                 │
+│  ...          │  LAUNCH OPTIONS                                 │
+│               │  ┌───────────────────────────────────────────┐  │
+│               │  │/home/<you>/.local/bin/a2qlinux-steam %comm│  │
+│               │  └───────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+To check it, press **Play**. First A2Qlinux's status window and Questlog
+appear, then, a few seconds later, the game. If Questlog was already open,
+the game starts at once and Questlog stays as it was.
+
+To stop starting Questlog with the game, empty the Launch Options field
+again. The menu entry keeps working either way.
+
 Next: [USING.md](USING.md).
 
 ## Removing A2Qlinux

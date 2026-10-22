@@ -15,17 +15,10 @@ database and the map. When you start the game later, Questlog picks up the
 traffic by itself. Your character appears in Questlog after you log in or
 change zone.
 
-**Together with the game, from Steam.** In Steam, open AION 2's Properties >
-General > Launch Options and paste the line `a2qlinux-setup` printed. It
-looks like this:
-
-```
-/home/<you>/.local/bin/a2qlinux-steam %command%
-```
-
-The full path matters: Steam does not look in `~/.local/bin` by itself.
-
-From then on, Play starts Questlog first and the game a few seconds later,
+**Together with the game, from Steam.** Once AION 2 has the Steam launch
+option (set it up as in
+[INSTALL.md](INSTALL.md#starting-questlog-with-the-game-from-steam-optional)),
+Play starts Questlog first and the game a few seconds later,
 once Questlog runs. If Questlog is already open when you press Play, the game
 starts at once and joins it; nothing restarts.
 

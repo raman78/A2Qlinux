@@ -4,7 +4,7 @@ Start with the guide that matches what you want to do.
 
 | Document | For | Covers |
 |---|---|---|
-| [INSTALL.md](INSTALL.md) | players | what it is, requirements, installing Questlog and A2Qlinux, removal — start here |
+| [INSTALL.md](INSTALL.md) | players | what it is, requirements, installing Questlog and A2Qlinux, the Steam launch option, removal — start here |
 | [USING.md](USING.md) | players | starting Questlog (menu, Steam), the tray icon, playing with it |
 | [UPDATING.md](UPDATING.md) | players | automatic Questlog updates, updating by hand |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | players | messages and symptoms, what to do; FAQ |
