@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -23,6 +24,11 @@ class LauncherPidTest(unittest.TestCase):
     def test_pid_of_a_running_launcher(self):
         launcher = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)", "-m", "a2qlinux.launcher"])
         try:
+            # Until the child has exec'd, its /proc cmdline is still this runner's.
+            deadline = time.monotonic() + 2
+            while (b"a2qlinux.launcher" not in Path(f"/proc/{launcher.pid}/cmdline").read_bytes()
+                   and time.monotonic() < deadline):
+                time.sleep(0.01)
             d.LOCK.write_text(f"{launcher.pid}\n")
             self.assertEqual(d.launcher_pid(), launcher.pid)
         finally:
