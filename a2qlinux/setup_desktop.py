@@ -4,6 +4,8 @@
 
 What it does, in order:
   1. Checks the programs A2Qlinux uses and names the missing ones; installs nothing.
+     Starts the tray icon's check (a2qlinux.tray --check) to see that it can
+     run on this desktop.
   2. Checks that the Windows parts are present: shipped in the package, built
      by bridge/build.sh in a source checkout.
   3. Takes Questlog's icon from the installed Questlog (resources/icon.png in
@@ -16,6 +18,7 @@ Run it again after moving Questlog's folder.
 """
 
 import argparse
+import os
 from pathlib import Path
 import shutil
 import struct
@@ -23,6 +26,7 @@ import subprocess
 import sys
 
 from . import config
+from .desktop import TERMINALS, terminal_command
 from .update import read_asar_file
 
 BIN = Path(__file__).resolve().parent / "bin"
@@ -30,21 +34,24 @@ ENTRY_ID = "questlog-aion2"
 ICON = Path.home() / ".local" / "share" / "icons" / f"{ENTRY_ID}.png"
 MENU_ENTRY = Path.home() / ".local" / "share" / "applications" / f"{ENTRY_ID}.desktop"
 
-# program -> what provides it (Arch / CachyOS package)
+# program -> what provides it (Arch / CachyOS package; other distributions: docs/INSTALL.md)
 NEEDED = {
     "dumpcap": "wireshark-cli (and membership of the 'wireshark' group)",
-    "7z": "p7zip (unpacks Questlog's installer for updates)",
+    "7z": "7zip (unpacks Questlog's installer for updates)",
     "protontricks-launch": "protontricks",
-    "konsole": "konsole",
     "notify-send": "libnotify",
     "xdotool": "xdotool",
     "systemd-run": "systemd",
 }
 NEEDED_PYTHON = {"PyQt6": "python-pyqt6", "Xlib": "python-xlib"}
+TRAY_CHECK_WAIT = 30   # s for the tray check to start Qt and answer
 
 
 def check_programs():
     missing = [f"{program} ({package})" for program, package in NEEDED.items() if not shutil.which(program)]
+    if terminal_command([]) is None:
+        missing.append("a terminal for the status window (one of: "
+                       + ", ".join(name for name, _ in TERMINALS) + ")")
     for module, package in NEEDED_PYTHON.items():
         if subprocess.run([sys.executable, "-c", f"import {module}"], capture_output=True).returncode:
             missing.append(f"Python module {module} ({package})")
@@ -52,6 +59,31 @@ def check_programs():
     if "wireshark" not in groups:
         missing.append("membership of the 'wireshark' group: sudo usermod -aG wireshark $USER, then log in again")
     return missing
+
+
+def tray_problem():
+    """Why A2Qlinux's tray icon could not run on this desktop; None if it can.
+
+    Runs the tray itself (a2qlinux.tray --check), so what is checked is what
+    the launcher will start: Qt with the desktop's display, and a system tray.
+    """
+    if not (os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY")):
+        return "the tray icon could not be checked: no desktop session here (run a2qlinux-setup on the desktop)"
+    try:
+        # Qt logs to the journal, not to a stderr that is not a terminal, unless told to.
+        done = subprocess.run([sys.executable, "-m", "a2qlinux.tray", "--check"], stdin=subprocess.DEVNULL,
+                              capture_output=True, text=True, timeout=TRAY_CHECK_WAIT,
+                              env={**os.environ, "QT_FORCE_STDERR_LOGGING": "1"})
+    except subprocess.TimeoutExpired:
+        return f"the tray icon check did not answer within {TRAY_CHECK_WAIT} s"
+    if done.returncode == 0:
+        return None
+    lines = [line.strip() for line in done.stderr.splitlines() if line.strip()]
+    # Qt names a missing library in its qt.qpa lines, above its closing summary.
+    reason = " / ".join([line for line in lines if line.startswith(("qt.qpa", "a2qlinux tray:"))]
+                        or lines[-3:]) or f"exit code {done.returncode}"
+    return (f"A2Qlinux's tray icon cannot run here ({reason}); "
+            "see 'The tray icon' in docs/TROUBLESHOOTING.md")
 
 
 def windows_parts_problem():
@@ -166,6 +198,9 @@ def main():
     missing = check_programs()
     if missing:
         problems.append("missing: " + "; ".join(missing))
+    tray = tray_problem()
+    if tray:
+        problems.append(tray)
 
     parts_problem = windows_parts_problem()
     if parts_problem:

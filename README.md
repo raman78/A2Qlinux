@@ -7,8 +7,11 @@ Steam's Proton, with live game traffic.
 Questlog reads the game's traffic through Npcap, a Windows driver that cannot
 work under Wine/Proton. A2Qlinux captures the traffic on the Linux side with
 `dumpcap` and hands it to Questlog through its own stand-in for Npcap's
-`wpcap.dll`. Questlog runs unmodified, inside the game's Proton prefix, in its
-normal live-capture mode, with its overlays over the game.
+`wpcap.dll`. Questlog runs inside the game's Proton prefix, in its normal
+live-capture mode, with its overlays over the game. Its program files stay
+as shipped; the only change A2Qlinux makes to Questlog's folder is removing
+the configuration of Questlog's own updater, which cannot install under
+Proton (A2Qlinux updates it instead).
 
 It also handles what comes with sharing a Wine session with a fullscreen
 game:
@@ -26,7 +29,10 @@ game:
   back if they do not start.
 
 Status: in daily use on CachyOS, KDE Plasma 6 (Wayland), Proton 11
-(`proton-cachyos-slr`), Questlog 0.1.34. Other setups are untested.
+(`proton-cachyos-slr`), Questlog 0.1.37. Other distributions and desktops
+are untested; what they need (Steam from the distribution or Valve, not
+Flatpak; a system tray; Python 3.11 or newer; the packages per distribution)
+is in [docs/INSTALL.md](docs/INSTALL.md#what-you-need-before-you-start).
 
 ## Quick start
 
@@ -77,8 +83,13 @@ source checkout; built files are not kept in the repository. Releasing:
 A2Qlinux is an independent project, not made or endorsed by Questlog's
 authors or by AION 2's publisher. It contains no Questlog code or assets:
 Questlog is downloaded from its authors, and its icon is taken from your own
-installation. Whether third-party meters are allowed is for the game's
-publisher to decide; check their current rules.
+installation. Questlog and its name belong to its authors (questlog.gg).
+
+Whether third-party meters are allowed is for the game's publisher, NCSOFT,
+to decide. It has not said so either way, and its rules forbid
+"unauthorized programs" in general terms. Using any third-party meter,
+under Windows or through A2Qlinux, is at your own risk; check the
+publisher's current rules.
 
 ## License
 

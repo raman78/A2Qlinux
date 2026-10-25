@@ -17,6 +17,7 @@ a new one is then started here.
 import fcntl
 import os
 from pathlib import Path
+import shutil
 import signal
 import subprocess
 import sys
@@ -25,6 +26,29 @@ import time
 from .config import questlog_dir
 
 LOCK = questlog_dir() / "proton-stream" / ".lock"
+
+# Terminals the status window can open in, first found wins, each with the
+# option after which it takes a program and its arguments as separate words
+# (from each one's manual). x-terminal-emulator is Debian's alternative for
+# whichever terminal is installed; Debian policy requires it to take -e so.
+TERMINALS = (
+    ("konsole", ["-e"]),
+    ("gnome-terminal", ["--"]),
+    ("ptyxis", ["--"]),
+    ("xfce4-terminal", ["-x"]),
+    ("mate-terminal", ["-x"]),
+    ("x-terminal-emulator", ["-e"]),
+    ("xterm", ["-e"]),
+)
+
+
+def terminal_command(program, which=shutil.which):
+    """The command that runs `program` (a list of words) in a new terminal window; None without a terminal."""
+    for name, option in TERMINALS:
+        found = which(name)
+        if found:
+            return [found, *option, *program]
+    return None
 
 
 def launcher_running():
@@ -100,8 +124,14 @@ def main():
     # Any arguments (e.g. --close-with-game) are passed on to the launcher (a2qlinux.launcher).
     script = ('"$0" "$@"; code=$?; if [ $code -ne 0 ]; then echo; '
               'read -rp "A2Qlinux ended with code $code - press Enter to close. "; fi')
-    os.execvp("konsole", ["konsole", "-e", "bash", "-c", script, sys.executable,
-                          "-m", "a2qlinux.launcher", *options])
+    command = terminal_command(["bash", "-c", script, sys.executable, "-m", "a2qlinux.launcher", *options])
+    if command is None:
+        message = ("No terminal for the status window was found. Install one of: "
+                   + ", ".join(name for name, _ in TERMINALS) + ".")
+        print(f"a2qlinux: {message}", file=sys.stderr)
+        notify(message)
+        return 1
+    os.execv(command[0], command)
 
 
 if __name__ == "__main__":

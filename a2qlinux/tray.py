@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Questlog's tray icon, drawn by KDE instead of by Wine.
+"""Questlog's tray icon, drawn by the desktop instead of by Wine.
 
 Questlog's own tray icon is a Windows icon shown through Wine, and under Wine
 its menu opens only once: Electron gives up on the menu when it cannot bring
@@ -12,6 +12,10 @@ This process only reports what was chosen, one word per line on stdout:
     quit    "Quit Questlog"
 the launcher (a2qlinux/launcher.py) does the rest. It ends when its stdin closes, i.e. when
 the launcher (a2qlinux/launcher.py) stops it or ends itself.
+
+With --check it only tells whether it could run here: exit code 0 if Qt
+starts and the desktop has a system tray, otherwise 1 with the reason on
+stderr (Qt's own message when Qt cannot start). a2qlinux-setup runs it.
 """
 
 from pathlib import Path
@@ -36,6 +40,8 @@ def main():
     if not QSystemTrayIcon.isSystemTrayAvailable():
         print("a2qlinux tray: the desktop has no system tray", file=sys.stderr)
         return 1
+    if "--check" in sys.argv[1:]:
+        return 0
 
     tray = QSystemTrayIcon(QIcon(str(ICON)), app)
     tray.setToolTip("Questlog (AION 2)")

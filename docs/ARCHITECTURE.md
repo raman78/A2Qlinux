@@ -16,8 +16,9 @@ Questlog reads the game's network traffic through Npcap's
 cannot run under Wine. A2Qlinux replaces that one DLL with its own
 `wpcap.dll`. The replacement implements the eleven libpcap calls Questlog
 makes and feeds them packets captured on the Linux side. With it, Questlog
-runs its normal live-capture code path, unmodified, inside the game's Proton
-prefix.
+runs its normal live-capture code path inside the game's Proton prefix. Its
+program files stay as shipped; the one change to its folder is the removed
+configuration of its own updater, `resources/app-update.yml` (§6.6).
 
 Everything else in this repository exists because Questlog then shares a
 Wine session with a fullscreen game: starting the two in the right order,
@@ -44,7 +45,7 @@ Terms used below:
  |  +- dumpcap (TCP port 13328)        |     |                               |
  |  |   +- BridgeServer 127.0.0.1:port +---->| Questlog.exe --no-sandbox     |
  |  |      (pcap_bridge, token)        | TCP |  +- wpcap.dll (ours, in       |
- |  +- Tray -> a2qlinux.tray (KDE)     |     |  |   System32\Npcap)          |
+ |  +- Tray -> a2qlinux.tray (desktop) |     |  |   System32\Npcap)          |
  |  +- protontricks-launch ------------+---->|  |   pcap_next_ex every 25 ms |
  |  +- protontricks-launch ------------+---->|  +- window-order guard thread |
  |       questlog_ctl.exe <command>    |     | questlog_ctl.exe (short-lived)|
@@ -65,8 +66,8 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
 |---|---|---|
 | `a2qlinux/launcher.py` | Linux | launcher: capture, bridge, starting and quitting Questlog, tray |
 | `a2qlinux/pcap_bridge.py` | Linux, in the launcher | `BridgeServer`: hands captured packets to every connected DLL |
-| `a2qlinux/desktop.py` | Linux | entry point of the menu entry and of `a2qlinux-steam`; one launcher at a time |
-| `a2qlinux/tray.py` | Linux, child of the launcher | our tray icon (PyQt6, drawn by KDE) |
+| `a2qlinux/desktop.py` | Linux | entry point of the menu entry and of `a2qlinux-steam`; opens the launcher in a terminal; one launcher at a time |
+| `a2qlinux/tray.py` | Linux, child of the launcher; `--check` from `a2qlinux-setup` | our tray icon (PyQt6, drawn by the desktop's system tray) |
 | `a2qlinux/steam.py` (`a2qlinux-steam`) | Linux, as Steam's launch option | starts the launcher with the game; lets the game join a running Questlog |
 | `a2qlinux/config.py` | Linux, in every command | user settings from `~/.config/a2qlinux/config.toml` (§13) |
 | `a2qlinux/update.py` | Linux, in the launcher | stages new Questlog versions in the background, installs them at the next start (§6.6) |
@@ -107,7 +108,8 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
    `dumpcap -F pcap` filtered to `tcp and host <address> and port 13328`.
    A thread (`pump_records`) passes each record to `BridgeServer.publish`.
 3. It finds the prefix (`game_prefix`): from a running `AION2.exe`'s
-   environment, else from Steam's `libraryfolders.vdf`. Then it installs
+   environment, else from the `libraryfolders.vdf` of each native Steam
+   installation (`steam_roots`, §14). Then it installs
    `a2qlinux/bin/wpcap.dll` as `drive_c/windows/system32/Npcap/wpcap.dll`
    (`install_bridge_dll`). It replaces only an empty marker or an older build
    of ours, recognised by the string `questlog-proton bridge`
@@ -335,8 +337,9 @@ upstream Wine included. Trace: `set_foreground_window hwnd <icon window> …
 
 **Replacement.** The launcher shows its own icon instead
 (`a2qlinux/tray.py`, `QSystemTrayIcon`, which KDE serves as a
-StatusNotifierItem). Its menu is drawn by KDE, outside Wine's foreground
-rules. The tray process only prints `open` or `quit` on stdout; class `Tray`
+StatusNotifierItem; Qt falls back to an XEmbed tray icon on X11 desktops
+without a StatusNotifierItem host). Its menu is drawn by the desktop, outside
+Wine's foreground rules. The tray process only prints `open` or `quit` on stdout; class `Tray`
 in `a2qlinux/launcher.py` reads that into `Requests`. The tray runs in its own
 session, so a Ctrl+C for the launcher does not reach it. It ends when its
 stdin closes.
@@ -439,8 +442,9 @@ switched off (§6.6), and the session end would skip it anyway.
 ### 6.5 Signals between the menu entry and the launcher
 
 `a2qlinux/desktop.py` is what the menu entry, the desktop icon and
-`a2qlinux-steam` run. If no launcher holds the lock, it opens Konsole with
-`a2qlinux/launcher.py`. Otherwise it signals the PID read from the lock file
+`a2qlinux-steam` run. If no launcher holds the lock, it opens
+`a2qlinux/launcher.py` in a terminal window, the status window
+(`terminal_command`, §14). Otherwise it signals the PID read from the lock file
 (`launcher_pid`), after checking that the process's command line contains
 `a2qlinux.launcher`, so a stale or reused PID is never signalled:
 
@@ -625,11 +629,11 @@ the session itself.
 |---|---|---|
 | Questlog quits at once, "GPU process isn't usable" | Chromium's sandbox inside Steam's container (§7.1) | `questlog.log` |
 | Questlog shows "No capture bridge: start Questlog with A2Qlinux" | Questlog started without the launcher | start it from the menu entry |
-| "Capture bridge not reachable (is A2Qlinux running?)" | launcher not running (terminal closed) | Konsole window |
-| "Capture bridge closed the connection …" | launcher stopped, or it dropped a connection | Konsole window |
+| "Capture bridge not reachable (is A2Qlinux running?)" | launcher not running (terminal closed) | status window |
+| "Capture bridge closed the connection …" | launcher stopped, or it dropped a connection | status window |
 | Steam "launching" forever while Questlog runs | Proton waiting for an idle prefix (§5.1) | `steam_launch.log`; set the launch option |
 | click in the game activates Questlog | §6.1; guard not running | `questlog.log`, `[a2qlinux]` lines |
-| two Questlog tray icons | `hide-tray` failed | Konsole window, `Questlog control:` lines |
+| two Questlog tray icons | `hide-tray` failed | status window, `Questlog control:` lines |
 | "Aion 2's traffic can't be read" before logging in | §7.3, harmless | — |
 | "A2Qlinux is already running in another window" | second launcher refused (I1) | use the running one |
 | "Questlog is already running in the game prefix without the capture bridge" | Questlog started outside A2Qlinux | quit it from its own tray icon |
@@ -637,6 +641,9 @@ the session itself.
 | "Questlog update check failed (…)" | no network, CDN change | none; retried at the next check |
 | "Questlog X does not fit this A2Qlinux yet …" (notification) | a check of §10 failed | A2Qlinux needs a change for that version; the installed one stays |
 | "Questlog X ended within 60 s … going back" | the new version did not start under Proton | the previous version runs again; the failed one is in `<folder>-X-failed` |
+| notification "No terminal for the status window was found" | none of `TERMINALS` installed (§14) | install one |
+| "AION 2's Wine prefix was not found …" / "Only a Flatpak Steam was found" | no prefix in any native installation's libraries; only a Flatpak Steam (§14) | the message lists the files read |
+| `a2qlinux-setup`: "A2Qlinux's tray icon cannot run here (…)" | no system tray, or Qt cannot start (§14) | the `qt.qpa` lines in the message |
 
 ### 7.1 `--no-sandbox`
 
@@ -719,7 +726,7 @@ one** — §6.4.
 | who owns the game connection | `tools/tcp_owner_probe.exe` in the prefix |
 | Wine's view of windows and focus | run `WINEDEBUG=+event,+x11drv,+win a2qlinux-run`; the log grows about 40 KB/s, so only briefly |
 
-Logs: the launcher's messages in its Konsole window; Questlog's and Wine's
+Logs: the launcher's messages in its status window (the terminal); Questlog's and Wine's
 output, including the guard's lines, in `proton-stream/questlog.log`,
 rewritten on each launcher start; Steam verb switches in
 `proton-stream/steam_launch.log`.
@@ -840,3 +847,67 @@ TOML), and the setting concerned keeps its default. The launcher logs each
 problem (`Settings: …`) and sends one desktop notification. A `true`/`false`
 where a number is expected is refused rather than read as 1/0.
 
+## 14. Distributions and desktops
+
+Developed and played on the one setup named at the top of this document. What depends on the
+distribution or desktop, how A2Qlinux copes with it, and how that was
+established. Package names per distribution are in `docs/INSTALL.md`; they
+were read from each distribution's package index (Debian, Ubuntu through
+Launchpad, Fedora's mdapi, openSUSE Tumbleweed's repository) in October
+2026, including which package installs `/usr/bin/7z`: Debian 12's `7zip`
+has only `7zz`, so Debian and Ubuntu use `p7zip-full`, which on newer
+releases is a transitional package for a `7zip` that does install `7z`.
+
+**Status window: the terminal** (`TERMINALS`, `terminal_command` in
+`a2qlinux/desktop.py`). The first one found of Konsole, GNOME Terminal,
+Ptyxis, the Xfce and MATE terminals, `x-terminal-emulator` and `xterm`.
+Each is given the program and its arguments as separate words, after the
+option its manual names for that: `-e` (Konsole, xterm), `--` (GNOME
+Terminal, Ptyxis), `-x` (Xfce, MATE). `x-terminal-emulator` is Debian's
+alternative for the installed terminal; Debian policy requires it to take
+`-e` with separate words, which covers terminals not listed. GNOME Console
+(`kgx`) is not listed by name: it takes everything after `-e` as the
+command only from version 47 (`kgx_filter_arguments` in its source; absent
+in 46.0). Debian 13 ships 48 and registers it as `x-terminal-emulator`,
+which is how it is reached there. Only Konsole has been run with
+A2Qlinux. Without any of them the menu entry
+does not start the launcher with no window; it says which to install
+(notification and stderr), and `a2qlinux-setup` lists it as missing.
+
+**Tray icon.** `a2qlinux-setup` runs `a2qlinux.tray --check`: the real
+tray module, up to `QSystemTrayIcon.isSystemTrayAvailable()`, without
+showing an icon (`tray_problem` in `a2qlinux/setup_desktop.py`). It reports
+the two failures seen in testing, with the tray's own words: no system tray
+(GNOME without the AppIndicator extension; reproduced under Xvfb with a
+private D-Bus session), and Qt unable to load its platform plugin. The
+second matters on X11 sessions: the PyQt6 wheels pip installs bundle Qt,
+whose `xcb` plugin needs the system's `libxcb-cursor.so.0` (and other xcb
+libraries), which pip cannot install. Reproduced by hiding that library in
+a private mount namespace (`unshare -rm`, bind-mounting `/dev/null` over
+it) under Xvfb: Qt aborts with "From 6.5.0, xcb-cursor0 or libxcb-cursor0
+is needed to load the Qt xcb platform plugin". Qt sends its messages to the
+journal when stderr is not a terminal, so the check sets
+`QT_FORCE_STDERR_LOGGING=1`; without it the reason was lost and only the
+exit code (-6) remained. Wayland sessions use Qt's `wayland` plugin and do
+not need the xcb libraries.
+
+**Steam's location** (`steam_roots` in `a2qlinux/launcher.py`). Valve's
+launcher (`bin_steam.sh`) keeps `~/.steam/steam` pointing at the
+installation, wherever it is; `~/.steam/root` and the usual folders
+(`$XDG_DATA_HOME/Steam`, `~/Steam`) follow, each resolved and listed once.
+Steam from Flatpak is not supported: its permissions (Flathub's
+`com.valvesoftware.Steam` manifest) give it no access to the home folder,
+so the launch option cannot reach `~/.local/bin/a2qlinux-steam` or the
+Python environment behind it. When only a Flatpak Steam exists,
+`game_prefix` says so instead of reporting a missing prefix.
+
+**Other requirements.** Python 3.11 for `tomllib` (§13), declared in
+`requires-python`, so pipx refuses older Pythons (Ubuntu 22.04 has 3.10).
+`systemd-run --user` for the Steam launch option (§5.1). A native
+`protontricks-launch`; Debian 13 has no protontricks package, and
+`pipx install protontricks` provides the command (its wheel's entry
+points). Debian's `wireshark-common` asks whether non-root users may
+capture, with no as the default (its debconf template `install-setuid`);
+`dpkg-reconfigure wireshark-common` changes the answer. `bridge/build.sh`
+uses Arch's Wine paths; users of other distributions install the release
+wheel, which carries the built parts (§12).

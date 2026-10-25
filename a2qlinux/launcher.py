@@ -105,7 +105,27 @@ def game_processes(appid, names):
     return found
 
 
-def game_prefix(appid):
+FLATPAK_STEAM = Path.home() / ".var" / "app" / "com.valvesoftware.Steam" / ".local" / "share" / "Steam"
+
+
+def steam_roots(home=None):
+    """Native Steam installations, each once.
+
+    Valve's launcher keeps ~/.steam/steam (and ~/.steam/root) pointing at the
+    installation, wherever the user or the distribution put it; the usual
+    folders are listed after them for an installation without those links.
+    """
+    home = Path(home) if home else Path.home()
+    data = Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share")
+    roots = []
+    for candidate in (home / ".steam" / "steam", home / ".steam" / "root", data / "Steam", home / "Steam"):
+        root = candidate.resolve()
+        if root.is_dir() and root not in roots:
+            roots.append(root)
+    return roots
+
+
+def game_prefix(appid, roots=None):
     """The game's Wine prefix.
 
     Read from a running AION2.exe's environment when there is one; otherwise
@@ -117,13 +137,18 @@ def game_prefix(appid):
             return Path(env["WINEPREFIX"])
         if env.get("STEAM_COMPAT_DATA_PATH"):
             return Path(env["STEAM_COMPAT_DATA_PATH"]) / "pfx"
-    libraries = Path.home() / ".local" / "share" / "Steam" / "steamapps" / "libraryfolders.vdf"
-    candidates = [Path(m) for m in re.findall(r'"path"\s+"([^"]+)"', _read(libraries))]
-    for library in candidates:
-        prefix = library / "steamapps" / "compatdata" / str(appid) / "pfx"
-        if (prefix / "drive_c").is_dir():
-            return prefix
-    raise RuntimeError(f"AION 2's Wine prefix was not found in Steam's libraries ({libraries}). "
+    roots = steam_roots() if roots is None else roots
+    lists = [root / "steamapps" / "libraryfolders.vdf" for root in roots]
+    for libraries in lists:
+        for library in [Path(m) for m in re.findall(r'"path"\s+"([^"]+)"', _read(libraries))]:
+            prefix = library / "steamapps" / "compatdata" / str(appid) / "pfx"
+            if (prefix / "drive_c").is_dir():
+                return prefix
+    if not roots and FLATPAK_STEAM.is_dir():
+        raise RuntimeError(f"Only a Flatpak Steam was found ({FLATPAK_STEAM}). A2Qlinux needs Steam from "
+                           "the distribution's packages or from Valve; see docs/INSTALL.md.")
+    looked = ", ".join(map(str, lists)) or "no Steam installation found"
+    raise RuntimeError(f"AION 2's Wine prefix was not found in Steam's libraries ({looked}). "
                        "Start the game once from Steam so the prefix exists.")
 
 

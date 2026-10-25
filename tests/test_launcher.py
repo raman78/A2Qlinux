@@ -271,5 +271,55 @@ class WineSessionRunningTest(unittest.TestCase):
             self.assertFalse(q.wine_session_running(prefix))
 
 
+class GamePrefixTest(unittest.TestCase):
+    """Without a running game, the prefix is found through whichever native Steam installation exists."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.home = Path(self.tmp.name)
+        self.saved = (q.game_processes, q.FLATPAK_STEAM)
+        q.game_processes = lambda appid, names: {name: set() for name in names}   # no game running
+        q.FLATPAK_STEAM = self.home / "flatpak-steam"
+
+    def tearDown(self):
+        q.game_processes, q.FLATPAK_STEAM = self.saved
+        self.tmp.cleanup()
+
+    def steam(self, folder, library):
+        """A Steam installation in `folder` whose library list names `library`, which holds the game's prefix."""
+        (folder / "steamapps").mkdir(parents=True)
+        (folder / "steamapps" / "libraryfolders.vdf").write_text(f'"libraryfolders"\n{{\n "0"\n {{\n  "path"  "{library}"\n }}\n}}\n')
+        prefix = library / "steamapps" / "compatdata" / str(q.APPID) / "pfx"
+        (prefix / "drive_c").mkdir(parents=True)
+        return prefix
+
+    def test_installation_outside_local_share_found_through_valves_link(self):
+        installed = self.home / ".steam" / "debian-installation"
+        prefix = self.steam(installed, self.home / "games")
+        (self.home / ".steam" / "steam").symlink_to(installed)
+        roots = q.steam_roots(self.home)
+        self.assertEqual(roots, [installed.resolve()])
+        self.assertEqual(q.game_prefix(q.APPID, roots), prefix)
+
+    def test_one_installation_behind_several_links_is_listed_once(self):
+        installed = self.home / ".local" / "share" / "Steam"
+        installed.mkdir(parents=True)
+        (self.home / ".steam").mkdir()
+        (self.home / ".steam" / "steam").symlink_to(installed)
+        (self.home / ".steam" / "root").symlink_to(installed)
+        self.assertEqual(q.steam_roots(self.home), [installed.resolve()])
+
+    def test_only_a_flatpak_steam_is_named_as_such(self):
+        q.FLATPAK_STEAM.mkdir()
+        with self.assertRaisesRegex(RuntimeError, "Flatpak"):
+            q.game_prefix(q.APPID, [])
+
+    def test_missing_prefix_names_the_lists_looked_in(self):
+        installed = self.home / "Steam"
+        (installed / "steamapps").mkdir(parents=True)
+        with self.assertRaisesRegex(RuntimeError, "libraryfolders.vdf.*Start the game once"):
+            q.game_prefix(q.APPID, [installed])
+
+
 if __name__ == "__main__":
     unittest.main()
