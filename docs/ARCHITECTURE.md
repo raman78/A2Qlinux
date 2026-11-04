@@ -735,7 +735,8 @@ privileges a Wine process should not have. `dumpcap` gets them through the
 `wireshark` group and its file capabilities, and runs as the normal user.
 
 **The DLL built with clang against Wine's headers**, not MinGW: the build
-needs only `clang`, `lld` and the installed Wine (`bridge/build.sh`).
+needs only `clang`, `lld` and the installed Wine's development files
+(`bridge/build.sh`, §14).
 
 **Our tray instead of fixing the Wine one** — §6.2. **The guard instead of a
 patched Proton** — §6.1. **Session end after a delay instead of an immediate
@@ -856,7 +857,15 @@ release.
 `a2qlinux/config.py` reads `~/.config/a2qlinux/config.toml` (or under
 `$XDG_CONFIG_HOME`) with the standard library's `tomllib`. `a2qlinux-setup`
 writes it when missing (`config.template`), with every setting at its
-default and a comment for each; it never rewrites an existing file.
+default and a comment for each. It changes an existing file in one case
+only: `a2qlinux-setup --questlog-dir` (`config.set_questlog_dir`) replaces
+the `questlog_dir` line, or adds it, and leaves every other line and comment
+as it was. The setup then reads the folder back from the file, like every
+other command, so the folder it checks and installs Questlog into is the
+one the launcher uses later. An earlier version only wrote the option into
+a new file; with a file already there, the option was refused, and the
+first-installation code would have installed into a folder the settings did
+not name.
 
 | Setting | Default | Replaces | Read by |
 |---|---|---|---|
@@ -980,6 +989,28 @@ case reads as a missing group membership, not as a missing package.
 `pipx install protontricks` provides the command (its wheel's entry
 points). Debian's `wireshark-common` asks whether non-root users may
 capture, with no as the default (its debconf template `install-setuid`);
-`dpkg-reconfigure wireshark-common` changes the answer. `bridge/build.sh`
-uses Arch's Wine paths; users of other distributions install the package
-from PyPI, which carries the built parts (§12).
+`dpkg-reconfigure wireshark-common` changes the answer.
+
+**Building from source** (`bridge/build.sh`, `install-from-source.sh`).
+The build needs `clang`, `ld.lld` and Wine's headers and x86_64 import
+libraries. Where the distributions put the latter, from their package file
+lists: headers under `/usr/include/wine` (Arch, Fedora, openSUSE) or
+`/usr/include/wine/wine` (Debian, Ubuntu, package `libwine-dev`); import
+libraries in `x86_64-windows` under `/usr/lib/wine` (Arch),
+`/usr/lib64/wine` (openSUSE) or `/usr/lib/x86_64-linux-gnu/wine` (Debian,
+Ubuntu). `build.sh` tries these in turn, takes `WINE_INCLUDE` / `WINE_LIB`
+over them, and when something is missing prints the family's install line
+(from `/etc/os-release`, as `a2qlinux-setup` does) and exits 1 before
+compiling. Fedora 44's `wine-devel` file list (mdapi) showed only
+`i386-windows` import libraries; whether its x86_64 ones live under
+`/usr/lib64/wine` is not established, and the build would then say so.
+Checked here: the detected Arch paths and a Debian-shaped layout given
+through the variables build code and data sections identical to the
+previous script's (`llvm-objdump` of `.text`, `.rdata`, `.data`; the files
+differ only in the PE time stamp, which changes on every build). Only Arch
+has built it for real. `install-from-source.sh` runs `build.sh`,
+`pipx install --editable .` (after `pipx uninstall a2qlinux` if one is
+installed, since pipx refuses a second install), `pipx ensurepath` and
+`a2qlinux-setup` with `PIPX_BIN_DIR` (default `~/.local/bin`) put first on
+`PATH`, so the menu entry points at pipx's stable command folder rather
+than at the environment's own `bin`.

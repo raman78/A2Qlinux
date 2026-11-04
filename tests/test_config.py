@@ -78,5 +78,39 @@ class LoadTest(unittest.TestCase):
         self.assertEqual(settings.after_game, "keep")
 
 
+class SetQuestlogDirTest(unittest.TestCase):
+    """a2qlinux-setup --questlog-dir writes the folder into the settings file, new or existing."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "a2qlinux" / "config.toml"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_a_missing_file_is_created_with_the_folder(self):
+        config.set_questlog_dir("/games/QL", self.path)
+        settings, problems = config.load(self.path)
+        self.assertEqual((settings.questlog_dir, problems), (Path("/games/QL"), []))
+        self.assertIn("after_game", self.path.read_text())          # the full template
+
+    def test_an_existing_file_changes_only_that_line(self):
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text('# mine\nquestlog_dir = "/old"\nauto_update = false   # off\n')
+        config.set_questlog_dir("/new/QL", self.path)
+        self.assertEqual(self.path.read_text(), '# mine\nquestlog_dir = "/new/QL"\nauto_update = false   # off\n')
+
+    def test_a_file_without_the_line_gets_it_added(self):
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text("auto_update = false")
+        config.set_questlog_dir("/new/QL", self.path)
+        settings, problems = config.load(self.path)
+        self.assertEqual((settings.questlog_dir, settings.auto_update, problems), (Path("/new/QL"), False, []))
+
+    def test_quotes_and_backslashes_in_the_folder_survive(self):
+        config.set_questlog_dir('/games/"odd" \\ name', self.path)
+        self.assertEqual(config.load(self.path)[0].questlog_dir, Path('/games/"odd" \\ name'))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -316,22 +316,28 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--questlog-dir", type=Path,
                         default=None,
-                        help=f"folder with Questlog.exe (default: from {config.CONFIG_PATH}, else ~/Games/Questlog); "
-                             "written into a new settings file")
+                        help=f"Questlog's folder (default: from {config.CONFIG_PATH}, else ~/Games/Questlog); "
+                             "written into the settings file. Without Questlog.exe in it, the newest Questlog "
+                             "is installed there")
     parser.add_argument("--desktop-shortcut", action="store_true", help="also put the entry on the desktop")
     args = parser.parse_args()
-    settings, config_problems = config.load()
-    questlog_dir = (args.questlog_dir or settings.questlog_dir).expanduser().resolve()
-    problems = list(config_problems)
-    if not config.CONFIG_PATH.exists():
+    created = not config.CONFIG_PATH.exists()
+    if args.questlog_dir:
+        # Into the settings file, which every A2Qlinux command reads, so the
+        # folder used here is the one the launcher uses later.
+        config.set_questlog_dir(args.questlog_dir.expanduser().resolve())
+    elif created:
         config.CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        config.CONFIG_PATH.write_text(config.template(questlog_dir))
-        print(f"Settings: {config.CONFIG_PATH} (every setting at its default, with comments)")
-    elif questlog_dir != settings.questlog_dir.resolve():
-        problems.append(f"--questlog-dir {questlog_dir} differs from {settings.questlog_dir} in "
-                        f"{config.CONFIG_PATH}; set questlog_dir there, which A2Qlinux reads")
-    else:
-        print(f"Settings: {config.CONFIG_PATH}")
+        config.CONFIG_PATH.write_text(config.template())
+    settings, config_problems = config.load()
+    questlog_dir = settings.questlog_dir.resolve()
+    problems = list(config_problems)
+    print(f"Settings: {config.CONFIG_PATH}"
+          + (" (every setting at its default, with comments)" if created else "")
+          + (f"; questlog_dir = {questlog_dir}" if args.questlog_dir else ""))
+    if os.environ.get("QUESTLOG_DIR"):
+        print(f"Note: the QUESTLOG_DIR environment variable sets Questlog's folder to {questlog_dir}, over "
+              f"{config.CONFIG_PATH}; the menu entry and Steam do not see that variable.")
 
     info = os_release()
     missing, wanted = missing_packages()

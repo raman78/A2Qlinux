@@ -180,7 +180,7 @@ What the setup does, in order:
 | checks the programs from "Installing the packages", and for missing ones prints one install command for your distribution | `missing: …` and the command |
 | tries a one-second capture, to see that capturing is allowed | `capturing is not allowed yet …` and the commands, if not |
 | starts A2Qlinux's tray icon for a moment, without showing it, to see that it can run on your desktop | a reason, if not; see "The tray icon" in [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
-| installs Questlog in `~/Games/Questlog` if it is not there yet (about 130 MB) | `Downloading Questlog …`, then `Installed Questlog …` |
+| installs Questlog in its folder (`~/Games/Questlog`, or the one given with `--questlog-dir`) if it is not there yet (about 130 MB) | `Downloading Questlog …`, then `Installed Questlog …` |
 | takes Questlog's icon from it (A2Qlinux does not ship Questlog's logo) | `Icon: …` |
 | creates the "Questlog (AION 2)" entry in your applications menu | `Menu entry: …` |
 | prints the line for Steam's launch options, used in the optional last section | `Steam > AION 2 > …` |
@@ -188,10 +188,29 @@ What the setup does, in order:
 It runs nothing with `sudo` and changes nothing in the game; the commands
 that need administrator rights are printed for you to run.
 
-If you already have Questlog unpacked somewhere else, give its folder once
-as `a2qlinux-setup --questlog-dir <folder>`; it is written into A2Qlinux's
-settings file and nothing is downloaded. If the automatic installation
-fails, the message says why; installing Questlog by hand is described in
+**Questlog in another folder.** A2Qlinux keeps Questlog in `~/Games/Questlog`
+unless you tell it otherwise. To use another folder, run the setup once
+with it:
+
+```
+a2qlinux-setup --questlog-dir <folder>
+```
+
+The setup writes that folder into A2Qlinux's settings file (only that line;
+your other settings stay), so the menu entry, the Steam launch option and
+every later run of the setup use it; you do not give it again. Then:
+
+| What is in the folder | What the setup does |
+|---|---|
+| a Questlog you unpacked before (`Questlog.exe` is there) | uses it; nothing is downloaded |
+| nothing, or the folder does not exist yet | installs the newest Questlog there |
+| other files, but no `Questlog.exe` | installs nothing, and says so; choose an empty folder |
+
+To move back to the default, run it with `--questlog-dir ~/Games/Questlog`,
+or change `questlog_dir` in the settings file.
+
+If the automatic installation fails, the message says why; installing
+Questlog by hand is described in
 [UPDATING.md](UPDATING.md#installing-questlog-by-hand).
 
 The menu entry keeps itself up to date: each time `a2qlinux` starts, it
@@ -199,18 +218,51 @@ checks that the entry (and the desktop icon, if you have one) still runs
 this installation, and writes it again if not, for example after A2Qlinux
 was reinstalled elsewhere. Options you added to the entry by hand stay.
 
-**From the source code instead** (for changing A2Qlinux itself): in a copy of
-the repository, build the small Windows parts once (needs `clang`, `lld` and
-`wine`), then install that copy so that your changes take effect at once,
-instead of steps 1 and 2:
-```
-bash bridge/build.sh && pipx install --editable .
-```
-Then run `a2qlinux-setup` as above. The build script looks for Wine's
-files where Arch and CachyOS put them (`/usr/include/wine`,
-`/usr/lib/wine/x86_64-windows`). On other distributions `pipx install
-a2qlinux` is the simpler way, since that package comes with these parts
-built.
+### From the source code instead
+
+This is for changing A2Qlinux itself; to use it, the PyPI package above is
+all you need. Installing from a copy of the repository differs in two
+ways. The small Windows parts A2Qlinux puts into the game's Proton
+environment are not in the repository, only in the PyPI package, so they
+are built first. And the copy is installed *editable*: pipx runs the files
+in your copy instead of its own copies of them, so a change you make takes
+effect the next time A2Qlinux starts, without installing again.
+
+1. Install what the build needs, besides the packages above:
+
+   | Distribution | Command |
+   |---|---|
+   | Arch, CachyOS | `sudo pacman -S --needed clang lld wine` |
+   | Debian, Ubuntu | `sudo apt install clang lld libwine-dev` |
+   | Fedora | `sudo dnf install clang lld wine-devel` |
+   | openSUSE | `sudo zypper install clang lld wine-devel` |
+
+   `clang` and `lld` compile and link the Windows parts; the Wine package
+   provides the Windows headers and libraries they are built against.
+2. Get the repository and run its installer from it:
+   ```
+   git clone https://github.com/raman78/A2Qlinux.git && cd A2Qlinux && ./install-from-source.sh --desktop-shortcut
+   ```
+3. Open a new terminal, so that the A2Qlinux commands are found, and read
+   the end of what the installer printed, as in step 4 above.
+
+What `install-from-source.sh` does, in order, with a line `== 1/4 …` and so
+on for each step:
+
+| Step | Command it runs | Why |
+|---|---|---|
+| 1 | `bash bridge/build.sh` | builds the Windows parts into the copy. It finds Wine's files in the folders Arch, Debian, Ubuntu, Fedora and openSUSE use; if something is missing it prints the install command for your distribution |
+| 2 | `pipx install --editable .` | installs this copy (the `.` is the current folder); an A2Qlinux installed before is removed first, whether from PyPI or another copy |
+| 3 | `pipx ensurepath` | as in step 2 above |
+| 4 | `a2qlinux-setup` | the same checks and setup as above; options given to the installer, such as `--desktop-shortcut`, are passed on |
+
+Run it again after `git pull` when the Windows parts changed, or after a
+Wine update (the parts are built against the installed Wine). A change to
+the Python files needs nothing. Building has been tried on Arch and
+CachyOS only so far; the other distributions' folders come from their
+package file lists. If Wine's files are somewhere else, the build says so;
+give the folders as `WINE_INCLUDE=<folder with windows/windows.h>` and
+`WINE_LIB=<folder with libkernel32.a>` in front of the command.
 
 ## Checking that it works
 

@@ -140,6 +140,26 @@ def template(questlog_dir=None):
     return "\n".join(lines)
 
 
+def set_questlog_dir(questlog_dir, path=CONFIG_PATH):
+    """Write `questlog_dir` into the settings file, for a2qlinux-setup --questlog-dir.
+
+    A missing file is created from template(); in an existing one only the
+    questlog_dir line changes (or is added), so the user's other settings and
+    comments stay as they are.
+    """
+    path = Path(path)
+    line = f"questlog_dir = {_toml(str(questlog_dir))}"
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(template(questlog_dir))
+        return
+    text = path.read_text()
+    new, count = re.subn(r"(?m)^[ \t]*questlog_dir[ \t]*=.*$", lambda _: line, text, count=1)
+    if not count:
+        new = text + ("" if text.endswith("\n") or not text else "\n") + line + "\n"
+    path.write_text(new)
+
+
 def _toml(value):
     if isinstance(value, bool):
         return "true" if value else "false"

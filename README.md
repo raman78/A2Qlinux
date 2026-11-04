@@ -74,12 +74,14 @@ for Arch, Debian, Ubuntu, Fedora and openSUSE. In short:
 | `a2qlinux/setup_desktop.py` | `a2qlinux-setup`: dependency and capture checks with install commands, Questlog installation, menu entry, icon |
 | `a2qlinux/bin/` | the built Windows parts (shipped in the package, not in git) |
 | `bridge/` | Windows parts in C: `wpcap.dll` stand-in, `questlog_ctl.exe`, their tests; `build.sh` |
+| `install-from-source.sh` | installs this checkout for development: build, editable pipx install, setup |
 | `tests/` | Python tests: `python3 -m unittest` |
 | `tools/` | diagnostics: replay-file tools, TCP-owner probe |
 
 The Windows parts are built with `clang` against the installed Wine's headers
-(`bridge/build.sh`) — by the release workflow for the packages, by hand in a
-source checkout; built files are not kept in the repository. Releasing:
+(`bridge/build.sh`) — by the release workflow for the packages, by
+`install-from-source.sh` in a source checkout; built files are not kept in
+the repository. Releasing:
 [docs/RELEASE.md](https://github.com/raman78/A2Qlinux/blob/main/docs/RELEASE.md).
 
 ## Not affiliated
