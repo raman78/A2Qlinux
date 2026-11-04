@@ -15,8 +15,9 @@ Steam with `proton-cachyos-slr`.
 
 Code: the package `a2qlinux/` (commands `a2qlinux`, `a2qlinux-run`,
 `a2qlinux-setup`, `a2qlinux-steam`), C sources in `bridge/`. Tests:
-`python3 -m unittest` in the repository root, after `bash bridge/build.sh`
-(also after a Wine update). Installed here with `pipx install --editable .`.
+`python3 -m unittest` in the repository root (needs no built Windows parts;
+`bash bridge/build.sh` after changing the C sources, not after a Wine update).
+Installed here with `pipx install --editable .` (`install-from-source.sh`).
 Work on `develop`; releases per `docs/RELEASE.md` (`main` = last release),
 run with the `a2qlinux-release` skill (one approval, then the whole sequence).
 User settings: `~/.config/a2qlinux/config.toml` (`a2qlinux/config.py`,

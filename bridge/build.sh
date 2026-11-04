@@ -5,7 +5,10 @@
 #   a2qlinux/bin/questlog_ctl.exe acts on a running Questlog from inside its Wine session
 #   bridge/tests/*.exe            test programs for the two above
 #   tools/tcp_owner_probe.exe     diagnostic: does Wine report TCP connection owners
-# Rebuild after a Wine update.
+# No rebuild is needed after a Wine update: the parts import only documented
+# Win32 functions by name (kernel32, user32, ws2_32, ucrtbase), and the build
+# here (system Wine 11.21) runs daily under Proton's Wine 11.0; rebuild after
+# changing the C sources.
 #
 # Wine's files are looked for where the distributions put them (their package
 # file lists, docs/ARCHITECTURE.md §14); WINE_INCLUDE and WINE_LIB override that.

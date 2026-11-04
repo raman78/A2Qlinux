@@ -736,7 +736,12 @@ privileges a Wine process should not have. `dumpcap` gets them through the
 
 **The DLL built with clang against Wine's headers**, not MinGW: the build
 needs only `clang`, `lld` and the installed Wine's development files
-(`bridge/build.sh`, §14).
+(`bridge/build.sh`, §14). The result is not tied to that Wine: the two
+parts import only documented Win32 functions by name (`kernel32`, `user32`,
+`ws2_32`, `ucrtbase`, `shell32`; `llvm-objdump -p`), so a Wine update needs
+no rebuild. Observed: the build here against system Wine 11.21 runs daily
+under Proton's Wine 11.0, and the PyPI package's parts are built against
+whatever Wine the CI container has.
 
 **Our tray instead of fixing the Wine one** — §6.2. **The guard instead of a
 patched Proton** — §6.1. **Session end after a delay instead of an immediate
@@ -746,7 +751,7 @@ one** — §6.4.
 
 | What | How |
 |---|---|
-| launcher, bridge, quit logic, updates, Steam verb switch | `python3 -m unittest` in the repository root (after `bash bridge/build.sh`; CI runs both on every push, §12); the update tests build a fake installer with `7z` and run feed → download (`file://`) → checks → swap → rollback, and the first installation (`install_fresh`), offline |
+| launcher, bridge, quit logic, updates, Steam verb switch | `python3 -m unittest` in the repository root (no built Windows parts needed; CI runs `bash bridge/build.sh` and the tests on every push, §12); the update tests build a fake installer with `7z` and run feed → download (`file://`) → checks → swap → rollback, and the first installation (`install_fresh`), offline |
 | DLL against a live bridge | `bridge/tests/bridge_client_test.exe` in a throwaway prefix, with a running `BridgeServer` and `WINEDLLOVERRIDES=wpcap=n`; report in `C:\bridge_client_test.txt` (packets, delay) |
 | window-order guard | copy `bridge/tests/zorder_guard_test.exe` and `a2qlinux/bin/wpcap.dll` to an empty folder, then `WINEPREFIX=<throwaway> xvfb-run -a wine zorder_guard_test.exe 'Z:\<folder>\wpcap.dll'`; prints the order before and after, `PASS`/`FAIL` |
 | `questlog_ctl.exe` by hand | `protontricks-launch --appid 3393110 <package>/a2qlinux/bin/questlog_ctl.exe hide-tray` (or `show-tray`, `close-window`, `end-session`); `<package>` is printed by `python -c 'import a2qlinux; print(a2qlinux.__path__[0])'` in A2Qlinux's environment |
