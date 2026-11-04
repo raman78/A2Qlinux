@@ -20,6 +20,29 @@ git tag --sort=-v:refname | head -3         # last version
 git log <last tag>..develop --oneline       # what goes into this release
 ```
 
+Then check that the newest Questlog fits this A2Qlinux. Players run the
+newest Questlog, because A2Qlinux updates it by itself, so a release that
+does not fit it ships a refused update. The check runs the shipped updater
+(`stage()` in `a2qlinux/update.py`: download, checksum, unpack,
+`compatibility_problems`) against a throwaway folder; the real Questlog is
+not touched. Run it from the repository root (about 125 MB download):
+
+```bash
+rm -rf /tmp/a2q-qlcheck && mkdir -p /tmp/a2q-qlcheck/questlog /tmp/a2q-qlcheck/state
+python3 -c "
+import sys, json
+from a2qlinux import update
+state = update.stage('/tmp/a2q-qlcheck/questlog', '/tmp/a2q-qlcheck/state', print, lambda t: None)
+print(json.dumps(state, indent=1))
+sys.exit(0 if state and state['fits'] else 1)
+"; rm -rf /tmp/a2q-qlcheck
+```
+
+`"fits": true` means release. `"fits": false` lists in `problems` what
+changed in Questlog; that needs a code change first
+(`docs/ARCHITECTURE.md` §10). No output state (`None`) means the feed or
+the download failed; the line above it says why.
+
 ## 2. Choose the version
 
 Tags are `vMAJOR.MINOR.PATCH`; the package version is the tag without `v`
@@ -50,13 +73,16 @@ previous release in `CHANGELOG.md`:
 Rules, as in sto-warp: written for a player, not a programmer; no file,
 module, function or variable names; no commit or issue links; neutral tone
 ("Questlog does X"); related fixes merged into one bullet. If players have to
-do something after updating, it is the first bullet.
+do something after updating, it is the first bullet. The release title, also
+the release commit's one-liner, follows the same rules:
+`vX.Y.Z — short player-facing summary`. Everything published is in
+English.
 
 ## 4. Release commit on develop
 
 ```bash
 git add CHANGELOG.md
-git commit -m "release: vX.Y.Z — short description"
+git commit -m "release: vX.Y.Z — short player-facing summary"
 git push origin develop
 gh run watch                                # wait for Tests to pass
 ```
@@ -76,8 +102,8 @@ why and resolve it by hand; never force.
 ## 6. Publish the release
 
 ```bash
-awk '/^## \[/{keep = index($0, "[X.Y.Z]") > 0} keep' CHANGELOG.md > /tmp/notes.md
-gh release create vX.Y.Z --target main --title "A2Qlinux X.Y.Z" --notes-file /tmp/notes.md
+awk '/^## \[/{keep = index($0, "[X.Y.Z]") > 0} keep' CHANGELOG.md | tail -n +2 > /tmp/a2q-vX.Y.Z-notes.md
+gh release create vX.Y.Z --target main --title "vX.Y.Z — short player-facing summary" --notes-file /tmp/a2q-vX.Y.Z-notes.md
 ```
 
 Publishing creates the tag and starts the `Release` workflow. Its `build`
