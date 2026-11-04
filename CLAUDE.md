@@ -28,6 +28,10 @@ about the machine's setup changes (Questlog version, paths, launch method),
 update the "Stan" section of `notes/README.md`.
 
 Rules learned in this project:
+- Everything that leaves the chat is in English: code, comments, log and UI
+  strings, documentation, commit messages, tags, release notes, changelog,
+  issues, pull requests and repository settings. Only the conversation with
+  Raman is in Polish, and `notes/` (private, not in git).
 - Never run meters or scripts with `sudo`; capture works through the
   `wireshark` group.
 - Never `wineserver -k` in the game prefix — it ends the game too. Questlog's
