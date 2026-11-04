@@ -26,7 +26,10 @@ A2Qlinux, what causes them and what to do, followed by common questions.
 | "AION 2's Wine prefix was not found in Steam's libraries" | the game has not been started from Steam yet, or Steam is somewhere A2Qlinux does not look | start the game once from Steam; the message lists where A2Qlinux looked |
 | "Only a Flatpak Steam was found" | Steam is installed from Flatpak | install Steam from your distribution or from Valve instead (see [INSTALL.md](INSTALL.md#what-you-need-before-you-start)) |
 | "requires a different Python" when installing with pipx | your Python is older than 3.11 | use a newer distribution release (see [INSTALL.md](INSTALL.md#what-you-need-before-you-start)) |
-| "dumpcap stopped. Check capture permission" | you are not yet allowed to capture: not in the `wireshark` group, not logged in again since, or on Debian and Ubuntu capturing is not allowed for the group | do "Allowing capture" in [INSTALL.md](INSTALL.md#allowing-capture); `dumpcap -D` must list your network devices |
+| "dumpcap stopped. Check capture permission" | you are not yet allowed to capture: not in the `wireshark` group, not logged in again since, or on Debian and Ubuntu capturing is not allowed for the group | run `a2qlinux-setup`: it tries a capture and prints the commands still needed (see "Allowing capture" in [INSTALL.md](INSTALL.md#allowing-capture)) |
+| `a2qlinux-setup`: "… already exists and is not an empty folder, but holds no Questlog.exe" | the Questlog folder holds something else, so A2Qlinux does not install into it | move that folder away, or give another one with `--questlog-dir` |
+| `a2qlinux-setup`: "Questlog's download information could not be read" or "Questlog X could not be installed" | no internet connection, or the download broke off | run `a2qlinux-setup` again; nothing half-installed is left behind |
+| `a2qlinux-setup`: "Questlog X does not fit this A2Qlinux yet" | the newest Questlog changed something A2Qlinux relies on | update A2Qlinux (`pipx upgrade a2qlinux`); if there is no newer A2Qlinux yet, install an earlier Questlog by hand ([UPDATING.md](UPDATING.md#installing-questlog-by-hand)) |
 | `a2qlinux-setup` says the tray icon cannot run | see below | see below |
 
 ## The tray icon

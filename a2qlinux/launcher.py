@@ -232,7 +232,7 @@ def wait_for_game_or_cancel(appid):
 def system_dumpcap():
     found = shutil.which("dumpcap")
     if not found:
-        raise RuntimeError("dumpcap is missing. Install wireshark-cli.")
+        raise RuntimeError("dumpcap is missing. Run a2qlinux-setup, which names the package to install.")
     path = Path(found).resolve(strict=True)
     info = path.stat()
     if info.st_uid != 0 or info.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
@@ -291,7 +291,7 @@ def pump_records(stream, server, status):
             if record is not None:
                 status["packets"] += 1
                 status["last_packet"] = time.monotonic()
-        status["error"] = "dumpcap stopped. Check capture permission: dumpcap -D"
+        status["error"] = "dumpcap stopped. Check capture permission: run a2qlinux-setup, which tests it and says what to do."
     except (ValueError, OSError) as error:
         status["error"] = f"Capture stream unreadable: {error}"
 

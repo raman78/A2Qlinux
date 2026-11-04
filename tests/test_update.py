@@ -100,8 +100,8 @@ class CompatibilityTest(unittest.TestCase):
         self.assertIn("non-activatable", problems)
 
 
-class StageInstallRollbackTest(unittest.TestCase):
-    """The whole path, offline: feed and installer come from file:// URLs."""
+class OfflineCdn:
+    """A Questlog 0.1.35 'release' served from file:// URLs, like cdn.questlog.gg, for the update tests."""
 
     def setUp(self):
         if not shutil.which("7z"):
@@ -131,6 +131,29 @@ class StageInstallRollbackTest(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def publish_unfitting(self):
+        """Replace the served 0.1.35 by one built on an Electron this A2Qlinux has not checked."""
+        installer = self.cdn / "questlog-setup-0.1.35.exe"
+        build = Path(self.tmp.name) / "build2"
+        make_app(build / "app", version="0.1.35", electron="45.0.0")
+        (build / "nsis" / "$PLUGINSDIR").mkdir(parents=True)
+        subprocess.run(["7z", "a", str(build / "nsis" / "$PLUGINSDIR" / "app-64.7z"), "."],
+                       cwd=build / "app", check=True, capture_output=True)
+        installer.unlink()
+        subprocess.run(["7z", "a", "-t7z", str(installer), "$PLUGINSDIR"], cwd=build / "nsis",
+                       check=True, capture_output=True)
+        digest = base64.b64encode(hashlib.sha512(installer.read_bytes()).digest()).decode()
+        text = (self.cdn / "latest.yml").read_text()
+        text = "\n".join(
+            f"{line.split('sha512:')[0]}sha512: {digest}" if "sha512:" in line else
+            f"{line.split('size:')[0]}size: {installer.stat().st_size}" if "size:" in line else line
+            for line in text.splitlines())
+        (self.cdn / "latest.yml").write_text(text)
+
+
+class StageInstallRollbackTest(OfflineCdn, unittest.TestCase):
+    """The whole path, offline: feed and installer come from file:// URLs."""
 
     def stage(self):
         return u.stage(self.questlog, self.state, self.logged.append, self.notified.append,
@@ -167,23 +190,7 @@ class StageInstallRollbackTest(unittest.TestCase):
         self.assertEqual(u.installed_version(self.questlog), "0.1.34")
 
     def test_an_unfitting_version_is_reported_and_not_installed(self):
-        installer = self.cdn / "questlog-setup-0.1.35.exe"
-        # Rebuild the package with an Electron this A2Qlinux has not checked.
-        build = Path(self.tmp.name) / "build2"
-        make_app(build / "app", version="0.1.35", electron="45.0.0")
-        (build / "nsis" / "$PLUGINSDIR").mkdir(parents=True)
-        subprocess.run(["7z", "a", str(build / "nsis" / "$PLUGINSDIR" / "app-64.7z"), "."],
-                       cwd=build / "app", check=True, capture_output=True)
-        installer.unlink()
-        subprocess.run(["7z", "a", "-t7z", str(installer), "$PLUGINSDIR"], cwd=build / "nsis",
-                       check=True, capture_output=True)
-        digest = base64.b64encode(hashlib.sha512(installer.read_bytes()).digest()).decode()
-        text = (self.cdn / "latest.yml").read_text()
-        text = "\n".join(
-            f"{line.split('sha512:')[0]}sha512: {digest}" if "sha512:" in line else
-            f"{line.split('size:')[0]}size: {installer.stat().st_size}" if "size:" in line else line
-            for line in text.splitlines())
-        (self.cdn / "latest.yml").write_text(text)
+        self.publish_unfitting()
         state = self.stage()
         self.assertFalse(state["fits"])
         self.assertIn("Electron 45.0.0", self.notified[0])
@@ -194,6 +201,64 @@ class StageInstallRollbackTest(unittest.TestCase):
         u.disable_builtin_updater(self.questlog, self.logged.append)
         self.assertFalse((self.questlog / "resources" / "app-update.yml").exists())
         self.assertEqual(len(self.logged), 1)
+
+
+class InstallFreshTest(OfflineCdn, unittest.TestCase):
+    """a2qlinux-setup on a machine without Questlog: the same feed and checks, then straight into place."""
+
+    def install(self, target):
+        return u.install_fresh(target, self.logged.append, feed_url=(self.cdn / "latest.yml").as_uri(),
+                               downloads=self.cdn.as_uri() + "/")
+
+    def test_installs_into_a_missing_folder_and_leaves_nothing_behind(self):
+        target = Path(self.tmp.name) / "Games" / "Questlog"
+        self.assertEqual(self.install(target), "0.1.35")
+        self.assertEqual(u.installed_version(target), "0.1.35")
+        self.assertFalse((target / "resources" / "app-update.yml").exists())
+        self.assertEqual([p.name for p in target.parent.iterdir()], ["Questlog"])   # no work folder left
+        self.assertIn("Installed Questlog 0.1.35", self.logged[-1])
+
+    def test_installs_into_an_empty_folder(self):
+        target = Path(self.tmp.name) / "empty"
+        target.mkdir()
+        self.install(target)
+        self.assertEqual(u.installed_version(target), "0.1.35")
+
+    def test_never_writes_into_a_folder_that_holds_something(self):
+        target = Path(self.tmp.name) / "taken"
+        target.mkdir()
+        (target / "notes.txt").write_text("mine")
+        with self.assertRaisesRegex(RuntimeError, "not an empty folder"):
+            self.install(target)
+        self.assertEqual([p.name for p in target.iterdir()], ["notes.txt"])
+
+    def test_a_corrupt_download_is_reported_and_cleaned_up(self):
+        feed = self.cdn / "latest.yml"
+        feed.write_text(feed.read_text().replace("sha512: ", "sha512: AAAA"))
+        target = Path(self.tmp.name) / "fresh" / "Questlog"
+        with self.assertRaisesRegex(RuntimeError, "SHA-512"):
+            self.install(target)
+        self.assertFalse(target.exists())
+        self.assertEqual(list(target.parent.iterdir()), [])
+
+    def test_a_folder_that_cannot_be_made_is_reported_not_raised_raw(self):
+        (Path(self.tmp.name) / "file").write_text("x")
+        target = Path(self.tmp.name) / "file" / "Questlog"         # parent is a file: nothing can be made there
+        with self.assertRaisesRegex(RuntimeError, "no folder for Questlog can be made"):
+            self.install(target)
+
+    def test_a_version_that_does_not_fit_is_not_installed(self):
+        self.publish_unfitting()
+        target = Path(self.tmp.name) / "fresh" / "Questlog"
+        with self.assertRaisesRegex(RuntimeError, "does not fit this A2Qlinux yet: .*Electron 45.0.0.*pipx upgrade"):
+            self.install(target)
+        self.assertFalse(target.exists())
+        self.assertEqual(list(target.parent.iterdir()), [])
+
+    def test_an_unreadable_feed_is_reported(self):
+        with self.assertRaisesRegex(RuntimeError, "download information could not be read"):
+            u.install_fresh(Path(self.tmp.name) / "Q", self.logged.append,
+                            feed_url=(self.cdn / "missing.yml").as_uri())
 
 
 if __name__ == "__main__":

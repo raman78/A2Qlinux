@@ -43,20 +43,19 @@ for Arch, Debian, Ubuntu, Fedora and openSUSE. In short:
    [Installing the packages](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#installing-the-packages).
 2. Join the `wireshark` group and log in again — see
    [Allowing capture](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#allowing-capture).
-3. Unpack Questlog to `~/Games/Questlog` — see
-   [Installing Questlog](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#installing-questlog).
-4. `pipx install a2qlinux`, `pipx ensurepath`, open a new terminal, then
-   `a2qlinux-setup --desktop-shortcut` — see
-   [Installing A2Qlinux](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#installing-a2qlinux).
-5. Start **Questlog (AION 2)** from the menu, or set the Steam launch option
+3. `pipx install a2qlinux`, `pipx ensurepath`, open a new terminal, then
+   `a2qlinux-setup --desktop-shortcut`. It installs Questlog, checks
+   everything else and prints the command for anything still missing — see
+   [Installing A2Qlinux and Questlog](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#installing-a2qlinux-and-questlog).
+4. Start **Questlog (AION 2)** from the menu, or set the Steam launch option
    that `a2qlinux-setup` prints.
 
 ## Documentation
 
 - [docs/INSTALL.md](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md) — requirements, installing, removal.
 - [docs/USING.md](https://github.com/raman78/A2Qlinux/blob/main/docs/USING.md) — starting, tray icon, playing.
-- [docs/UPDATING.md](https://github.com/raman78/A2Qlinux/blob/main/docs/UPDATING.md) — Questlog updates, and updating
-  A2Qlinux itself (`pipx upgrade a2qlinux`).
+- [docs/UPDATING.md](https://github.com/raman78/A2Qlinux/blob/main/docs/UPDATING.md) — Questlog updates, installing Questlog
+  by hand, and updating A2Qlinux itself (`pipx upgrade a2qlinux`).
 - [docs/TROUBLESHOOTING.md](https://github.com/raman78/A2Qlinux/blob/main/docs/TROUBLESHOOTING.md) — problems, FAQ.
 - [docs/ARCHITECTURE.md](https://github.com/raman78/A2Qlinux/blob/main/docs/ARCHITECTURE.md) — how it works and why, failure
   modes, tests, what a Questlog update can break.
@@ -70,9 +69,9 @@ for Arch, Debian, Ubuntu, Fedora and openSUSE. In short:
 | `a2qlinux/desktop.py` | `a2qlinux`: menu-entry entry point; one launcher at a time |
 | `a2qlinux/tray.py` | tray icon (PyQt6) |
 | `a2qlinux/config.py` | settings from `~/.config/a2qlinux/config.toml` |
-| `a2qlinux/update.py` | background Questlog updates: download, verify, check, install, roll back |
+| `a2qlinux/update.py` | installing Questlog, and background Questlog updates: download, verify, check, install, roll back |
 | `a2qlinux/steam.py` | `a2qlinux-steam`: Steam launch-option wrapper |
-| `a2qlinux/setup_desktop.py` | `a2qlinux-setup`: menu entry, icon, dependency check |
+| `a2qlinux/setup_desktop.py` | `a2qlinux-setup`: dependency and capture checks with install commands, Questlog installation, menu entry, icon |
 | `a2qlinux/bin/` | the built Windows parts (shipped in the package, not in git) |
 | `bridge/` | Windows parts in C: `wpcap.dll` stand-in, `questlog_ctl.exe`, their tests; `build.sh` |
 | `tests/` | Python tests: `python3 -m unittest` |

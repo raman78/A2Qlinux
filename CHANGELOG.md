@@ -22,6 +22,12 @@ What changed for players, release by release. Technical details are in
   waits until the last data is saved, at most about 10 seconds.
 
 ### Added
+- `a2qlinux-setup` installs Questlog itself when it is not there yet: it
+  downloads the newest version from Questlog's authors, checks it and puts
+  it in place. Installing Questlog by hand is no longer needed.
+- For anything still missing, `a2qlinux-setup` prints the exact command for
+  the distribution in use, including what allows capturing the game's
+  traffic, and checks capturing with a short real capture.
 - A settings file, `~/.config/a2qlinux/config.toml`, created by `a2qlinux-setup`:
   Questlog's folder, what happens after the game (Questlog stays or closes,
   and after how long it closes), and automatic updates. Mistakes in it are
@@ -29,8 +35,8 @@ What changed for players, release by release. Technical details are in
 - `a2qlinux-setup` checks that A2Qlinux's tray icon can run on your desktop,
   and says why not (no system tray, or a missing library).
 - The install guide covers Debian, Ubuntu, Fedora and openSUSE besides
-  Arch: package names, the extra step for capturing on Debian and Ubuntu,
-  and what A2Qlinux needs from the desktop and from Steam.
+  Arch, in numbered steps with one package command per distribution, and
+  says what A2Qlinux needs from the desktop and from Steam.
 
 ### Fixed
 - AION 2's Proton environment is found wherever Steam is installed, through

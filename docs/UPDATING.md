@@ -4,8 +4,8 @@ This guide explains how Questlog is kept up to date under A2Qlinux, and how to
 update it by hand if you prefer.
 
 **A2Qlinux updates Questlog for you.** Questlog's own updater downloads new
-versions but cannot install them under Proton (its installer stops, as
-described in [INSTALL.md](INSTALL.md), "Installing Questlog"), so A2Qlinux
+versions but cannot install them under Proton (its installer stops without
+installing anything), so A2Qlinux
 switches it off and does the job itself, the way Questlog does on Windows:
 download in the background, install at the next start.
 
@@ -41,11 +41,41 @@ To turn automatic updates off, set `auto_update = false` in the settings file
 (see "Settings" in [USING.md](USING.md)); `update_check_hours` there sets how
 often A2Qlinux checks. Then update by hand.
 
+### Installing Questlog by hand
+
+`a2qlinux-setup` installs Questlog for you ([INSTALL.md](INSTALL.md#installing-a2qlinux-and-questlog)).
+These commands do the same by hand, for when that fails, or when you want
+to see each step. They always fetch the newest version; there is nothing to
+change in them.
+
+1. Download the newest installer, and the small file `latest.yml` that
+   names it and holds its checksum:
+   ```
+   mkdir -p /tmp/qlupd/dl && cd /tmp/qlupd/dl && curl -s -o latest.yml https://cdn.questlog.gg/desktop/latest.yml && curl -LO "https://cdn.questlog.gg/desktop/$(sed -n 's/^path: //p' latest.yml)"
+   ```
+2. Check that the download is complete and genuine. This prints `OK` and
+   the file name; if it prints `MISMATCH`, run step 1 again:
+   ```
+   python3 -c "import re,hashlib,base64,pathlib;y=pathlib.Path('latest.yml').read_text();f=re.search(r'^path: (.+)',y,re.M)[1];s=re.search(r'^sha512: (.+)',y,re.M)[1];print('OK' if base64.b64encode(hashlib.sha512(pathlib.Path(f).read_bytes()).digest()).decode()==s else 'MISMATCH',f)"
+   ```
+3. Unpack the installer, then the program package inside it:
+   ```
+   mkdir -p /tmp/qlupd/nsis /tmp/qlupd/app && cd /tmp/qlupd/nsis && 7z x ../dl/questlog-setup-*.exe && cd /tmp/qlupd/app && 7z x '/tmp/qlupd/nsis/$PLUGINSDIR/app-64.7z'
+   ```
+4. Move the program into place and delete the temporary files:
+   ```
+   mkdir -p ~/Games/Questlog && cp -a /tmp/qlupd/app/. ~/Games/Questlog/ && cd ~ && rm -rf /tmp/qlupd
+   ```
+5. Run `a2qlinux-setup` (it now finds Questlog and installs nothing).
+
+Do not install Npcap itself into the game's Proton environment. It is a
+Windows driver and does not work there; A2Qlinux replaces it.
+
 ### Updating by hand
 
-1. Do steps 1–3 of "Installing Questlog" in [INSTALL.md](INSTALL.md#installing-questlog).
-   They fetch the newest version; do not do step 4, which would copy it
-   over the current folder.
+1. Do steps 1–3 of "Installing Questlog by hand" above. They fetch the
+   newest version; do not do step 4, which would copy it over the current
+   folder.
 2. Check that the new version still works with A2Qlinux. This is a short
    technical check, listed in [ARCHITECTURE.md](ARCHITECTURE.md) §10. If
    you are not comfortable doing it, use the automatic update, which does

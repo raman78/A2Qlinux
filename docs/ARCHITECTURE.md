@@ -70,8 +70,8 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
 | `a2qlinux/tray.py` | Linux, child of the launcher; `--check` from `a2qlinux-setup` | our tray icon (PyQt6, drawn by the desktop's system tray) |
 | `a2qlinux/steam.py` (`a2qlinux-steam`) | Linux, as Steam's launch option | starts the launcher with the game; lets the game join a running Questlog |
 | `a2qlinux/config.py` | Linux, in every command | user settings from `~/.config/a2qlinux/config.toml` (§13) |
-| `a2qlinux/update.py` | Linux, in the launcher | stages new Questlog versions in the background, installs them at the next start (§6.6) |
-| `a2qlinux/setup_desktop.py` (`a2qlinux-setup`) | Linux, by hand; `refresh_entries` on every `a2qlinux` start | menu entry, icon, dependency check; keeps the menu entry (and an existing desktop shortcut) running this installation's `a2qlinux` |
+| `a2qlinux/update.py` | Linux, in the launcher; `install_fresh` from `a2qlinux-setup` | stages new Questlog versions in the background, installs them at the next start; installs Questlog the first time (§6.6) |
+| `a2qlinux/setup_desktop.py` (`a2qlinux-setup`) | Linux, by hand; `refresh_entries` on every `a2qlinux` start | dependency, capture and tray checks with the commands that fix them (§14); first Questlog installation (§6.6); menu entry, icon; keeps the menu entry (and an existing desktop shortcut) running this installation's `a2qlinux` |
 | `a2qlinux/bin/wpcap.dll` (from `bridge/wpcap_bridge.c`) | prefix, in Questlog's NodeService process | libpcap stand-in; window-order guard |
 | `a2qlinux/bin/questlog_ctl.exe` (from `bridge/questlog_ctl.c`) | prefix, started per command | hides/shows Questlog's tray icon, closes its window, ends its session |
 
@@ -469,7 +469,8 @@ the background, and runs it on quit or from an "install" button in its
 window. Under Wine that installer stops (§7.5), so a downloaded update is
 never installed. `a2qlinux/update.py` does the update instead, the same way as
 a manual update, which therefore remains the fallback (`docs/UPDATING.md`,
-"Updating by hand"):
+"Updating by hand"). The first installation uses the same code (end of this
+section).
 
 ```
  at every launch:  disable_builtin_updater -> install_staged -> Questlog
@@ -534,6 +535,29 @@ Checked against the real CDN (18 October 2026), on a copy of 0.1.29: feed,
 download, checksum, unpacking, checks and swap to 0.1.34 in 3.9 s. The result
 was identical to the manual installation of the same version, except for the
 removed `app-update.yml`.
+
+**First installation** (`install_fresh`, run by `a2qlinux-setup` when the
+Questlog folder has no `Questlog.exe`). It reads the feed (`read_feed`) and
+runs the same download, size and SHA-512 check, unpacking and
+`compatibility_problems` as `stage` (both through `_fetch`), then renames
+the unpacked program into place. Differences from an update, and why:
+
+- No staging and no "next start": nothing runs yet, so the program goes
+  straight into place.
+- The work folder is a temporary folder next to the target
+  (`.a2qlinux-questlog-*` in its parent), so the final move is a rename on
+  one file system, and it is deleted whatever happens, including Ctrl+C.
+- It never writes into a folder that exists and holds anything: a folder
+  without `Questlog.exe` but with other files is reported, not filled.
+- A version that does not fit is not installed. Unlike an update, there is
+  no older version to keep, so the message names the two ways out:
+  a newer A2Qlinux, or an earlier Questlog by hand.
+- Errors are raised as `RuntimeError` with the reason and what to do;
+  `a2qlinux-setup` lists them under "Not ready yet".
+
+Checked against the real CDN (4 November 2026) with an empty home folder:
+Questlog 0.1.48 downloaded, verified, unpacked, judged to fit and put in
+place by `a2qlinux-setup`, followed by "Ready".
 
 ### 6.7 Releasing Steam after the game
 
@@ -644,6 +668,8 @@ the session itself.
 | notification "No terminal for the status window was found" | none of `TERMINALS` installed (§14) | install one |
 | "AION 2's Wine prefix was not found …" / "Only a Flatpak Steam was found" | no prefix in any native installation's libraries; only a Flatpak Steam (§14) | the message lists the files read |
 | `a2qlinux-setup`: "A2Qlinux's tray icon cannot run here (…)" | no system tray, or Qt cannot start (§14) | the `qt.qpa` lines in the message |
+| `a2qlinux-setup`: "capturing is not allowed yet (…)" | the capture check failed (§14) | `dumpcap`'s own line in the message, and the commands listed |
+| `a2qlinux-setup`: "Questlog X does not fit …" / "could not be installed" / "not an empty folder" | `install_fresh` refused or failed (§6.6) | the reason in the message |
 
 ### 7.1 `--no-sandbox`
 
@@ -687,8 +713,9 @@ processes whose environment points at the game's prefix. Never use
 The NSIS installer checks through PowerShell whether Questlog runs. Wine's
 PowerShell is a stub that answers "running", so the installer tries to close
 Questlog and gives up with code 2. Questlog is therefore installed by
-unpacking its files (`docs/INSTALL.md`, "Installing Questlog"), and updated
-by `a2qlinux/update.py` (§6.6). Its own updater downloads new versions fine
+unpacking its files: by `a2qlinux-setup` (`install_fresh`, §6.6) or by hand
+(`docs/UPDATING.md`, "Installing Questlog by hand"), and updated by
+`a2qlinux/update.py` (§6.6). Its own updater downloads new versions fine
 but would start that same installer, so it is switched off.
 
 ## 8. Decisions and rejected alternatives
@@ -718,7 +745,7 @@ one** — §6.4.
 
 | What | How |
 |---|---|
-| launcher, bridge, quit logic, updates, Steam verb switch | `python3 -m unittest` in the repository root (after `bash bridge/build.sh`; CI runs both on every push, §12); the update tests build a fake installer with `7z` and run feed → download (`file://`) → checks → swap → rollback offline |
+| launcher, bridge, quit logic, updates, Steam verb switch | `python3 -m unittest` in the repository root (after `bash bridge/build.sh`; CI runs both on every push, §12); the update tests build a fake installer with `7z` and run feed → download (`file://`) → checks → swap → rollback, and the first installation (`install_fresh`), offline |
 | DLL against a live bridge | `bridge/tests/bridge_client_test.exe` in a throwaway prefix, with a running `BridgeServer` and `WINEDLLOVERRIDES=wpcap=n`; report in `C:\bridge_client_test.txt` (packets, delay) |
 | window-order guard | copy `bridge/tests/zorder_guard_test.exe` and `a2qlinux/bin/wpcap.dll` to an empty folder, then `WINEPREFIX=<throwaway> xvfb-run -a wine zorder_guard_test.exe 'Z:\<folder>\wpcap.dll'`; prints the order before and after, `PASS`/`FAIL` |
 | `questlog_ctl.exe` by hand | `protontricks-launch --appid 3393110 <package>/a2qlinux/bin/questlog_ctl.exe hide-tray` (or `show-tray`, `close-window`, `end-session`); `<package>` is printed by `python -c 'import a2qlinux; print(a2qlinux.__path__[0])'` in A2Qlinux's environment |
@@ -913,6 +940,39 @@ so the launch option cannot reach `~/.local/bin/a2qlinux-steam` or the
 Python environment behind it. When only a Flatpak Steam exists,
 `game_prefix` says so instead of reporting a missing prefix.
 
+**Missing packages: one command per distribution** (`missing_packages`,
+`install_commands`, `distro_family` in `a2qlinux/setup_desktop.py`).
+`a2qlinux-setup` reads `/etc/os-release` and maps `ID` and `ID_LIKE` to a
+family: Arch, Ubuntu (checked before Debian, since Ubuntu's derivatives name
+both), Debian, Fedora, SUSE. `PACKAGES` holds each family's package names,
+the same as the table in `docs/INSTALL.md`; `install_commands` turns the
+missing ones into one `sudo <package manager> install …` line. Two special
+cases follow the package indexes: Ubuntu gets `add-apt-repository multiverse`
+in front when protontricks is missing; Debian other than 12 gets
+`pipx install protontricks` instead. An unknown distribution gets Arch's
+names and a pointer to the guide. A missing xcb-cursor library is known only
+from the tray check's message, so it joins the command from there. The
+setup prints these commands and never runs `sudo` itself.
+
+**Capture check** (`capture_problem`). `dumpcap -D` is no check: listing
+devices needs no rights, and a copy of `dumpcap` without capabilities listed
+them as well as the real one. The setup therefore captures for one second
+on `lo` with a filter that matches nothing (`tcp port 1`), written to a
+pipe that is discarded (I4 holds: no traffic is written anywhere). Measured:
+the real `dumpcap` exits 0 in about one second; the copy without
+capabilities exits 1 with "You do not have permission to capture on device
+"lo"". On failure the message carries `dumpcap`'s own line and the steps
+that apply: `dpkg-reconfigure wireshark-common` on Debian and Ubuntu when
+`dumpcap` has neither file capabilities nor the setuid bit (Fedora and
+openSUSE give it capabilities, as Arch does: their package files
+`wireshark.spec` and `permissions.secure`); `usermod -aG wireshark` when the
+group database lacks the user (`id -nG <user>`); a new login when the
+running session lacks the group (`id -nG`). On Arch, Fedora and openSUSE
+`dumpcap` is `root:wireshark 0750`, so a user outside the group cannot even
+run it, and `shutil.which` (which tests for execute permission) does not
+find it. The setup looks programs up by existence (`installed`), so this
+case reads as a missing group membership, not as a missing package.
+
 **Other requirements.** Python 3.11 for `tomllib` (§13), declared in
 `requires-python`, so pipx refuses older Pythons (Ubuntu 22.04 has 3.10).
 `systemd-run --user` for the Steam launch option (§5.1). A native
@@ -921,5 +981,5 @@ Python environment behind it. When only a Flatpak Steam exists,
 points). Debian's `wireshark-common` asks whether non-root users may
 capture, with no as the default (its debconf template `install-setuid`);
 `dpkg-reconfigure wireshark-common` changes the answer. `bridge/build.sh`
-uses Arch's Wine paths; users of other distributions install the release
-wheel, which carries the built parts (§12).
+uses Arch's Wine paths; users of other distributions install the package
+from PyPI, which carries the built parts (§12).

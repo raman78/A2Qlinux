@@ -13,6 +13,10 @@ the way docs/UPDATING.md describes doing it by hand:
                         staged one, keeping the old one as a backup
   if it then fails      rollback(): put the old folder back
 
+The first installation goes through the same download and checks:
+install_fresh(), run by a2qlinux-setup when the Questlog folder has no
+Questlog.exe, puts the newest version that fits straight into place.
+
 Questlog's own updater is switched off (disable_builtin_updater), so it no
 longer downloads 115 MB that it cannot install, nor offers an install button
 that does nothing. Without resources/app-update.yml it only logs
@@ -31,6 +35,7 @@ import re
 import shutil
 import struct
 import subprocess
+import tempfile
 import threading
 import urllib.request
 
@@ -180,7 +185,7 @@ def _unpack(installer, work):
     """installer.exe (NSIS) -> work/app, Questlog's files; needs 7z."""
     seven = shutil.which("7z")
     if not seven:
-        raise RuntimeError("7z is missing (package p7zip)")
+        raise RuntimeError("7z is missing; run a2qlinux-setup, which names the package to install")
     nsis, app = work / "nsis", work / "app"
     for folder in (nsis, app):
         shutil.rmtree(folder, ignore_errors=True)
@@ -218,11 +223,32 @@ def stage(questlog_dir, state_dir, log, notify, feed_url=FEED, downloads=DOWNLOA
         return _stage(questlog_dir, state_dir, log, notify, feed_url, downloads)
 
 
+def read_feed(feed_url=FEED):
+    """The newest version as latest.yml describes it (parse_feed); raises OSError or ValueError."""
+    with _open(feed_url, 20) as response:
+        return parse_feed(response.read().decode("utf-8", "replace"))
+
+
+def _fetch(feed, work, downloads):
+    """Download the feed's installer into `work`, verify and unpack it; (app folder, compatibility problems).
+
+    The installer is deleted once unpacked, and Questlog's own updater
+    configuration is removed from the unpacked files (disable_builtin_updater).
+    Raises OSError, ValueError or RuntimeError when a step fails.
+    """
+    installer = work / feed["path"]
+    _download(downloads + feed["path"], installer, feed["size"], feed["sha512"])
+    app = _unpack(installer, work)
+    installer.unlink()
+    problems = compatibility_problems(app)
+    (app / "resources" / "app-update.yml").unlink(missing_ok=True)
+    return app, problems
+
+
 def _stage(questlog_dir, state_dir, log, notify, feed_url, downloads):
     current = installed_version(questlog_dir)
     try:
-        with _open(feed_url, 20) as response:
-            feed = parse_feed(response.read().decode("utf-8", "replace"))
+        feed = read_feed(feed_url)
     except (OSError, ValueError) as error:
         log(f"Questlog update check failed ({error}); trying again later.")
         return None
@@ -235,16 +261,11 @@ def _stage(questlog_dir, state_dir, log, notify, feed_url, downloads):
     log(f"Questlog {feed['version']} is out (installed: {current or 'unknown'}); downloading it.")
     try:
         work.mkdir(parents=True, exist_ok=True)
-        installer = work / feed["path"]
-        _download(downloads + feed["path"], installer, feed["size"], feed["sha512"])
-        app = _unpack(installer, work)
-        installer.unlink()
+        app, problems = _fetch(feed, work, downloads)
     except (OSError, ValueError, RuntimeError) as error:
         shutil.rmtree(work, ignore_errors=True)
         log(f"Questlog {feed['version']} could not be staged: {error}. Trying again later.")
         return None
-    problems = compatibility_problems(app)
-    (app / "resources" / "app-update.yml").unlink(missing_ok=True)
     state = {"version": feed["version"], "app": str(app), "fits": not problems, "problems": problems}
     # Older staged versions are superseded by this one.
     for other in (Path(state_dir) / "update").iterdir():
@@ -265,6 +286,55 @@ def _stage(questlog_dir, state_dir, log, notify, feed_url, downloads):
 
 
 # ------------------------------------------------------------- installation
+
+def install_fresh(questlog_dir, log, feed_url=FEED, downloads=DOWNLOADS):
+    """Install the newest Questlog into a missing or empty folder; returns its version.
+
+    For a2qlinux-setup on a machine without Questlog: the same download,
+    checksum, unpacking and compatibility checks as an update (_fetch), then
+    the unpacked program is moved into place. The work folder is made next
+    to the target, so the move is a rename on one file system.
+
+    Raises RuntimeError with what went wrong and what to do; a folder that
+    holds anything is never written into, and nothing is left behind.
+    """
+    questlog_dir = Path(questlog_dir)
+    if questlog_dir.exists() and (not questlog_dir.is_dir() or any(questlog_dir.iterdir())):
+        raise RuntimeError(f"{questlog_dir} already exists and is not an empty folder, but holds no "
+                           "Questlog.exe; move it away, or pass another folder with --questlog-dir")
+    try:
+        feed = read_feed(feed_url)
+    except (OSError, ValueError) as error:
+        raise RuntimeError(f"Questlog's download information could not be read ({error}); "
+                           "check the internet connection and run a2qlinux-setup again") from error
+    version = feed["version"]
+    log(f"Downloading Questlog {version} from its authors' server ({feed['size'] / 1e6:.0f} MB), "
+        "checking and unpacking it …")
+    try:
+        questlog_dir.parent.mkdir(parents=True, exist_ok=True)
+        work = Path(tempfile.mkdtemp(prefix=".a2qlinux-questlog-", dir=questlog_dir.parent))
+    except OSError as error:
+        raise RuntimeError(f"no folder for Questlog can be made in {questlog_dir.parent}: {error}") from error
+    try:
+        try:
+            app, problems = _fetch(feed, work, downloads)
+        except (OSError, ValueError, RuntimeError) as error:
+            raise RuntimeError(f"Questlog {version} could not be installed: {error}") from error
+        if problems:
+            raise RuntimeError(f"Questlog {version} does not fit this A2Qlinux yet: " + "; ".join(problems)
+                               + ". Update A2Qlinux (pipx upgrade a2qlinux), or install an earlier "
+                               "Questlog by hand (docs/UPDATING.md, 'Installing Questlog by hand')")
+        try:
+            if questlog_dir.exists():
+                questlog_dir.rmdir()
+            app.rename(questlog_dir)
+        except OSError as error:
+            raise RuntimeError(f"Questlog {version} could not be put in {questlog_dir}: {error}") from error
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    log(f"Installed Questlog {version} in {questlog_dir}.")
+    return version
+
 
 def install_staged(questlog_dir, state_dir, log):
     """Swap in a staged version that fits. Returns (old version, backup folder) or None.
