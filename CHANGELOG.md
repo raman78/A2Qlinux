@@ -3,7 +3,7 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
-## [Unreleased]
+## [0.2.1] — 2026-11-05
 
 ### Fixed
 - `a2qlinux-setup --questlog-dir <folder>` now always takes effect: the
@@ -12,9 +12,9 @@ What changed for players, release by release. Technical details are in
 
 ### Changed
 - Installing from the source code is one command, `install-from-source.sh`,
-  which builds, installs and sets up, and works on the distributions the
-  install guide covers; missing build tools are named with the command that
-  installs them.
+  which builds, installs and sets up. The build looks for Wine's files where
+  the distributions in the install guide keep them, and names missing build
+  tools with the command that installs them.
 
 ## [0.2.0] — 2026-11-05
 
