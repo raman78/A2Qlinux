@@ -26,7 +26,7 @@ A2Qlinux, what causes them and what to do, followed by common questions.
 | "AION 2's Wine prefix was not found in Steam's libraries" | the game has not been started from Steam yet, or Steam is somewhere A2Qlinux does not look | start the game once from Steam; the message lists where A2Qlinux looked |
 | "Only a Flatpak Steam was found" | Steam is installed from Flatpak | install Steam from your distribution or from Valve instead (see [INSTALL.md](INSTALL.md#what-you-need-before-you-start)) |
 | "requires a different Python" when installing with pipx | your Python is older than 3.11 | use a newer distribution release (see [INSTALL.md](INSTALL.md#what-you-need-before-you-start)) |
-| "dumpcap stopped. Check capture permission" | you are not yet allowed to capture: not in the `wireshark` group, not logged in again since, or on Debian and Ubuntu capturing is not allowed for the group | see the `wireshark` steps in [INSTALL.md](INSTALL.md#what-you-need-before-you-start); `dumpcap -D` must list your network devices |
+| "dumpcap stopped. Check capture permission" | you are not yet allowed to capture: not in the `wireshark` group, not logged in again since, or on Debian and Ubuntu capturing is not allowed for the group | do "Allowing capture" in [INSTALL.md](INSTALL.md#allowing-capture); `dumpcap -D` must list your network devices |
 | `a2qlinux-setup` says the tray icon cannot run | see below | see below |
 
 ## The tray icon

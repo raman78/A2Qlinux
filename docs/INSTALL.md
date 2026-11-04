@@ -24,11 +24,28 @@ order. It keeps your clicks in the game when Questlog's window is open behind
 it. And it shows its own tray icon in place of Questlog's, whose menu does not
 work reliably under Proton.
 
+## The steps at a glance
+
+| Step | What you do | Takes |
+|---|---|---|
+| 1 | [Check what you need](#what-you-need-before-you-start) | a minute |
+| 2 | [Install the packages](#installing-the-packages) | one command |
+| 3 | [Allow capturing without administrator rights](#allowing-capture) | one or two commands, then log in again |
+| 4 | [Install Questlog](#installing-questlog) | four commands |
+| 5 | [Install A2Qlinux](#installing-a2qlinux) | two commands |
+| 6 | [Check that it works](#checking-that-it-works) | a game session |
+| 7 | [Start Questlog with the game from Steam](#starting-questlog-with-the-game-from-steam-optional) | optional |
+
+The commands below are typed in a terminal (Konsole, GNOME Terminal, or
+whatever your desktop has). Copy each one whole; most are a single long
+line.
+
 ## What you need before you start
 
-- AION 2 from Steam, started at least once, so that its Proton environment
-  (the "prefix") exists. It should run in **borderless window** mode, or the
-  overlays end up under the game.
+- **AION 2 from Steam, started at least once**, so that its Proton
+  environment (the "prefix", the folder where a Windows game keeps its
+  Windows files) exists. Set the game to **borderless window** mode, or
+  Questlog's overlays end up under it.
 - **Steam from your distribution's packages or from Valve's website.**
   Steam installed from Flatpak does not work: it runs in a sandbox that
   cannot see A2Qlinux, so its launch option cannot start it. Steam from
@@ -36,87 +53,111 @@ work reliably under Proton.
 - **A desktop with a system tray**, where A2Qlinux shows its Questlog icon.
   KDE Plasma, Xfce, Cinnamon and MATE have one. GNOME needs the extension
   "AppIndicator and KStatusNotifierItem Support"; Ubuntu ships it already
-  switched on. `a2qlinux-setup` checks the tray for you. A2Qlinux is used
+  switched on. A2Qlinux checks the tray for you in step 5. It is used
   daily on KDE Plasma 6 (Wayland); other desktops have not been played on
   yet.
-- **Python 3.11 or newer**, which pipx uses for A2Qlinux. Ubuntu 22.04 has
-  3.10 and is too old; Ubuntu 24.04, Debian 12 and newer, Fedora, openSUSE
-  Tumbleweed and Arch are fine. `python3 --version` tells you yours.
+- **Python 3.11 or newer.** `python3 --version` tells you yours. Ubuntu
+  22.04 has 3.10 and is too old; Ubuntu 24.04, Debian 12 and newer, Fedora,
+  openSUSE Tumbleweed and Arch are fine.
 - **systemd**, which almost every distribution uses. Without it the menu
   entry works, but the Steam launch option cannot start Questlog.
-- These packages. A2Qlinux names any that are missing when you run
-  `a2qlinux-setup` later:
 
-| What it is for | Arch / CachyOS | Debian / Ubuntu | Fedora | openSUSE |
-|---|---|---|---|---|
-| capturing the game's traffic (`dumpcap`) | `wireshark-cli` | `wireshark-common` | `wireshark-cli` | `wireshark` |
-| starting Questlog inside the game's Proton environment | `protontricks` | `protontricks` (see below) | `protontricks` | `protontricks` |
-| installing A2Qlinux | `python-pipx` | `pipx` | `pipx` | `python313-pipx` (the one for your Python) |
-| unpacking Questlog's installer, also for its updates (`7z`) | `7zip` | `p7zip-full` | `7zip` | `7zip` |
-| bringing Questlog's window to the front | `xdotool` | `xdotool` | `xdotool` | `xdotool` |
-| notifications | `libnotify` | `libnotify-bin` | `libnotify` | `libnotify-tools` |
-| the tray icon in an X11 session (not needed on Wayland) | `xcb-util-cursor` | `libxcb-cursor0` | `xcb-util-cursor` | `libxcb-cursor0` |
+## Installing the packages
 
-A2Qlinux's status window opens in a terminal: the first it finds of
-Konsole, GNOME Terminal, Ptyxis, the Xfce and MATE terminals, Debian's
-default terminal (`x-terminal-emulator`) and `xterm`. Every desktop listed
-above comes with one of them. The rest A2Qlinux needs (the tray icon
-library, among others) comes with it when pipx installs it.
+Install these with your distribution's package manager. Use the command for
+your distribution:
 
-**Protontricks on Debian and Ubuntu.** On Ubuntu it is in the
-`multiverse` section, which has to be switched on. Debian 13 has no
-protontricks package; install it with pipx instead:
-`pipx install protontricks`. That gives the `protontricks-launch` command
-A2Qlinux uses. Do not use protontricks from Flatpak: A2Qlinux needs the
-command in your normal system.
+| Distribution | Command |
+|---|---|
+| Arch, CachyOS | `sudo pacman -S --needed wireshark-cli protontricks python-pipx 7zip xdotool libnotify xcb-util-cursor` |
+| Ubuntu | `sudo add-apt-repository multiverse && sudo apt install wireshark-common protontricks pipx p7zip-full xdotool libnotify-bin libxcb-cursor0` |
+| Debian 12 | `sudo apt install wireshark-common protontricks pipx p7zip-full xdotool libnotify-bin libxcb-cursor0` |
+| Debian 13 | `sudo apt install wireshark-common pipx p7zip-full xdotool libnotify-bin libxcb-cursor0 && pipx install protontricks` |
+| Fedora | `sudo dnf install wireshark-cli protontricks pipx 7zip xdotool libnotify xcb-util-cursor` |
+| openSUSE Tumbleweed | `sudo zypper install wireshark protontricks python313-pipx 7zip xdotool libnotify-tools libxcb-cursor0` |
 
-- Your user in the `wireshark` group, so that capturing works without
-  administrator rights. Run this once, then log out and back in:
+On Debian and Ubuntu, installing `wireshark-common` asks "Should
+non-superusers be able to capture packets?". Answer **Yes**; step 3 explains
+why. If you answered No, step 3 shows how to change it.
 
-```
-sudo usermod -aG wireshark $USER
-```
+What each package is for:
 
-On Debian and Ubuntu, first allow capturing for that group. The
-`wireshark-common` package asks about this while it installs ("Should
-non-superusers be able to capture packets?"), and the answer is no unless
-you said yes. To answer again, run this and choose **Yes**:
+| Package | What it is for |
+|---|---|
+| Wireshark's command-line part | captures the game's traffic (`dumpcap`) |
+| protontricks | starts Questlog inside the game's Proton environment |
+| pipx | installs A2Qlinux in a folder of its own |
+| 7zip / p7zip | unpacks Questlog's installer, now and for its updates |
+| xdotool | brings Questlog's window to the front |
+| libnotify | desktop notifications |
+| xcb-cursor | the tray icon in an X11 session (a Wayland session does not need it) |
 
-```
-sudo dpkg-reconfigure wireshark-common
-```
+Notes:
 
-Nothing in A2Qlinux is run with `sudo` after that.
+- **Ubuntu** keeps protontricks in the `multiverse` section, which the
+  command above switches on. **Debian 13** has no protontricks package, so
+  the command installs it with pipx; that gives the `protontricks-launch`
+  command A2Qlinux uses. Do not use protontricks from Flatpak: A2Qlinux
+  needs the command in your normal system.
+- **openSUSE** names pipx after the Python version: `python313-pipx` is for
+  Python 3.13; pick the one matching `python3 --version`.
+- A2Qlinux's status window opens in a terminal: the first it finds of
+  Konsole, GNOME Terminal, Ptyxis, the Xfce and MATE terminals, Debian's
+  default terminal and `xterm`. Every desktop named above comes with one.
+- The rest A2Qlinux needs (the tray icon library, among others) comes with
+  it in step 5.
+
+## Allowing capture
+
+A2Qlinux reads the game's traffic with Wireshark's capture tool, `dumpcap`.
+Capturing network traffic normally needs administrator rights. The
+distributions solve this with a group called `wireshark`: its members may
+run `dumpcap`, and nothing else gets those rights. So you add yourself to
+that group once, and A2Qlinux never needs `sudo`.
+
+1. **Debian and Ubuntu only:** make sure capturing is allowed for the
+   group. If you answered Yes during step 2, skip this. Otherwise run this
+   and choose **Yes**:
+   ```
+   sudo dpkg-reconfigure wireshark-common
+   ```
+2. Add yourself to the group:
+   ```
+   sudo usermod -aG wireshark $USER
+   ```
+3. Log out of your desktop and log in again. Group membership is read at
+   login, so until then nothing changes.
+4. Check it. This lists your network devices; an error about permissions
+   means one of the steps above is missing:
+   ```
+   dumpcap -D
+   ```
 
 ## Installing Questlog
 
-Questlog's own installer stops under Proton without installing anything. So
-Questlog is installed by unpacking its files into a folder, by default
-`~/Games/Questlog`. The same steps are used later to update it.
+Questlog's own installer stops under Proton without installing anything.
+So Questlog is installed by unpacking its files into a folder, by default
+`~/Games/Questlog`. The commands always fetch the newest version; there is
+nothing to change in them.
 
-1. Look up the current version, its file name and its checksum:
+1. Download the newest installer, and the small file `latest.yml` that
+   names it and holds its checksum:
    ```
-   curl -s https://cdn.questlog.gg/desktop/latest.yml
+   mkdir -p /tmp/qlupd/dl && cd /tmp/qlupd/dl && curl -s -o latest.yml https://cdn.questlog.gg/desktop/latest.yml && curl -LO "https://cdn.questlog.gg/desktop/$(sed -n 's/^path: //p' latest.yml)"
    ```
-   You will see `version`, the installer's file name, `sha512` and `size`.
-2. Download that installer into an empty folder (example for 0.1.34):
+2. Check that the download is complete and genuine. This prints `OK` and
+   the file name; if it prints `MISMATCH`, run step 1 again:
    ```
-   mkdir -p /tmp/qlupd/dl && cd /tmp/qlupd/dl && curl -LO https://cdn.questlog.gg/desktop/questlog-setup-0.1.34.exe
+   python3 -c "import re,hashlib,base64,pathlib;y=pathlib.Path('latest.yml').read_text();f=re.search(r'^path: (.+)',y,re.M)[1];s=re.search(r'^sha512: (.+)',y,re.M)[1];print('OK' if base64.b64encode(hashlib.sha512(pathlib.Path(f).read_bytes()).digest()).decode()==s else 'MISMATCH',f)"
    ```
-3. Check the download. The line printed must be identical to the `sha512`
-   from step 1:
+3. Unpack the installer, then the program package inside it:
    ```
-   python3 -c "import hashlib,base64,sys;print(base64.b64encode(hashlib.sha512(open(sys.argv[1],'rb').read()).digest()).decode())" questlog-setup-0.1.34.exe
+   mkdir -p /tmp/qlupd/nsis /tmp/qlupd/app && cd /tmp/qlupd/nsis && 7z x ../dl/questlog-setup-*.exe && cd /tmp/qlupd/app && 7z x '/tmp/qlupd/nsis/$PLUGINSDIR/app-64.7z'
    ```
-4. Unpack the installer, then the program package inside it:
+4. Move the program into place and delete the temporary files:
    ```
-   mkdir -p /tmp/qlupd/nsis /tmp/qlupd/app && cd /tmp/qlupd/nsis && 7z x ../dl/questlog-setup-0.1.34.exe && cd /tmp/qlupd/app && 7z x '/tmp/qlupd/nsis/$PLUGINSDIR/app-64.7z'
+   mkdir -p ~/Games/Questlog && cp -a /tmp/qlupd/app/. ~/Games/Questlog/ && cd ~ && rm -rf /tmp/qlupd
    ```
-5. Move the program into place:
-   ```
-   mkdir -p ~/Games/Questlog && cp -a /tmp/qlupd/app/. ~/Games/Questlog/
-   ```
-6. Delete `/tmp/qlupd`.
 
 Do **not** install Npcap itself into the game's Proton environment. It is a
 Windows driver and does not work there. A2Qlinux provides what Questlog needs
@@ -138,30 +179,36 @@ nothing has to be built.
    ```
    pipx install a2qlinux
    ```
-2. Create the menu entry (and, with `--desktop-shortcut`, a desktop icon):
+2. Let pipx add `~/.local/bin` to your command path, then **close the
+   terminal and open a new one**, so that the new commands are found:
+   ```
+   pipx ensurepath
+   ```
+3. Create the menu entry (and, with `--desktop-shortcut`, a desktop icon).
+   Run it on your desktop, not over SSH:
    ```
    a2qlinux-setup --desktop-shortcut
    ```
+4. Read the end of what it printed. "Ready" means you can go on. Otherwise
+   it lists what is still missing, each with what to do; fix those and run
+   step 3 again.
 
-`a2qlinux-setup` creates A2Qlinux's settings file (see "Settings" in
-[USING.md](USING.md)) unless it exists, checks the packages from the list above
-and names any that are missing. It also starts A2Qlinux's tray icon for a
-moment, without showing it, to see that it can run on your desktop; if not,
-it prints why (see "The tray icon" in
-[TROUBLESHOOTING.md](TROUBLESHOOTING.md)). Run it on the desktop, not over
-SSH, so that this check can see your desktop. It takes Questlog's icon from your Questlog folder (A2Qlinux
-does not ship Questlog's logo) and creates the "Questlog (AION 2)" entry. At
-the end it prints the line for Steam's launch options (see
-[USING.md](USING.md)) and either "Ready" or a list of what is still missing.
-It installs no packages and changes nothing in the game.
+What `a2qlinux-setup` does: it creates A2Qlinux's settings file (see
+"Settings" in [USING.md](USING.md)) unless it exists, and checks the
+packages from step 2 and your membership of the `wireshark` group. It starts
+A2Qlinux's tray icon for a moment, without showing it, to see that it can
+run on your desktop; that is why it has to run on the desktop. If the icon
+cannot run, it prints why (see "The tray icon" in
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md)). It takes Questlog's icon from
+your Questlog folder (A2Qlinux does not ship Questlog's logo), creates the
+"Questlog (AION 2)" entry, and prints the line for Steam's launch options,
+used in the optional last step. It installs no packages and changes nothing
+in the game.
 
 The entry keeps itself up to date: each time `a2qlinux` starts, it checks
 that the menu entry (and the desktop icon, if you have one) still runs this
 installation, and writes it again if not, for example after A2Qlinux was
 reinstalled elsewhere. Options you added to the entry by hand stay.
-
-Tip: if `a2qlinux-setup` is not found, run `pipx ensurepath` once and open a
-new terminal.
 
 **From the source code instead** (for changing A2Qlinux itself): in a copy of
 the repository, build the small Windows parts once (needs `clang`, `lld` and
@@ -174,6 +221,21 @@ files where Arch and CachyOS put them (`/usr/include/wine`,
 `/usr/lib/wine/x86_64-windows`). On other distributions `pipx install
 a2qlinux` is the simpler way, since that package comes with these parts
 built.
+
+## Checking that it works
+
+1. Start **Questlog (AION 2)** from your applications menu. A small
+   terminal window opens, A2Qlinux's status window, and then Questlog.
+   Keep the status window open while you use Questlog; it carries the game
+   traffic to Questlog.
+2. Look at the system tray: one Questlog icon, A2Qlinux's. Right-click it
+   to see Open Questlog and Quit Questlog.
+3. Start AION 2 from Steam and log in to a character.
+4. The status window says `Game traffic is flowing to Questlog.` and
+   Questlog shows your character. Fight something: the damage meter fills.
+
+If something differs, the status window says what went wrong;
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md) lists the messages and what to do.
 
 ## Starting Questlog with the game from Steam (optional)
 
@@ -230,10 +292,12 @@ Next: [USING.md](USING.md).
    ```
    pipx uninstall a2qlinux
    ```
-4. Delete the menu entry, the desktop shortcut and the icon:
+4. Delete the menu entry, the icon and the settings file:
    ```
-   rm ~/.local/share/applications/questlog-aion2.desktop ~/Desktop/questlog-aion2.desktop ~/.local/share/icons/questlog-aion2.png
+   rm -r ~/.local/share/applications/questlog-aion2.desktop ~/.local/share/icons/questlog-aion2.png ~/.config/a2qlinux
    ```
+   If you made a desktop shortcut, delete `questlog-aion2.desktop` from
+   your desktop too.
 5. Delete A2Qlinux's capture library from the game's Proton environment, the
    folder `drive_c/windows/system32/Npcap` inside
    `steamapps/compatdata/3393110/pfx` in your Steam library.

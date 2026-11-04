@@ -36,14 +36,19 @@ is in [docs/INSTALL.md](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTA
 
 ## Quick start
 
-1. Install the requirements and join the `wireshark` group — see
-   [docs/INSTALL.md](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#what-you-need-before-you-start).
-2. Unpack Questlog to `~/Games/Questlog` — see
+The [installation guide](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md) walks through each step, with the commands
+for Arch, Debian, Ubuntu, Fedora and openSUSE. In short:
+
+1. Install the packages A2Qlinux uses — see
+   [Installing the packages](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#installing-the-packages).
+2. Join the `wireshark` group and log in again — see
+   [Allowing capture](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#allowing-capture).
+3. Unpack Questlog to `~/Games/Questlog` — see
    [Installing Questlog](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#installing-questlog).
-3. Install A2Qlinux with pipx, then create the menu entry — see
-   [Installing A2Qlinux](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#installing-a2qlinux):
-   `pipx install a2qlinux && a2qlinux-setup --desktop-shortcut`
-4. Start **Questlog (AION 2)** from the menu, or set the Steam launch option
+4. `pipx install a2qlinux`, `pipx ensurepath`, open a new terminal, then
+   `a2qlinux-setup --desktop-shortcut` — see
+   [Installing A2Qlinux](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#installing-a2qlinux).
+5. Start **Questlog (AION 2)** from the menu, or set the Steam launch option
    that `a2qlinux-setup` prints.
 
 ## Documentation

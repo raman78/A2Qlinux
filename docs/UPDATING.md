@@ -43,8 +43,9 @@ often A2Qlinux checks. Then update by hand.
 
 ### Updating by hand
 
-1. Do steps 1–4 of "Installing Questlog" in [INSTALL.md](INSTALL.md) for the
-   new version.
+1. Do steps 1–3 of "Installing Questlog" in [INSTALL.md](INSTALL.md#installing-questlog).
+   They fetch the newest version; do not do step 4, which would copy it
+   over the current folder.
 2. Check that the new version still works with A2Qlinux. This is a short
    technical check, listed in [ARCHITECTURE.md](ARCHITECTURE.md) §10. If
    you are not comfortable doing it, use the automatic update, which does
