@@ -256,10 +256,12 @@ on for each step:
 | 3 | `pipx ensurepath` | as in step 2 above |
 | 4 | `a2qlinux-setup` | the same checks and setup as above; options given to the installer, such as `--desktop-shortcut`, are passed on |
 
-Run it again after `git pull` when the Windows parts changed, or after a
-Wine update (the parts are built against the installed Wine). A change to
-the Python files needs nothing. Building has been tried on Arch and
-CachyOS only so far; the other distributions' folders come from their
+To update your copy later, run `git pull` in it, then `./install-from-source.sh`
+again. Changes you make yourself to A2Qlinux's Python files take effect the
+next time A2Qlinux starts; after changing the C files in `bridge/`, run the
+script again.
+
+Building has been tried on Arch and CachyOS only so far; the other distributions' folders come from their
 package file lists. If Wine's files are somewhere else, the build says so;
 give the folders as `WINE_INCLUDE=<folder with windows/windows.h>` and
 `WINE_LIB=<folder with libkernel32.a>` in front of the command.
