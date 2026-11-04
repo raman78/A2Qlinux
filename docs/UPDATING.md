@@ -64,14 +64,22 @@ often A2Qlinux checks. Then update by hand.
 
 ## Updating A2Qlinux itself
 
-A2Qlinux does not update itself. When a new release is out (the project's
-GitHub page, Releases), download its `a2qlinux-<version>-py3-none-any.whl`
-and replace the old one with it:
+A2Qlinux does not update itself; pipx does it when you ask. What changed
+in each version is in the project's changelog (`CHANGELOG.md` on its GitHub
+page). Quit Questlog first, then:
 
 ```
-pipx uninstall a2qlinux && pipx install ./a2qlinux-<version>-py3-none-any.whl
+pipx upgrade a2qlinux
 ```
 
-Quit Questlog first. The menu entry, the Steam launch option and Questlog
-itself stay as they are; only A2Qlinux's own files are replaced. Which
-version you have: `pipx list`.
+pipx fetches the newest version from PyPI and replaces A2Qlinux's own files.
+The menu entry, the Steam launch option, your settings file and Questlog
+itself stay as they are: they point at the `a2qlinux` commands in
+`~/.local/bin`, which keep their names. Which version you have:
+`pipx list`.
+
+If you installed A2Qlinux from a downloaded `.whl` file before it was on
+PyPI, pipx keeps using that file: `pipx upgrade` says A2Qlinux "is
+unchanged … because it is installed from the local source". Switch over
+once with `pipx uninstall a2qlinux && pipx install a2qlinux`; nothing else
+changes, and from then on `pipx upgrade a2qlinux` works.

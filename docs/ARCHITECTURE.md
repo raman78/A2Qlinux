@@ -803,10 +803,22 @@ otherwise downloads a tarball without history, leaving hatch-vcs no tag to
 read. The checkout is marked `safe.directory`, because it belongs to another
 user there.
 
-**PyPI** is prepared but off (`pypi` job, `if: false`) while the repository
-is private, since a package on PyPI is public. Turning it on takes a public
-repository, a Trusted Publisher for `release.yml` on pypi.org, and removing
-the `if: false`.
+**PyPI.** Users install with `pipx install a2qlinux` and update with
+`pipx upgrade a2qlinux`. The `pypi` job in `release.yml` runs after `build`,
+on published releases only, and uploads the two files `build` attached to the
+release, downloaded back with `gh release download`. It does not build again:
+the Windows parts exist only in the Arch container, and uploading the checked
+files means PyPI and the GitHub Release carry identical packages. It
+authenticates through a Trusted Publisher on pypi.org (project `a2qlinux`,
+repository `raman78/A2Qlinux`, workflow `release.yml`, no environment), so no
+token is stored in the repository. `skip-existing` makes a re-run after a
+partial upload succeed instead of failing on the file already there. sto-warp
+publishes from a single job that builds on the runner; A2Qlinux differs only
+because of the Windows parts.
+
+`README.md` is the package's description on PyPI, where relative links do not
+resolve, so its links to `docs/` and `LICENSE` are absolute URLs on `main`,
+i.e. the documentation of the latest release.
 
 **Branches.** Work happens on `develop`; a release fast-forwards `main` to it
 and tags `main` (`docs/RELEASE.md`). `main` therefore always equals the last

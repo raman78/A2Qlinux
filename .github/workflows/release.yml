@@ -64,11 +64,12 @@ jobs:
           name: dist
           path: dist/
 
-  # PyPI publishing, off while the repository is private: a package on PyPI is
-  # public. To turn on: make the repository public, add a Trusted Publisher for
-  # this workflow on pypi.org, and remove the `if: false` below.
+  # PyPI: uploads exactly the files the build job checked and attached, since
+  # only the Arch container builds the Windows parts. Authenticated by PyPI's
+  # Trusted Publisher for this workflow (no token). Releases only: a run by hand
+  # has no release to download from and must not publish.
   pypi:
-    if: false
+    if: github.event_name == 'release'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -79,3 +80,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern 'a2qlinux-*' --dir dist
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true    # a re-run after a partial upload does not fail

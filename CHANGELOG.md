@@ -5,6 +5,22 @@ What changed for players, release by release. Technical details are in
 
 ## [Unreleased]
 
+### Changed
+- A2Qlinux is now on PyPI: install it with `pipx install a2qlinux` and
+  update it with `pipx upgrade a2qlinux`. If you installed it from a
+  downloaded file, switch over once: quit Questlog, then
+  `pipx uninstall a2qlinux && pipx install a2qlinux`. The menu entry, the
+  Steam launch option and your settings stay as they are.
+- The status window opens in the terminal your desktop has (GNOME Terminal,
+  Ptyxis, the Xfce or MATE terminal, Debian's default terminal or xterm),
+  not only in Konsole. Without any, a notification says which to install.
+- Play in Steam (with the launch option) now starts Questlog first and the
+  game a few seconds later, once Questlog runs, instead of the other way
+  round. That is what lets the game end without disturbing Questlog.
+- Quit Questlog ends it at once when no game data is waiting to be saved
+  (without the game, or a while after closing it); while playing, it still
+  waits until the last data is saved, at most about 10 seconds.
+
 ### Added
 - A settings file, `~/.config/a2qlinux/config.toml`, created by `a2qlinux-setup`:
   Questlog's folder, what happens after the game (Questlog stays or closes,
@@ -15,17 +31,6 @@ What changed for players, release by release. Technical details are in
 - The install guide covers Debian, Ubuntu, Fedora and openSUSE besides
   Arch: package names, the extra step for capturing on Debian and Ubuntu,
   and what A2Qlinux needs from the desktop and from Steam.
-
-### Changed
-- The status window opens in the terminal your desktop has (GNOME Terminal,
-  Ptyxis, the Xfce or MATE terminal, Debian's default terminal or xterm),
-  not only in Konsole. Without any, a notification says which to install.
-- Play in Steam (with the launch option) now starts Questlog first and the
-  game a few seconds later, once Questlog runs, instead of the other way
-  round. That is what lets the game end without disturbing Questlog.
-- Quit Questlog ends it at once when no game data is waiting to be saved
-  (without the game, or a while after closing it); while playing, it still
-  waits until the last data is saved, at most about 10 seconds.
 
 ### Fixed
 - AION 2's Proton environment is found wherever Steam is installed, through

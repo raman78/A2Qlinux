@@ -32,28 +32,28 @@ Status: in daily use on CachyOS, KDE Plasma 6 (Wayland), Proton 11
 (`proton-cachyos-slr`), Questlog 0.1.37. Other distributions and desktops
 are untested; what they need (Steam from the distribution or Valve, not
 Flatpak; a system tray; Python 3.11 or newer; the packages per distribution)
-is in [docs/INSTALL.md](docs/INSTALL.md#what-you-need-before-you-start).
+is in [docs/INSTALL.md](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#what-you-need-before-you-start).
 
 ## Quick start
 
 1. Install the requirements and join the `wireshark` group — see
-   [docs/INSTALL.md](docs/INSTALL.md#what-you-need-before-you-start).
+   [docs/INSTALL.md](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#what-you-need-before-you-start).
 2. Unpack Questlog to `~/Games/Questlog` — see
-   [Installing Questlog](docs/INSTALL.md#installing-questlog).
-3. Install A2Qlinux with pipx from the wheel of the newest release, then
-   create the menu entry — see
-   [Installing A2Qlinux](docs/INSTALL.md#installing-a2qlinux):
-   `pipx install ./a2qlinux-<version>-py3-none-any.whl && a2qlinux-setup --desktop-shortcut`
+   [Installing Questlog](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#installing-questlog).
+3. Install A2Qlinux with pipx, then create the menu entry — see
+   [Installing A2Qlinux](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#installing-a2qlinux):
+   `pipx install a2qlinux && a2qlinux-setup --desktop-shortcut`
 4. Start **Questlog (AION 2)** from the menu, or set the Steam launch option
    that `a2qlinux-setup` prints.
 
 ## Documentation
 
-- [docs/INSTALL.md](docs/INSTALL.md) — requirements, installing, removal.
-- [docs/USING.md](docs/USING.md) — starting, tray icon, playing.
-- [docs/UPDATING.md](docs/UPDATING.md) — Questlog updates.
-- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — problems, FAQ.
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how it works and why, failure
+- [docs/INSTALL.md](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md) — requirements, installing, removal.
+- [docs/USING.md](https://github.com/raman78/A2Qlinux/blob/main/docs/USING.md) — starting, tray icon, playing.
+- [docs/UPDATING.md](https://github.com/raman78/A2Qlinux/blob/main/docs/UPDATING.md) — Questlog updates, and updating
+  A2Qlinux itself (`pipx upgrade a2qlinux`).
+- [docs/TROUBLESHOOTING.md](https://github.com/raman78/A2Qlinux/blob/main/docs/TROUBLESHOOTING.md) — problems, FAQ.
+- [docs/ARCHITECTURE.md](https://github.com/raman78/A2Qlinux/blob/main/docs/ARCHITECTURE.md) — how it works and why, failure
   modes, tests, what a Questlog update can break.
 
 ## Repository layout
@@ -76,7 +76,7 @@ is in [docs/INSTALL.md](docs/INSTALL.md#what-you-need-before-you-start).
 The Windows parts are built with `clang` against the installed Wine's headers
 (`bridge/build.sh`) — by the release workflow for the packages, by hand in a
 source checkout; built files are not kept in the repository. Releasing:
-[docs/RELEASE.md](docs/RELEASE.md).
+[docs/RELEASE.md](https://github.com/raman78/A2Qlinux/blob/main/docs/RELEASE.md).
 
 ## Not affiliated
 
@@ -93,4 +93,4 @@ publisher's current rules.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/raman78/A2Qlinux/blob/main/LICENSE).

@@ -128,16 +128,17 @@ A2Qlinux's settings file.
 
 ## Installing A2Qlinux
 
-A2Qlinux is installed with pipx, which keeps it and the libraries it uses in
-a folder of their own and puts its commands in `~/.local/bin`.
+A2Qlinux is installed with pipx, which downloads it from PyPI (the Python
+package index), keeps it and the libraries it uses in a folder of their own
+and puts its commands in `~/.local/bin`. The package already contains the
+small Windows parts A2Qlinux puts into the game's Proton environment, so
+nothing has to be built.
 
-1. Download the file `a2qlinux-<version>-py3-none-any.whl` from the newest
-   release on the project's GitHub page (Releases).
-2. Install it:
+1. Install it:
    ```
-   pipx install ./a2qlinux-<version>-py3-none-any.whl
+   pipx install a2qlinux
    ```
-3. Create the menu entry (and, with `--desktop-shortcut`, a desktop icon):
+2. Create the menu entry (and, with `--desktop-shortcut`, a desktop icon):
    ```
    a2qlinux-setup --desktop-shortcut
    ```
@@ -170,8 +171,9 @@ bash bridge/build.sh && pipx install --editable .
 ```
 Then run `a2qlinux-setup` as above. The build script looks for Wine's
 files where Arch and CachyOS put them (`/usr/include/wine`,
-`/usr/lib/wine/x86_64-windows`). On other distributions the release's
-package is the simpler way, since it comes with these parts built.
+`/usr/lib/wine/x86_64-windows`). On other distributions `pipx install
+a2qlinux` is the simpler way, since that package comes with these parts
+built.
 
 ## Starting Questlog with the game from Steam (optional)
 
