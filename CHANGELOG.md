@@ -3,51 +3,50 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
-## [Unreleased]
+## [0.2.0] — 2026-11-05
 
 ### Changed
-- A2Qlinux is now on PyPI: install it with `pipx install a2qlinux` and
-  update it with `pipx upgrade a2qlinux`. If you installed it from a
-  downloaded file, switch over once: quit Questlog, then
-  `pipx uninstall a2qlinux && pipx install a2qlinux`. The menu entry, the
-  Steam launch option and your settings stay as they are.
-- The status window opens in the terminal your desktop has (GNOME Terminal,
-  Ptyxis, the Xfce or MATE terminal, Debian's default terminal or xterm),
-  not only in Konsole. Without any, a notification says which to install.
-- Play in Steam (with the launch option) now starts Questlog first and the
-  game a few seconds later, once Questlog runs, instead of the other way
-  round. That is what lets the game end without disturbing Questlog.
+- A2Qlinux is now installed and updated from PyPI: `pipx install a2qlinux`,
+  then `pipx upgrade a2qlinux` for new versions. After updating from 0.1.0,
+  which was installed from a downloaded file, switch over once: quit
+  Questlog, then run `pipx uninstall a2qlinux && pipx install a2qlinux`. The
+  menu entry, the Steam launch option and the settings stay as they are.
+- Play in Steam (with the launch option) starts Questlog first and the game
+  a few seconds later, once Questlog runs, instead of the other way round.
+  That is what lets the game end without disturbing Questlog.
 - Quit Questlog ends it at once when no game data is waiting to be saved
   (without the game, or a while after closing it); while playing, it still
   waits until the last data is saved, at most about 10 seconds.
+- The status window opens in the terminal the desktop has (GNOME Terminal,
+  Ptyxis, the Xfce or MATE terminal, Debian's default terminal or xterm),
+  not only in Konsole. Without any, a notification says which to install.
 
 ### Added
-- `a2qlinux-setup` installs Questlog itself when it is not there yet: it
-  downloads the newest version from Questlog's authors, checks it and puts
-  it in place. Installing Questlog by hand is no longer needed.
-- For anything still missing, `a2qlinux-setup` prints the exact command for
-  the distribution in use, including what allows capturing the game's
-  traffic, and checks capturing with a short real capture.
-- A settings file, `~/.config/a2qlinux/config.toml`, created by `a2qlinux-setup`:
-  Questlog's folder, what happens after the game (Questlog stays or closes,
-  and after how long it closes), and automatic updates. Mistakes in it are
-  reported with their line, and the default is used meanwhile.
-- `a2qlinux-setup` checks that A2Qlinux's tray icon can run on your desktop,
-  and says why not (no system tray, or a missing library).
+- `a2qlinux-setup` installs Questlog when it is not there yet: it downloads
+  the newest version from Questlog's authors, checks it and puts it in
+  place. Installing Questlog by hand is no longer needed.
+- `a2qlinux-setup` checks everything A2Qlinux needs, including that
+  capturing the game's traffic is allowed and that the tray icon can run on
+  the desktop, and for anything missing prints the exact command for the
+  distribution in use.
+- A settings file, `~/.config/a2qlinux/config.toml`, created by
+  `a2qlinux-setup`: Questlog's folder, what happens after the game (Questlog
+  stays or closes, and after how long it closes), and automatic updates.
+  Mistakes in it are reported with their line, and the default is used
+  meanwhile.
 - The install guide covers Debian, Ubuntu, Fedora and openSUSE besides
   Arch, in numbered steps with one package command per distribution, and
   says what A2Qlinux needs from the desktop and from Steam.
 
 ### Fixed
-- AION 2's Proton environment is found wherever Steam is installed, through
-  the link Steam keeps in `~/.steam`, not only in `~/.local/share/Steam`. A
-  Steam from Flatpak, which A2Qlinux cannot work with, is named as the
-  reason.
 - Steam no longer shows AION 2 as running after the game is closed while
   Questlog stays open: a moment after the game ends, Steam shows Play again,
   and Questlog keeps running untouched. Only when the game was started
   before Questlog does Questlog restart, about 10 seconds after the game, as
   it was (window open or only in the tray).
+- AION 2's Proton environment is found wherever Steam is installed, not
+  only in its default folder. A Steam from Flatpak, which A2Qlinux cannot
+  work with, is named as the reason.
 
 ## [0.1.0] — 2026-10-18
 
