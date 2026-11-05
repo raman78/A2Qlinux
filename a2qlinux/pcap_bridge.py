@@ -177,7 +177,11 @@ class BridgeServer:
             self.clients.append(client)
             self.connections += 1
             count = self.connections
-        self.log(f"Questlog connected to the capture bridge (connection {count}).")
+        # Questlog reconnects by design on every zone change (it opens the new
+        # device before closing the old one), so only the first connection is
+        # worth a line; what is abnormal (refused, dropped) is logged above.
+        if count == 1:
+            self.log("Questlog connected to the capture bridge.")
 
     def publish(self, global_header, record):
         """Feed one item from read_records()."""

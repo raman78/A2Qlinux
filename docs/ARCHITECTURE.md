@@ -138,6 +138,10 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
    The server serves any number of connections, each with every packet. A
    connection that stops reading (`CLIENT_QUEUE_RECORDS`, 5000 records
    queued) is dropped with a message; Questlog reopens it within a second.
+   Only the session's first connection is announced in the status window
+   (`Questlog connected to the capture bridge.`); the reconnects that every
+   zone change brings are normal and pass silently, while a refused or
+   dropped connection is always logged.
 
 ### 4.1 The DLL's calls
 

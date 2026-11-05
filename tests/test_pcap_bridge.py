@@ -78,6 +78,20 @@ class BridgeServerTest(unittest.TestCase):
         self.assertEqual(recv_exact(s, len(record(1))), record(1))
         s.close()
 
+    def test_only_the_first_connection_is_logged(self):
+        # Questlog reconnects on every zone change; one line, not one per zone.
+        first = connect(self.server)
+        recv_exact(first, 24)
+        self.assertTrue(wait_for(lambda: self.server.client_count() == 1))
+        first.close()
+        for _ in range(3):
+            s = connect(self.server)
+            recv_exact(s, 24)
+            s.close()
+        self.assertTrue(wait_for(lambda: self.server.connections == 4))
+        connected = [m for m in self.messages if "connected to the capture bridge" in m]
+        self.assertEqual(connected, ["Questlog connected to the capture bridge."])
+
     def test_wrong_token_is_refused_and_logged(self):
         s = connect(self.server, token="0" * 64)
         self.assertEqual(recv_exact(s, 24), b"")

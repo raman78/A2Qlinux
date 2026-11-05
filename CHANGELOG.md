@@ -3,6 +3,13 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
+## [Unreleased]
+
+### Changed
+- The status window no longer prints a line every time Questlog reconnects
+  to the game traffic, which it does on every zone change. It says once that
+  Questlog is connected; problems are still reported as before.
+
 ## [0.2.1] — 2026-11-05
 
 ### Fixed
