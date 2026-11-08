@@ -377,6 +377,7 @@ class CapturesTest(unittest.TestCase):
         self.messages, self.notes = [], []
         self.server = FakeServer()
         self.game = set()
+        self.index = {"enp9s0": 2, "proton0": 5}
 
     def captures(self, wanted=()):
         def start(dumpcap, name, address):
@@ -386,7 +387,7 @@ class CapturesTest(unittest.TestCase):
         self.now = 0.0
         return q.Captures("dumpcap", self.server, wanted, {"packets": 0}, log=self.messages.append,
                           notify=self.notes.append, interfaces=lambda: dict(self.up), start=start,
-                          game_addresses=lambda: set(self.game))
+                          game_addresses=lambda: set(self.game), index_of=self.index.get)
 
     def scan(self, captures):
         self.now += q.CAPTURE_SCAN_EVERY
@@ -435,6 +436,37 @@ class CapturesTest(unittest.TestCase):
         self.up["enp9s0"] = "10.0.4.91"         # a new address: tried again
         self.scan(captures)
         self.assertEqual(len(self.started), 2)
+
+    def test_failed_capture_is_retried_later_and_reported_only_once(self):
+        captures = self.captures()
+        self.scan(captures)
+        self.started[0][2].returncode = 1
+        self.scan(captures)                     # failure seen
+        retry_at = self.now + q.CAPTURE_RETRY_EVERY
+        while self.now + q.CAPTURE_SCAN_EVERY < retry_at:
+            self.scan(captures)
+        self.assertEqual(len(self.started), 1)  # not before the retry time
+        self.scan(captures)                     # now at the retry time
+        self.assertEqual(len(self.started), 2)  # tried again
+        self.started[1][2].returncode = 1       # and fails again
+        self.scan(captures)
+        self.assertEqual(len(self.notes), 1)
+        self.assertEqual(len([m for m in self.messages if "ended:" in m]), 1)
+
+    def test_vpn_recreated_between_scans_is_captured_again_without_a_failure(self):
+        # Proton VPN switching servers (8 November 2026): proton0 deleted and created again
+        # within 0.6 s, same name, same address; dumpcap ends with the old interface.
+        self.up["proton0"] = "10.2.0.2"
+        captures = self.captures()
+        self.scan(captures)
+        old = [p for n, _, p in self.started if n == "proton0"][0]
+        old.returncode = 0
+        self.index["proton0"] = 6
+        self.scan(captures)
+        self.assertEqual([n for n, _, _ in self.started].count("proton0"), 2)
+        self.assertIn("proton0", self.server.offered)
+        self.assertEqual(self.notes, [])
+        self.assertTrue(any("proton0 was created anew" in m for m in self.messages))
 
     def test_wanted_limits_capture_and_a_missing_one_is_told_once(self):
         self.up["proton0"] = "10.2.0.2"

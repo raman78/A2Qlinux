@@ -303,6 +303,17 @@ def pump_records(name, stream, server, status, capture, log=log):
 
 
 CAPTURE_SCAN_EVERY = 3   # s between looks at which interfaces are up (a VPN coming up or going down)
+CAPTURE_RETRY_EVERY = 30  # s before a dumpcap that failed on an interface still up is tried again
+
+
+def interface_index(name):
+    """The kernel's index of an interface, or None when it is gone. An interface
+    deleted and created again under the same name (a VPN switching servers)
+    gets a new index, while a link going down and up keeps it."""
+    try:
+        return socket.if_nametoindex(name)
+    except OSError:
+        return None
 
 
 def game_connection_addresses(path="/proc/net/tcp"):
@@ -330,7 +341,7 @@ class Captures:
     """
 
     def __init__(self, dumpcap, server, wanted, status, log=log, notify=None, interfaces=usable_interfaces,
-                 start=None, game_addresses=game_connection_addresses):
+                 start=None, game_addresses=game_connection_addresses, index_of=interface_index):
         self.dumpcap = dumpcap
         self.server = server
         self.wanted = tuple(wanted)
@@ -340,9 +351,12 @@ class Captures:
         self.interfaces = interfaces
         self.start = start or start_dumpcap
         self.game_addresses = game_addresses
+        self.index_of = index_of
+        self.reported = set()   # (name, address) whose failure was reported: once per launcher run
         self.told_uncaptured = set()
-        self.running = {}       # name -> {"address", "process", "error"}
-        self.failed = {}        # name -> address on which dumpcap failed; retried once the address changes
+        self.running = {}       # name -> {"address", "index", "process", "error"}
+        self.failed = {}        # name -> (address, retry at): dumpcap failed there; retried at that time,
+                                # or at once when the address changes
         self.told_missing = set()
         self.told_none = False
         self.next_scan = 0.0
@@ -370,23 +384,34 @@ class Captures:
                 self._stop(name)
                 self.log(f"Interface {name} changed its address from {capture['address']} to {up[name]}; "
                          "capturing there again.")
+            elif self.index_of(name) != capture["index"]:
+                # Deleted and created again between two scans (a VPN switching servers takes
+                # under a second): dumpcap ended with the old interface; not a failure.
+                self._stop(name)
+                self.log(f"Interface {name} was created anew (a VPN reconnecting?); capturing there again.")
             elif capture["process"].poll() is not None:
                 self._stop(name)
-                self.failed[name] = capture["address"]
+                self.failed[name] = (capture["address"], now + CAPTURE_RETRY_EVERY)
+                if (name, capture["address"]) in self.reported:
+                    continue
+                self.reported.add((name, capture["address"]))
                 reason = capture["error"] or "dumpcap stopped"
                 self.log(f"Capture on {name} ({capture['address']}) ended: {reason} "
                          f"(dumpcap exit code {capture['process'].returncode}; its own message is above). "
                          "Run a2qlinux-setup, which tests capture permission and says what to do. "
-                         f"{name} is tried again when its address changes or it comes back.")
+                         f"{name} is tried again every {CAPTURE_RETRY_EVERY} s, and at once when its "
+                         "address changes; this is not reported again.")
                 self.notify(f"Capture on {name} stopped, so Questlog gets no game data from it. "
                             "Details in the A2Qlinux window.")
-        for name in [n for n in self.failed if self.failed[n] != up.get(n)]:
+        for name in [n for n, (address, retry_at) in self.failed.items()
+                     if address != up.get(n) or now >= retry_at]:
             del self.failed[name]
         for name, address in up.items():
             if name in self.running or name in self.failed:
                 continue
             self.server.add_interface(name, address)
-            capture = {"address": address, "process": self.start(self.dumpcap, name, address), "error": None}
+            capture = {"address": address, "index": self.index_of(name),
+                       "process": self.start(self.dumpcap, name, address), "error": None}
             self.running[name] = capture
             threading.Thread(target=pump_records, args=(name, capture["process"].stdout, self.server,
                                                          self.status, capture, self.log), daemon=True).start()

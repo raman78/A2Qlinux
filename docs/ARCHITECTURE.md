@@ -240,24 +240,38 @@ again.
 3. Address changed (a new DHCP lease, a VPN reconnecting): stop and start
    again, since the address is part of `dumpcap`'s filter. Status window:
    `Interface <name> changed its address from <old> to <new>; capturing there again.`
-4. `dumpcap` ended by itself while its interface is still up: status window
-   `Capture on <name> (<address>) ended: …`, with the exit code and a pointer
-   to `a2qlinux-setup`; `dumpcap`'s own message is the line before it. One
-   desktop notification. That interface is not retried until its address
-   changes or it comes back, so a permission problem is reported once, not
-   every 3 s. The launcher keeps running: other interfaces may still carry
-   the game. (Before this design a stopped `dumpcap` ended the launcher;
-   with several interfaces one failure must not take the others down.)
-5. New interface: register the channel, start `dumpcap`. Status window:
+4. Interface created anew under the same name (`interface_index` differs
+   from the one recorded at the capture's start): stop and start again.
+   Status window: `Interface <name> was created anew (a VPN reconnecting?);
+   capturing there again.` No notification. This is the case of Proton VPN
+   switching servers: NetworkManager deleted `proton0` and created it again
+   0.6 s later with the same address (journal, 8 November 2026), between two
+   scans, so step 2 never saw it gone. `dumpcap` ends with the deleted
+   interface ("The network adapter … is no longer attached"). The kernel
+   gives a recreated interface a new index, while a link going down and up
+   keeps its index and `dumpcap` runs on through it (both measured with a
+   dummy interface in a private network namespace, `unshare -rn`).
+5. `dumpcap` ended by itself while its interface is still up, with the same
+   index: status window `Capture on <name> (<address>) ended: …`, with the
+   exit code and a pointer to `a2qlinux-setup`; `dumpcap`'s own message is
+   the line before it. One desktop notification. The interface is tried
+   again every `CAPTURE_RETRY_EVERY` (30 s), and at once when its address
+   changes; a repeated failure on the same interface and address is not
+   reported again, so a permission problem gives one message, not one every
+   30 s. The launcher keeps running: other interfaces may still carry the
+   game. (Before this design a stopped `dumpcap` ended the launcher; with
+   several interfaces one failure must not take the others down.)
+6. New interface: register the channel, start `dumpcap`. Status window:
    `Capturing on <name> (<address>), TCP port 13328.`
-6. Nothing up: `No network interface with an IPv4 address is up; capture
+7. Nothing up: `No network interface with an IPv4 address is up; capture
    starts as soon as one is.`, once. An interface named in the settings
    that is not up: one line per name, again only after it has been up.
-7. **Where the game is** (`game_connection_addresses`): read the kernel's
+8. **Where the game is** (`game_connection_addresses`): read the kernel's
    `/proc/net/tcp` for established connections to port 13328. A local
    address that no capture covers (the setting excludes its interface, or
    capture there failed) is logged with what is captured instead, and
-   notified, once each time it appears. Without this, Questlog's own message
+   notified, once each time it appears. This check is what made the
+   recreated-interface case of step 4 visible before step 4 existed. Without this, Questlog's own message
    would be the only sign. The game runs in Steam's runtime container, which
    shares the host's network namespace, so its connections are in that
    table (seen: the game's connection from `10.2.0.2`).
@@ -782,7 +796,7 @@ the session itself.
 | Questlog shows "No capture bridge: start Questlog with A2Qlinux" | Questlog started without the launcher | start it from the menu entry |
 | "Capture bridge not reachable (is A2Qlinux running?)" | launcher not running (terminal closed) | status window |
 | "Capture bridge closed the connection …" | launcher stopped, or it dropped a connection | status window |
-| Questlog: "Npcap lists no adapter with this address" | the game's connection uses an address no capture covers | status window: "AION 2's connection … uses …, which A2Qlinux does not capture on" (§4.3, step 7) |
+| Questlog: "Npcap lists no adapter with this address" | the game's connection uses an address no capture covers | status window: "AION 2's connection … uses …, which A2Qlinux does not capture on" (§4.3, step 8) |
 | Questlog: "A2Qlinux does not capture on <name> (any more) …" | the interface went away between Questlog's list and its open | none; Questlog lists again on its next pass |
 | "Capture on <name> … ended" (and a notification) | `dumpcap` failed on that interface, usually capture permission | `dumpcap`'s own line above it; `a2qlinux-setup` |
 | "Interface <name> delivers link type N, which Questlog cannot read" | an interface type Questlog's decoder skips (§4.3) | none from our side; game traffic on that interface is not counted |
@@ -934,10 +948,11 @@ automatic update
    match was corrected.
 5. Questlog's keyboard shortcuts while the game has focus have not been
    tested.
-6. A VPN switched on or off while the game runs has not been tried with the
-   game. The parts are tested on their own (`CapturesTest`: an interface
-   coming and going; Questlog lists the devices again for each new
-   connection, §4.3), not the whole sequence.
+6. A VPN switching servers while the game runs, tried once with the game
+   (8 November 2026), lost capture on `proton0`: the interface was
+   recreated between two scans, which led to §4.3 step 4. The fix is tested
+   with a real `dumpcap` on a recreated interface in a private network
+   namespace, not yet with the game.
 
 ## 12. Packaging and releases
 
