@@ -62,7 +62,7 @@ are read when A2Qlinux starts.
 | Setting | Default | What it does |
 |---|---|---|
 | `questlog_dir` | `"~/Games/Questlog"` | folder with Questlog |
-| `interface` | `""` | network interface the game uses; empty: chosen automatically when there is only one |
+| `interface` | `""` | network interfaces to listen on: a name such as `"enp9s0"`, or a list such as `["enp9s0", "proton0"]`; empty: all of them, and Questlog follows the game on whichever it uses |
 | `after_game` | `"keep"` | after the game: `"keep"` keeps Questlog open, `"close"` closes it |
 | `after_game_delay` | `15` | with `"close"`: seconds after the game before Questlog closes; at least 10.5, so that Questlog has saved |
 | `auto_update` | `true` | update Questlog automatically ([UPDATING.md](UPDATING.md)) |
@@ -73,9 +73,31 @@ not stop A2Qlinux: that setting keeps its default, and the status window and
 a notification say which line is wrong.
 
 The same can be set for a single start with an option, which wins over the
-file: `--close-with-game`, `--no-auto-update`, `--interface <name>`. Put it
+file: `--close-with-game`, `--no-auto-update`, `--interface <name>` (once
+per interface). Put it
 after `a2qlinux` in the menu entry's command, or between `a2qlinux-steam` and
 `%command%` in Steam's launch option.
+
+## A VPN or several network connections
+
+You do not need to set anything. A2Qlinux listens on every network
+connection the computer has (cable, Wi-Fi, a VPN), and Questlog picks the
+one the game is using, the way it does on Windows. When the game runs
+through a VPN, Questlog reads it there; switch the VPN on or off while
+playing and A2Qlinux notices within a few seconds, and Questlog follows.
+
+The status window shows what is happening:
+
+```
+[a2qlinux] Capturing on enp9s0 (10.0.4.90), TCP port 13328.
+[a2qlinux] Capturing on proton0 (10.2.0.2), TCP port 13328.
+[a2qlinux] Questlog follows the game's connection on proton0 (10.2.0.2).
+[a2qlinux] Game traffic is flowing to Questlog.
+```
+
+Set `interface` only to keep A2Qlinux off some connections. If the game
+then runs through one you left out, the status window and a notification
+say so.
 
 ## The tray icon
 

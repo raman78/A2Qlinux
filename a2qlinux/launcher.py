@@ -6,9 +6,10 @@ C:\\Windows\\System32\\Npcap\\wpcap.dll. Npcap is a Windows driver that cannot
 work under Wine, so this launcher puts our own wpcap.dll there (built from
 bridge/wpcap_bridge.c) and feeds it from dumpcap on the Linux side:
 
-    dumpcap (TCP 13328) -> BridgeServer on 127.0.0.1 -> wpcap.dll -> Questlog
+    dumpcap per interface (TCP 13328) -> BridgeServer on 127.0.0.1 -> wpcap.dll -> Questlog
 
-Questlog then runs its normal live capture loop, as on Windows.
+Questlog then runs its normal live capture loop, as on Windows, and picks
+the interface whose address its game connection uses (Captures).
 
 Run it as your normal user (dumpcap through the `wireshark` group). Questlog
 opens at once, game or not.
@@ -31,6 +32,7 @@ import shutil
 import signal
 import socket
 import stat
+import struct
 import subprocess
 import sys
 import threading
@@ -247,7 +249,8 @@ def interface_address(name):
     return socket.inet_ntoa(result[20:24])
 
 
-def choose_interface(requested):
+def usable_interfaces():
+    """{name: IPv4 address} of every interface besides lo that has one."""
     usable = {}
     for _, name in socket.if_nameindex():
         if name == "lo":
@@ -256,15 +259,7 @@ def choose_interface(requested):
             usable[name] = interface_address(name)
         except OSError:
             continue
-    if requested:
-        if requested not in usable:
-            raise RuntimeError(f"Interface {requested} has no IPv4 address. Usable: {', '.join(usable) or 'none'}.")
-        return requested, usable[requested]
-    if len(usable) == 1:
-        return next(iter(usable.items()))
-    if not usable:
-        raise RuntimeError("No network interface with an IPv4 address was found.")
-    raise RuntimeError(f"Several interfaces are up ({', '.join(usable)}); choose one with --interface.")
+    return usable
 
 
 def start_dumpcap(dumpcap, interface, address):
@@ -283,17 +278,148 @@ def stop_process(process):
             process.wait(timeout=3)
 
 
-def pump_records(stream, server, status):
-    """Thread body: hand dumpcap's packets to the bridge; record how it ended."""
+# Link types Questlog's frame decoder reads (Ethernet; BSD loopback; raw IP, as
+# on WireGuard and OpenVPN tun); frames of any other type it skips without a word.
+QUESTLOG_LINKTYPES = {1: "Ethernet", 0: "loopback", 108: "loopback", 12: "raw IP", 101: "raw IP"}
+
+
+def pump_records(name, stream, server, status, capture, log=log):
+    """Thread body: hand one interface's packets to the bridge; record how it ended."""
     try:
         for header, record in read_records(stream):
-            server.publish(header, record)
+            if header is not None:
+                linktype = struct.unpack("<I", header[20:24])[0]
+                if linktype not in QUESTLOG_LINKTYPES:
+                    log(f"Interface {name} delivers link type {linktype}, which Questlog cannot read "
+                        f"(it reads {', '.join(sorted(set(QUESTLOG_LINKTYPES.values())))}); "
+                        "game traffic on it will not be counted.")
+            server.publish(name, header, record)
             if record is not None:
                 status["packets"] += 1
                 status["last_packet"] = time.monotonic()
-        status["error"] = "dumpcap stopped. Check capture permission: run a2qlinux-setup, which tests it and says what to do."
+        capture["error"] = "dumpcap stopped"
     except (ValueError, OSError) as error:
-        status["error"] = f"Capture stream unreadable: {error}"
+        capture["error"] = f"capture stream unreadable: {error}"
+
+
+CAPTURE_SCAN_EVERY = 3   # s between looks at which interfaces are up (a VPN coming up or going down)
+
+
+def game_connection_addresses(path="/proc/net/tcp"):
+    """Local IPv4 addresses of established connections to the game's port, from the kernel's table."""
+    addresses = set()
+    for line in _read(path, limit=4 << 20).splitlines()[1:]:
+        fields = line.split()
+        if len(fields) < 4 or fields[3] != "01":                # 01 = ESTABLISHED
+            continue
+        local, remote = fields[1], fields[2]
+        if int(remote.split(":")[1], 16) != GAME_PORT:
+            continue
+        addresses.add(socket.inet_ntoa(struct.pack("<I", int(local.split(":")[0], 16))))
+    return addresses
+
+
+class Captures:
+    """One dumpcap per usable interface, kept in step with the interfaces that are up.
+
+    Each interface is a channel of the bridge; Questlog chooses among them by
+    the address of its game connection (pcap_findalldevs), so whichever one
+    the game uses - the network card, a VPN - is the one it reads. `wanted`
+    (settings `interface`, --interface) limits capture to those names; empty
+    means every interface with an IPv4 address besides lo.
+    """
+
+    def __init__(self, dumpcap, server, wanted, status, log=log, notify=None, interfaces=usable_interfaces,
+                 start=None, game_addresses=game_connection_addresses):
+        self.dumpcap = dumpcap
+        self.server = server
+        self.wanted = tuple(wanted)
+        self.status = status
+        self.log = log
+        self.notify = notify or (lambda text: None)
+        self.interfaces = interfaces
+        self.start = start or start_dumpcap
+        self.game_addresses = game_addresses
+        self.told_uncaptured = set()
+        self.running = {}       # name -> {"address", "process", "error"}
+        self.failed = {}        # name -> address on which dumpcap failed; retried once the address changes
+        self.told_missing = set()
+        self.told_none = False
+        self.next_scan = 0.0
+
+    def scan(self, now=None):
+        now = time.monotonic() if now is None else now
+        if now < self.next_scan:
+            return
+        self.next_scan = now + CAPTURE_SCAN_EVERY
+        up = self.interfaces()
+        if self.wanted:
+            for name in self.wanted:
+                if name not in up and name not in self.told_missing:
+                    self.log(f"Interface {name} (from the settings) is not up or has no IPv4 address; "
+                             f"capture starts on it when it comes up. Up now: {', '.join(up) or 'none'}.")
+                    self.told_missing.add(name)
+                elif name in up:
+                    self.told_missing.discard(name)
+            up = {name: address for name, address in up.items() if name in self.wanted}
+        for name, capture in list(self.running.items()):
+            if name not in up:
+                self._stop(name)
+                self.log(f"Interface {name} is gone (a VPN switched off?); capture there stopped.")
+            elif up[name] != capture["address"]:
+                self._stop(name)
+                self.log(f"Interface {name} changed its address from {capture['address']} to {up[name]}; "
+                         "capturing there again.")
+            elif capture["process"].poll() is not None:
+                self._stop(name)
+                self.failed[name] = capture["address"]
+                reason = capture["error"] or "dumpcap stopped"
+                self.log(f"Capture on {name} ({capture['address']}) ended: {reason} "
+                         f"(dumpcap exit code {capture['process'].returncode}; its own message is above). "
+                         "Run a2qlinux-setup, which tests capture permission and says what to do. "
+                         f"{name} is tried again when its address changes or it comes back.")
+                self.notify(f"Capture on {name} stopped, so Questlog gets no game data from it. "
+                            "Details in the A2Qlinux window.")
+        for name in [n for n in self.failed if self.failed[n] != up.get(n)]:
+            del self.failed[name]
+        for name, address in up.items():
+            if name in self.running or name in self.failed:
+                continue
+            self.server.add_interface(name, address)
+            capture = {"address": address, "process": self.start(self.dumpcap, name, address), "error": None}
+            self.running[name] = capture
+            threading.Thread(target=pump_records, args=(name, capture["process"].stdout, self.server,
+                                                         self.status, capture, self.log), daemon=True).start()
+            self.log(f"Capturing on {name} ({address}), TCP port {GAME_PORT}.")
+        if not up and not self.told_none:
+            self.log("No network interface with an IPv4 address is up" + (" among those in the settings"
+                     if self.wanted else "") + "; capture starts as soon as one is.")
+            self.told_none = True
+        elif up:
+            self.told_none = False
+        self._check_game_connection()
+
+    def _check_game_connection(self):
+        """Say so when the game's connection uses an address no capture covers: Questlog would get nothing."""
+        captured = {capture["address"]: name for name, capture in self.running.items()}
+        uncaptured = self.game_addresses() - set(captured)
+        for address in uncaptured - self.told_uncaptured:
+            why = (f"the setting 'interface' limits capture to {', '.join(self.wanted)}" if self.wanted
+                   else "no capture runs on its interface")
+            self.log(f"AION 2's connection to its server uses {address}, which A2Qlinux does not capture on "
+                     f"({why}), so Questlog gets no game data. Capturing on: "
+                     f"{', '.join(f'{n} ({a})' for a, n in captured.items()) or 'nothing'}.")
+            self.notify(f"AION 2 uses {address}, which A2Qlinux does not capture on. Details in the A2Qlinux window.")
+        self.told_uncaptured = uncaptured
+
+    def _stop(self, name):
+        capture = self.running.pop(name)
+        self.server.remove_interface(name)
+        stop_process(capture["process"])
+
+    def stop(self):
+        for name in list(self.running):
+            self._stop(name)
 
 
 # ------------------------------------------------------------------- session
@@ -805,9 +931,9 @@ def close_questlog(prefix, protontricks, log_path):
             ender.wait(timeout=5)
 
 
-def launch_questlog(executable, server, address, protontricks, log_path, hidden=False):
+def launch_questlog(executable, server, protontricks, log_path, hidden=False):
     env = os.environ.copy()
-    env["QUESTLOG_PROTON_BRIDGE"] = server.environment_value(address)
+    env["QUESTLOG_PROTON_BRIDGE"] = server.environment_value()
     # Wine ships a builtin wpcap.dll and loads it instead of ours even when
     # Questlog names our file by full path; "n" makes it take the native file.
     overrides = [o for o in env.get("WINEDLLOVERRIDES", "").split(";") if o and not o.startswith("wpcap=")]
@@ -833,8 +959,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
                                      epilog=f"Settings file: {config.CONFIG_PATH} (options here override it).")
     parser.add_argument("--exe", type=Path, default=default_exe, help=f"Questlog.exe (default {default_exe})")
-    parser.add_argument("--interface", default=settings.interface or None,
-                        help="network interface carrying the game connection")
+    parser.add_argument("--interface", action="append", metavar="NAME",
+                        help="capture only on this network interface (repeat for several; default: every "
+                             "interface with an IPv4 address, and Questlog follows the game's connection)")
     parser.add_argument("--no-auto-update", action="store_true",
                         help="do not download or install new Questlog versions (default: download them "
                              "in the background and install them at the next start)")
@@ -865,7 +992,6 @@ def main():
         state_dir = executable.parent / "proton-stream"
         session_lock(state_dir)
         dumpcap = system_dumpcap()
-        interface, address = choose_interface(args.interface)
         running = game_processes(APPID, ["questlog.exe"])["questlog.exe"]
         if running:
             fed = any("QUESTLOG_PROTON_BRIDGE=" in _read(f"/proc/{pid}/environ") for pid in running)
@@ -875,10 +1001,9 @@ def main():
             raise RuntimeError("Questlog is already running in the game prefix without the capture bridge. "
                                "Quit it (tray icon > Quit) and run this again.")
         server = BridgeServer(log)
-        capture = start_dumpcap(dumpcap, interface, address)
-        status = {"packets": 0, "error": None}
-        threading.Thread(target=pump_records, args=(capture.stdout, server, status), daemon=True).start()
-        log(f"Capturing on {interface} ({address}), TCP port {GAME_PORT}.")
+        status = {"packets": 0}
+        captures = Captures(dumpcap, server, args.interface or settings.interface, status, notify=notify)
+        captures.scan()
         tray = None
         try:
             game_seen = bool(game_processes(APPID, ["aion2.exe"])["aion2.exe"])
@@ -903,13 +1028,13 @@ def main():
                 if auto_update and questlog_update.install_staged(executable.parent, state_dir, log):
                     trial["until"] = time.monotonic() + UPDATE_TRIAL
                 log(f"Starting Questlog {questlog_update.installed_version(executable.parent) or '(version unknown)'}.")
-                started = launch_questlog(executable, server, address, protontricks, log_path, hidden=hidden)
+                started = launch_questlog(executable, server, protontricks, log_path, hidden=hidden)
                 tray.start()
                 hide_questlog_tray_icon(protontricks, log_path)
                 return started
 
             def start_again():
-                return launch_questlog(executable, server, address, protontricks, log_path)
+                return launch_questlog(executable, server, protontricks, log_path)
 
             questlog = start_questlog()
             if auto_update:
@@ -994,8 +1119,7 @@ def main():
                     questlog = start_questlog()
                     told = False
                     continue
-                if status["error"]:
-                    raise RuntimeError(status["error"])
+                captures.scan()
                 if not told and status["packets"] and server.client_count():
                     log("Game traffic is flowing to Questlog.")
                     told = True
@@ -1068,8 +1192,8 @@ def main():
                 # Ending while Questlog runs on (Ctrl+C, an error): give it its own tray icon back.
                 if game_processes(APPID, ["questlog.exe"])["questlog.exe"]:
                     run_ctl(protontricks, "show-tray", log_path)
+            captures.stop()
             server.stop()
-            stop_process(capture)
     except (OSError, RuntimeError) as error:
         print(f"a2qlinux: {error}", file=sys.stderr)
         return 1

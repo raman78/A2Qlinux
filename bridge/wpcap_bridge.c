@@ -8,14 +8,18 @@
  *
  * Only the calls Questlog makes are implemented. Their behaviour follows what
  * Questlog's capture loop expects:
- *   pcap_findalldevs   one device, carrying the local IPv4 address the game
- *                      connection uses (Questlog picks the adapter by address)
- *   pcap_open_live     connect to the bridge and authenticate with its token
+ *   pcap_findalldevs   one device per interface the launcher captures on, each
+ *                      with its IPv4 address, asked from the bridge on every
+ *                      call (Questlog picks the device whose address its game
+ *                      connection uses, and lists again for each new one)
+ *   pcap_open_live     connect to the bridge, authenticate with its token and
+ *                      ask for that interface's packets
  *   pcap_next_ex       1 = packet, 0 = none waiting (non-blocking), -1 = error
  *   pcap_compile/setfilter  accepted and ignored: dumpcap filters already
  *
  * Configuration comes from the environment, set by the launcher:
- *   QUESTLOG_PROTON_BRIDGE=<host>:<port>:<token>:<local IPv4>
+ *   QUESTLOG_PROTON_BRIDGE=<host>:<port>:<token>
+ * The request lines and replies are described in a2qlinux/pcap_bridge.py.
  * Without it every entry point fails with a message saying so, which Questlog
  * shows in its interface instead of silently counting nothing.
  *
@@ -33,6 +37,10 @@
 #define PCAP_ERRBUF_SIZE 256
 #define MAX_RECORD (16 + 262144)
 #define BRIDGE_SIGNATURE "questlog-proton bridge"
+/* Device names are this prefix + the Linux interface name (at most 15 bytes). */
+#define DEVICE_PREFIX "\\Device\\NPF_A2Qlinux_"
+#define IFNAME_MAX 16
+#define MAX_DEVICES 64
 
 /* Layouts as Questlog declares them (and as Npcap defines them on Win64). */
 struct pcap_addr {
@@ -73,7 +81,6 @@ struct config {
     char host[64];
     unsigned short port;
     char token[129];
-    char local_ip[16];
 };
 
 static void set_error(char *dst, const char *fmt, const char *detail)
@@ -83,7 +90,7 @@ static void set_error(char *dst, const char *fmt, const char *detail)
 
 static int read_config(struct config *c, char *errbuf)
 {
-    char value[512], *parts[4], *p;
+    char value[512], *parts[3], *p;
     DWORD n = GetEnvironmentVariableA("QUESTLOG_PROTON_BRIDGE", value, sizeof(value));
     int i;
     if (n == 0 || n >= sizeof(value)) {
@@ -91,26 +98,29 @@ static int read_config(struct config *c, char *errbuf)
         return -1;
     }
     p = value;
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < 3; i++) {
         parts[i] = p;
         p = strchr(p, ':');
-        if (i < 3) {
+        if (i < 2) {
             if (!p) {
                 set_error(errbuf, "QUESTLOG_PROTON_BRIDGE is malformed: %s", value);
                 return -1;
             }
             *p++ = 0;
+        } else if (p) {
+            set_error(errbuf, "QUESTLOG_PROTON_BRIDGE is from another A2Qlinux version: restart Questlog "
+                              "through A2Qlinux%s", NULL);
+            return -1;
         }
     }
     if (strlen(parts[0]) >= sizeof(c->host) || strlen(parts[2]) >= sizeof(c->token)
-        || strlen(parts[3]) >= sizeof(c->local_ip) || atoi(parts[1]) <= 0 || atoi(parts[1]) > 65535) {
+        || atoi(parts[1]) <= 0 || atoi(parts[1]) > 65535) {
         set_error(errbuf, "QUESTLOG_PROTON_BRIDGE has a bad field%s", NULL);
         return -1;
     }
     strcpy(c->host, parts[0]);
     c->port = (unsigned short)atoi(parts[1]);
     strcpy(c->token, parts[2]);
-    strcpy(c->local_ip, parts[3]);
     return 0;
 }
 
@@ -138,6 +148,56 @@ static int recv_exact(SOCKET s, unsigned char *dst, int len)
         got += n;
     }
     return 0;
+}
+
+/* One reply line, without its newline; -1 when the connection ends first or
+ * the line does not fit. Byte by byte: replies are a few short lines, and the
+ * packet stream that may follow must stay in the socket. */
+static int recv_line(SOCKET s, char *line, int size)
+{
+    int got = 0;
+    for (;;) {
+        char ch;
+        if (recv(s, &ch, 1, 0) != 1 || got >= size - 1)
+            return -1;
+        if (ch == '\n')
+            break;
+        line[got++] = ch;
+    }
+    line[got] = 0;
+    return 0;
+}
+
+/* Connect to the bridge and send one request ("list", "open <interface>"). */
+static SOCKET bridge_request(const struct config *c, const char *request, char *errbuf)
+{
+    struct sockaddr_in server;
+    char hello[200];
+    SOCKET s;
+
+    if (winsock_ready(errbuf) != 0)
+        return INVALID_SOCKET;
+    s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (s == INVALID_SOCKET) {
+        set_error(errbuf, "socket() failed%s", NULL);
+        return INVALID_SOCKET;
+    }
+    memset(&server, 0, sizeof(server));
+    server.sin_family = AF_INET;
+    server.sin_port = htons(c->port);
+    server.sin_addr.s_addr = inet_addr(c->host);
+    if (connect(s, (struct sockaddr *)&server, sizeof(server)) != 0) {
+        closesocket(s);
+        set_error(errbuf, "Capture bridge not reachable (is A2Qlinux running?)%s", NULL);
+        return INVALID_SOCKET;
+    }
+    snprintf(hello, sizeof(hello), "QLPB2 %s %s\n", c->token, request);
+    if (send(s, hello, (int)strlen(hello), 0) != (int)strlen(hello)) {
+        closesocket(s);
+        set_error(errbuf, "Capture bridge closed the connection at start - see the A2Qlinux window%s", NULL);
+        return INVALID_SOCKET;
+    }
+    return s;
 }
 
 /* --- Window-order guard ---
@@ -289,39 +349,78 @@ __declspec(dllexport) const char *pcap_lib_version(void)
     return BRIDGE_SIGNATURE " (wpcap.dll stand-in for Questlog under Proton)";
 }
 
+__declspec(dllexport) void pcap_freealldevs(pcap_if_t *alldevs);
+
+static pcap_if_t *new_device(const char *ifname, unsigned long ip)
+{
+    pcap_if_t *dev = calloc(1, sizeof(*dev));
+    struct pcap_addr *addr = calloc(1, sizeof(*addr));
+    struct sockaddr_in *sin = calloc(1, sizeof(*sin));
+    char name[sizeof(DEVICE_PREFIX) + IFNAME_MAX], description[IFNAME_MAX + 40];
+
+    if (!dev || !addr || !sin) {
+        free(dev); free(addr); free(sin);
+        return NULL;
+    }
+    snprintf(name, sizeof(name), "%s%s", DEVICE_PREFIX, ifname);
+    snprintf(description, sizeof(description), "%s through the A2Qlinux capture bridge", ifname);
+    sin->sin_family = AF_INET;
+    sin->sin_addr.s_addr = ip;
+    addr->addr = (struct sockaddr *)sin;
+    dev->addresses = addr;
+    dev->name = _strdup(name);
+    dev->description = _strdup(description);
+    if (!dev->name || !dev->description) {
+        free(dev->name); free(dev->description); free(dev); free(addr); free(sin);
+        return NULL;
+    }
+    return dev;
+}
+
 __declspec(dllexport) int pcap_findalldevs(pcap_if_t **alldevs, char *errbuf)
 {
     struct config c;
-    pcap_if_t *dev;
-    struct pcap_addr *addr;
-    struct sockaddr_in *sin;
-    unsigned long ip;
+    pcap_if_t *first = NULL, **tail = &first;
+    char line[128], ifname[IFNAME_MAX], ip[16];
+    SOCKET s;
+    int count = 0;
 
     *alldevs = NULL;
     start_window_guard();
     if (read_config(&c, errbuf) != 0)
         return -1;
-    ip = inet_addr(c.local_ip);
-    if (ip == INADDR_NONE) {
-        set_error(errbuf, "Bad local address in QUESTLOG_PROTON_BRIDGE: %s", c.local_ip);
+    s = bridge_request(&c, "list", errbuf);
+    if (s == INVALID_SOCKET)
         return -1;
+    for (;;) {
+        unsigned long address;
+        if (recv_line(s, line, sizeof(line)) != 0) {
+            set_error(errbuf, "Capture bridge closed the connection while listing interfaces - "
+                              "see the A2Qlinux window%s", NULL);
+            break;
+        }
+        if (!line[0]) {
+            closesocket(s);
+            *alldevs = first;
+            return 0;
+        }
+        if (sscanf(line, "%15s %15s", ifname, ip) != 2 || (address = inet_addr(ip)) == INADDR_NONE) {
+            set_error(errbuf, "Capture bridge listed an unreadable interface: %s", line);
+            break;
+        }
+        if (++count > MAX_DEVICES) {
+            set_error(errbuf, "Capture bridge listed too many interfaces%s", NULL);
+            break;
+        }
+        if (!(*tail = new_device(ifname, address))) {
+            set_error(errbuf, "Out of memory%s", NULL);
+            break;
+        }
+        tail = &(*tail)->next;
     }
-    dev = calloc(1, sizeof(*dev));
-    addr = calloc(1, sizeof(*addr));
-    sin = calloc(1, sizeof(*sin));
-    if (!dev || !addr || !sin) {
-        free(dev); free(addr); free(sin);
-        set_error(errbuf, "Out of memory%s", NULL);
-        return -1;
-    }
-    sin->sin_family = AF_INET;
-    sin->sin_addr.s_addr = ip;
-    addr->addr = (struct sockaddr *)sin;
-    dev->name = _strdup("\\Device\\NPF_QuestlogProtonBridge");
-    dev->description = _strdup("Linux capture bridge (A2Qlinux)");
-    dev->addresses = addr;
-    *alldevs = dev;
-    return 0;
+    closesocket(s);
+    pcap_freealldevs(first);
+    return -1;
 }
 
 __declspec(dllexport) void pcap_freealldevs(pcap_if_t *alldevs)
@@ -345,33 +444,37 @@ __declspec(dllexport) void pcap_freealldevs(pcap_if_t *alldevs)
 __declspec(dllexport) pcap_t *pcap_open_live(const char *device, int snaplen, int promisc, int to_ms, char *errbuf)
 {
     struct config c;
-    struct sockaddr_in server;
     unsigned char header[24];
-    char hello[160];
+    char request[sizeof("open ") + IFNAME_MAX], reply[PCAP_ERRBUF_SIZE];
+    const char *ifname;
     unsigned int magic;
     pcap_t *p;
     SOCKET s;
 
-    (void)device; (void)snaplen; (void)promisc; (void)to_ms;
+    (void)snaplen; (void)promisc; (void)to_ms;
     start_window_guard();
-    if (read_config(&c, errbuf) != 0 || winsock_ready(errbuf) != 0)
+    if (read_config(&c, errbuf) != 0)
         return NULL;
-    s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (s == INVALID_SOCKET) {
-        set_error(errbuf, "socket() failed%s", NULL);
+    if (!device || strncmp(device, DEVICE_PREFIX, strlen(DEVICE_PREFIX)) != 0
+        || !*(ifname = device + strlen(DEVICE_PREFIX)) || strlen(ifname) >= IFNAME_MAX || strchr(ifname, ' ')) {
+        set_error(errbuf, "Not a device of the A2Qlinux capture bridge: %s", device ? device : "(none)");
         return NULL;
     }
-    memset(&server, 0, sizeof(server));
-    server.sin_family = AF_INET;
-    server.sin_port = htons(c.port);
-    server.sin_addr.s_addr = inet_addr(c.host);
-    if (connect(s, (struct sockaddr *)&server, sizeof(server)) != 0) {
+    snprintf(request, sizeof(request), "open %s", ifname);
+    s = bridge_request(&c, request, errbuf);
+    if (s == INVALID_SOCKET)
+        return NULL;
+    if (recv_line(s, reply, sizeof(reply)) != 0) {
         closesocket(s);
-        set_error(errbuf, "Capture bridge not reachable (is A2Qlinux running?)%s", NULL);
+        set_error(errbuf, "Capture bridge closed the connection at start - see the A2Qlinux window%s", NULL);
         return NULL;
     }
-    snprintf(hello, sizeof(hello), "QLPB1 %s\n", c.token);
-    if (send(s, hello, (int)strlen(hello), 0) != (int)strlen(hello) || recv_exact(s, header, 24) != 0) {
+    if (strcmp(reply, "OK") != 0) {
+        closesocket(s);
+        set_error(errbuf, "%s", strncmp(reply, "ERR ", 4) == 0 ? reply + 4 : reply);
+        return NULL;
+    }
+    if (recv_exact(s, header, 24) != 0) {
         closesocket(s);
         set_error(errbuf, "Capture bridge closed the connection at start - see the A2Qlinux window%s", NULL);
         return NULL;

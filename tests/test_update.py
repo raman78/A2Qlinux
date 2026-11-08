@@ -22,7 +22,7 @@ releaseDate: '2026-10-18T11:10:38.625Z'
 """
 
 GOOD_MAIN = 'x.app.on("second-instance",l.show);w=new B({focusable:!1,alwaysOnTop:!0});'
-GOOD_WORKER = " ".join(f"{name}(a)" for name in sorted(u.PCAP_CALLS))
+GOOD_WORKER = " ".join(f"{name}(a)" for name in sorted(u.PCAP_CALLS)) + " S.find(X=>X.addresses.includes(k))"
 
 
 def write_asar(path, files):
@@ -92,12 +92,13 @@ class CompatibilityTest(unittest.TestCase):
 
     def test_new_pcap_call_unknown_electron_and_lost_behaviours_are_reported(self):
         app = make_app(self.root / "app", electron="45.0.0", main="nothing relevant",
-                       worker=GOOD_WORKER + " pcap_sendpacket(a)")
+                       worker=GOOD_WORKER.replace(".addresses.includes(", ".name.includes(") + " pcap_sendpacket(a)")
         problems = " | ".join(u.compatibility_problems(app))
         self.assertIn("pcap_sendpacket", problems)
         self.assertIn("Electron 45.0.0", problems)
         self.assertIn("second start", problems)
         self.assertIn("non-activatable", problems)
+        self.assertIn("by the game connection's address", problems)
 
 
 class OfflineCdn:

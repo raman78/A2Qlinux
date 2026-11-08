@@ -42,7 +42,7 @@ Terms used below:
  Linux, normal user                           Proton prefix 3393110
  +-------------------------------------+     +-------------------------------+
  | a2qlinux.launcher                   |     | AION2.exe                     |
- |  +- dumpcap (TCP port 13328)        |     |                               |
+ |  +- dumpcap per interface, TCP 13328|     |                               |
  |  |   +- BridgeServer 127.0.0.1:port +---->| Questlog.exe --no-sandbox     |
  |  |      (pcap_bridge, token)        | TCP |  +- wpcap.dll (ours, in       |
  |  +- Tray -> a2qlinux.tray (desktop) |     |  |   System32\Npcap)          |
@@ -65,7 +65,7 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
 | Module or file | Runs where | Role |
 |---|---|---|
 | `a2qlinux/launcher.py` | Linux | launcher: capture, bridge, starting and quitting Questlog, tray |
-| `a2qlinux/pcap_bridge.py` | Linux, in the launcher | `BridgeServer`: hands captured packets to every connected DLL |
+| `a2qlinux/pcap_bridge.py` | Linux, in the launcher | `BridgeServer`: lists the captured interfaces to the DLL and hands each interface's packets to the DLL connections that opened it |
 | `a2qlinux/desktop.py` | Linux | entry point of the menu entry and of `a2qlinux-steam`; opens the launcher in a terminal; one launcher at a time |
 | `a2qlinux/tray.py` | Linux, child of the launcher; `--check` from `a2qlinux-setup` | our tray icon (PyQt6, drawn by the desktop's system tray) |
 | `a2qlinux/steam.py` (`a2qlinux-steam`) | Linux, as Steam's launch option | starts the launcher with the game; lets the game join a running Questlog |
@@ -100,13 +100,16 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
 
 ## 4. Data flow: capture
 
-1. `a2qlinux/launcher.py` takes the lock (I1), checks that `dumpcap` is the
-   distribution's root-owned binary (`system_dumpcap`), and chooses the
-   network interface: the only one besides `lo` with an IPv4 address, or
-   `--interface`.
-2. It starts `BridgeServer` on `127.0.0.1` with a random port and token, and
-   `dumpcap -F pcap` filtered to `tcp and host <address> and port 13328`.
-   A thread (`pump_records`) passes each record to `BridgeServer.publish`.
+1. `a2qlinux/launcher.py` takes the lock (I1) and checks that `dumpcap` is the
+   distribution's root-owned binary (`system_dumpcap`).
+2. It starts `BridgeServer` on `127.0.0.1` with a random port and token.
+   `Captures` then starts one `dumpcap -F pcap` per network interface with
+   an IPv4 address besides `lo` (or per interface named in the `interface`
+   setting or `--interface`), filtered to
+   `tcp and host <that interface's address> and port 13328`, and registers
+   each interface with the bridge as a channel. A thread per interface
+   (`pump_records`) passes each record to `BridgeServer.publish`. Why every
+   interface, and how the set follows a VPN going up and down: §4.3.
 3. It finds the prefix (`game_prefix`): from a running `AION2.exe`'s
    environment, else from the `libraryfolders.vdf` of each native Steam
    installation (`steam_roots`, §14). Then it installs
@@ -118,17 +121,20 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
    alone and reported.
 4. It starts Questlog in the prefix through `protontricks-launch`
    (`launch_questlog`), with:
-   - `QUESTLOG_PROTON_BRIDGE=127.0.0.1:<port>:<token>:<interface address>`,
-     read by the DLL;
+   - `QUESTLOG_PROTON_BRIDGE=127.0.0.1:<port>:<token>`, read by the DLL;
    - `WINEDLLOVERRIDES=wpcap=n`, because Wine ships a builtin `wpcap` and
      loads it instead of a native file of that name, even when Questlog
      names our file by full path;
    - `--no-sandbox`, explained in §7.1.
 5. Questlog finds the game's TCP connection itself (`GetExtendedTcpTable`;
    Wine reports connection owners correctly, as checked with
-   `tools/tcp_owner_probe.c`). It picks the device whose address matches the
-   connection and opens it. `pcap_open_live` in our DLL connects to the
-   bridge, sends `QLPB1 <token>` and receives a pcap file header.
+   `tools/tcp_owner_probe.c`). It lists the devices (`pcap_findalldevs`) and
+   opens the one whose address is the connection's local address. Our DLL
+   answers the list by asking the bridge (`QLPB2 <token> list`): one device
+   per captured interface, named `\Device\NPF_A2Qlinux_<interface>`, with
+   that interface's address. `pcap_open_live` connects again, sends
+   `QLPB2 <token> open <interface>`, and receives `OK` followed by that
+   interface's pcap file header, or `ERR <reason>`, which Questlog shows.
 6. Every 25 ms Questlog calls `pcap_next_ex` until it returns 0 and
    reassembles the TCP streams itself. Packet times come from the record
    headers, i.e. from when `dumpcap` captured them. `dumpcap` writes
@@ -138,20 +144,22 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
    The server serves any number of connections, each with every packet. A
    connection that stops reading (`CLIENT_QUEUE_RECORDS`, 5000 records
    queued) is dropped with a message; Questlog reopens it within a second.
-   Only the session's first connection is announced in the status window
-   (`Questlog connected to the capture bridge.`); the reconnects that every
-   zone change brings are normal and pass silently, while a refused or
+   The status window names the interface Questlog follows
+   (`Questlog follows the game's connection on proton0 (10.2.0.2).`) on its
+   first connection and whenever the interface changes; the reconnects that
+   every zone change brings are normal and pass silently, while a refused or
    dropped connection is always logged.
 
 ### 4.1 The DLL's calls
 
 | Call | Behaviour |
 |---|---|
-| `pcap_findalldevs` | one device carrying the address from `QUESTLOG_PROTON_BRIDGE`; without that variable, the error "No capture bridge: start Questlog with A2Qlinux", which Questlog shows |
-| `pcap_open_live` | connect to the bridge, authenticate, read the pcap header |
+| `pcap_findalldevs` | asks the bridge on every call; one device per captured interface, with its IPv4 address (an empty list when none is captured); without `QUESTLOG_PROTON_BRIDGE`, the error "No capture bridge: start Questlog with A2Qlinux", which Questlog shows |
+| `pcap_open_live` | connect to the bridge, authenticate, ask for the device's interface, read the pcap header; the bridge's `ERR` reason becomes the error Questlog shows |
 | `pcap_next_ex` | 1 = packet, 0 = none waiting (non-blocking), -1 = connection lost, reason in `pcap_geterr` |
 | `pcap_compile`, `pcap_setfilter`, `pcap_freecode` | accepted, no effect; `dumpcap` already filters |
-| `pcap_setnonblock`, `pcap_datalink`, `pcap_geterr`, `pcap_close`, `pcap_freealldevs`, `pcap_lib_version` | as in libpcap |
+| `pcap_datalink` | the link type from that interface's pcap header: 1 on Ethernet, 101 (raw IP) on a WireGuard VPN |
+| `pcap_setnonblock`, `pcap_geterr`, `pcap_close`, `pcap_freealldevs`, `pcap_lib_version` | as in libpcap |
 
 The first call to `pcap_findalldevs` or `pcap_open_live` also starts the
 window-order guard (§6.1).
@@ -178,6 +186,88 @@ Load over 30 s with the game running (8-core desktop CPU, 8 GB GPU): Questlog's
 nine processes 0.07 of a core and 37 MB of GPU memory; the shared
 `wineserver` 0.04; the launcher 0.01; `dumpcap` about 0. `dumpcap` reads a
 copy of the traffic and does not affect the connection to the game server.
+
+### 4.3 Several interfaces: the network card and a VPN
+
+**Why every interface.** With a VPN on (Proton VPN here, a WireGuard
+interface `proton0`), the game's connection runs from the VPN's address
+(`10.2.0.2`) through `proton0`. The network card carries the same traffic
+encrypted, of no use to Questlog. With the VPN off it runs through the
+card. The launcher cannot know in advance which one: before the game starts
+there is no connection to look at, a VPN can go up or down in the middle of
+a session, and with split tunnelling the default route says nothing about
+the game. So it does not choose. It captures on every interface and lets
+Questlog choose, as it does on Windows among Npcap's adapters: Questlog
+lists the devices anew for each new game connection and takes the one whose
+address is the connection's local address (in its capture worker:
+`addresses.includes(<local address>)`). If no device has that address, it
+records "Npcap lists no adapter with this address" and tries again on its
+next pass over the connections, with a fresh list. A device that appears
+later is therefore picked up without a restart.
+
+**What `Captures.scan` does**, at start and then every `CAPTURE_SCAN_EVERY`
+(3 s) from the launcher's main loop:
+
+1. Read the interfaces that are up with an IPv4 address (`usable_interfaces`:
+   `if_nameindex`, then `SIOCGIFADDR` per name), keeping only those named in
+   `interface` / `--interface` when that is set.
+2. Interface gone (a VPN switched off): stop its `dumpcap`, withdraw the
+   channel (`BridgeServer.remove_interface`, which disconnects its clients,
+   so Questlog lists again), log it. This is normal and raises no
+   notification.
+3. Address changed (a new DHCP lease, a VPN reconnecting): stop and start
+   again, since the address is part of `dumpcap`'s filter.
+4. `dumpcap` ended by itself while its interface is still up: logged with the
+   exit code and a pointer to `a2qlinux-setup`, plus one desktop
+   notification. That interface is not retried until its address changes or
+   it comes back, so a permission problem is reported once, not every 3 s.
+   The launcher keeps running: other interfaces may still carry the game.
+5. New interface: register the channel, start `dumpcap`, log
+   `Capturing on <name> (<address>), TCP port 13328.`
+6. Nothing up: one line saying capture starts as soon as an interface is.
+   An interface from the settings that is not up: one line per name.
+7. **Where the game is** (`game_connection_addresses`): read the kernel's
+   `/proc/net/tcp` for established connections to port 13328. A local
+   address that no capture covers (the setting excludes its interface, or
+   capture there failed) is logged with what is captured instead, and
+   notified, once each time it appears. Without this, Questlog's own message
+   would be the only sign. The game runs in Steam's runtime container, which
+   shares the host's network namespace, so its connections are in that
+   table (seen: the game's connection from `10.2.0.2`).
+
+**Link types.** `dumpcap` writes each interface's own link type into its
+pcap header, and the DLL reports it from `pcap_datalink`. Questlog's frame
+decoder reads Ethernet (1), BSD loopback (0, 108) and raw IP (12, 101), and
+skips any other frame without a word. `pump_records` therefore logs an
+interface whose link type is outside `QUESTLOG_LINKTYPES`. WireGuard and
+OpenVPN `tun` interfaces deliver raw IP (101).
+
+**Cost.** One `dumpcap` per interface. With the filter, an interface without
+game traffic delivers nothing (measured: 0 packets on `enp9s0` while the
+game ran through `proton0`).
+
+**Checked with the game** (8 November 2026, Proton VPN on): the real
+`Captures` and `BridgeServer`, with `bridge/tests/bridge_client_test.exe` in
+a throwaway prefix calling the DLL as Questlog does. The DLL listed
+`enp9s0` (10.0.4.90) and `proton0` (10.2.0.2). Given the game connection's
+address `10.2.0.2`, it opened `proton0` with link type 101 and received
+1071 game packets in 20 s, with a mean delay of 138 ms and a maximum of
+272 ms, the same as on the network card (§4.2). Given `10.0.4.90`, it
+opened `enp9s0` with link type 1 and received nothing, as expected.
+Then Questlog itself, started into the running game's session: it opened
+`proton0` and recorded the character's session and four encounters, two
+ending in a kill, all through the VPN. During a crowded event in that session
+(about 600,000 logged events a minute, 1378 entities) the kills were saved
+0.4–1.4 s after they happened. That is Questlog's processing time under
+that load; the bridge's share stayed at about 140 ms.
+
+**Rejected: choosing one interface at start** (by the game's connection or
+the default route). There is no connection before the game starts, a VPN
+switched during a session would leave Questlog on the wrong interface until
+a restart, and with split tunnelling the default route is not the game's.
+The earlier behaviour, refusing to start when more than one interface had
+an address, left every VPN user editing the settings, and a setting naming
+the VPN stopped working as soon as the VPN was switched off.
 
 ## 5. Starting Questlog and the game in one Wine session
 
@@ -659,6 +749,11 @@ the session itself.
 | Questlog shows "No capture bridge: start Questlog with A2Qlinux" | Questlog started without the launcher | start it from the menu entry |
 | "Capture bridge not reachable (is A2Qlinux running?)" | launcher not running (terminal closed) | status window |
 | "Capture bridge closed the connection …" | launcher stopped, or it dropped a connection | status window |
+| Questlog: "Npcap lists no adapter with this address" | the game's connection uses an address no capture covers | status window: "AION 2's connection … uses …, which A2Qlinux does not capture on" (§4.3, step 7) |
+| Questlog: "A2Qlinux does not capture on <name> (any more) …" | the interface went away between Questlog's list and its open | none; Questlog lists again on its next pass |
+| "Capture on <name> … ended" (and a notification) | `dumpcap` failed on that interface, usually capture permission | `dumpcap`'s own line above it; `a2qlinux-setup` |
+| "Interface <name> delivers link type N, which Questlog cannot read" | an interface type Questlog's decoder skips (§4.3) | none from our side; game traffic on that interface is not counted |
+| "Refused a connection … from an older A2Qlinux wpcap.dll" | a Questlog still running with the DLL of an older A2Qlinux | quit Questlog and start it through A2Qlinux |
 | Steam "launching" forever while Questlog runs | Proton waiting for an idle prefix (§5.1) | `steam_launch.log`; set the launch option |
 | click in the game activates Questlog | §6.1; guard not running | `questlog.log`, `[a2qlinux]` lines |
 | two Questlog tray icons | `hide-tray` failed | status window, `Questlog control:` lines |
@@ -756,7 +851,7 @@ one** — §6.4.
 | What | How |
 |---|---|
 | launcher, bridge, quit logic, updates, Steam verb switch | `python3 -m unittest` in the repository root (no built Windows parts needed; CI runs `bash bridge/build.sh` and the tests on every push, §12); the update tests build a fake installer with `7z` and run feed → download (`file://`) → checks → swap → rollback, and the first installation (`install_fresh`), offline |
-| DLL against a live bridge | `bridge/tests/bridge_client_test.exe` in a throwaway prefix, with a running `BridgeServer` and `WINEDLLOVERRIDES=wpcap=n`; report in `C:\bridge_client_test.txt` (packets, delay) |
+| DLL against a live bridge | `bridge/tests/bridge_client_test.exe [<local address>]` in a throwaway prefix, with a running `BridgeServer` (with `Captures`, for real traffic), `WINEDLLOVERRIDES=wpcap=n` and `QUESTLOG_PROTON_BRIDGE` from `environment_value()`; it opens the device with that address, as Questlog does, or the first one; report in `C:\bridge_client_test.txt` (devices, link type, packets, delay) |
 | window-order guard | copy `bridge/tests/zorder_guard_test.exe` and `a2qlinux/bin/wpcap.dll` to an empty folder, then `WINEPREFIX=<throwaway> xvfb-run -a wine zorder_guard_test.exe 'Z:\<folder>\wpcap.dll'`; prints the order before and after, `PASS`/`FAIL` |
 | `questlog_ctl.exe` by hand | `protontricks-launch --appid 3393110 <package>/a2qlinux/bin/questlog_ctl.exe hide-tray` (or `show-tray`, `close-window`, `end-session`); `<package>` is printed by `python -c 'import a2qlinux; print(a2qlinux.__path__[0])'` in A2Qlinux's environment |
 | `questlog_ctl.exe` without the game prefix | Questlog in a throwaway prefix: `wine Questlog.exe --no-sandbox --disable-gpu` under `xvfb-run`, then the commands through `wine` |
@@ -775,13 +870,16 @@ own files.
 ## 10. What Questlog updates can break
 
 A2Qlinux depends on these properties of Questlog. `compatibility_problems`
-in `a2qlinux/update.py` checks all of them before an automatic update
+in `a2qlinux/update.py` checks all of them except the link types before an
+automatic update
 (§6.6); for a manual update, check them by hand (`docs/UPDATING.md`,
 "Updating by hand"):
 
 | Property | Used by | How to check |
 |---|---|---|
 | the eleven pcap calls in §4.1 | `bridge/wpcap_bridge.c` | `grep -ohE 'pcap_[a-z_]+\(' …/workers/aion-2/*.cjs \| sort -u` in the unpacked `app.asar` |
+| the capture device is picked by the game connection's address, listing anew per connection | §4.3 | `grep -c 'addresses.includes(' …/workers/aion-2/combat.cjs` |
+| link types decoded: 1, 0, 108, 12, 101 (`QUESTLOG_LINKTYPES`) | §4.3 | by hand only: in `combat.cjs`, the function that reads source and destination from a frame, given the frame and `linkType`; its comparisons name the accepted types |
 | Electron 44.5.1 (`KNOWN_ELECTRON`): tray icon id 3, `WM_ENDSESSION` ending the process | `questlog_ctl.exe` | `grep -aoE 'Electron/[0-9.]+' Questlog.exe`; for another version read `notify_icon_host.cc` and `native_window_views_win.cc` |
 | `second-instance` shows the window | §6.3 | `grep -oE 'on\("second-instance",[^)]*\)' main.cjs` |
 | overlay windows non-activatable (`focusable: false`) | §6.1 | `grep -c 'focusable:!1' main.cjs` |
@@ -879,7 +977,7 @@ not name.
 | Setting | Default | Replaces | Read by |
 |---|---|---|---|
 | `questlog_dir` | `~/Games/Questlog` | the `QUESTLOG_DIR` default | launcher (`--exe`), `a2qlinux.desktop` (lock file), `a2qlinux-steam`, `a2qlinux-setup` |
-| `interface` | `""` (automatic) | — | launcher (`--interface`) |
+| `interface` | `""` (every interface) | — | launcher (`--interface`, repeatable): a name or a list of names limiting `Captures` (§4.3) |
 | `after_game` | `"keep"` | — | launcher: §6.7 (`"keep"`) or `close_questlog` (`"close"`) |
 | `after_game_delay` | `15`, at least 10.5 | `GAME_EXIT_GRACE` | launcher, with `after_game = "close"` only |
 | `auto_update` | `true` | — | launcher, §6.6 |

@@ -323,3 +323,182 @@ class GamePrefixTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FakeDumpcap:
+    def __init__(self):
+        import io
+        self.stdout = io.BytesIO(b"")      # ends at once: the pump records "dumpcap stopped"
+        self.returncode = None
+        self.terminated = False
+
+    def poll(self):
+        return self.returncode
+
+    def terminate(self):
+        self.terminated = True
+        self.returncode = -15
+
+    def wait(self, timeout=None):
+        return self.returncode
+
+
+class FakeServer:
+    def __init__(self):
+        self.offered = {}
+
+    def add_interface(self, name, address):
+        self.offered[name] = address
+
+    def remove_interface(self, name):
+        self.offered.pop(name, None)
+
+    def publish(self, name, header, record):
+        pass
+
+
+class CapturesTest(unittest.TestCase):
+    def setUp(self):
+        self.up = {"enp9s0": "10.0.4.90"}
+        self.started = []
+        self.messages, self.notes = [], []
+        self.server = FakeServer()
+        self.game = set()
+
+    def captures(self, wanted=()):
+        def start(dumpcap, name, address):
+            process = FakeDumpcap()
+            self.started.append((name, address, process))
+            return process
+        self.now = 0.0
+        return q.Captures("dumpcap", self.server, wanted, {"packets": 0}, log=self.messages.append,
+                          notify=self.notes.append, interfaces=lambda: dict(self.up), start=start,
+                          game_addresses=lambda: set(self.game))
+
+    def scan(self, captures):
+        self.now += q.CAPTURE_SCAN_EVERY
+        captures.scan(self.now)
+
+    def test_every_interface_is_captured_and_offered(self):
+        self.up["proton0"] = "10.2.0.2"
+        captures = self.captures()
+        self.scan(captures)
+        self.assertEqual(self.server.offered, {"enp9s0": "10.0.4.90", "proton0": "10.2.0.2"})
+        self.assertEqual(sorted(n for n, _, _ in self.started), ["enp9s0", "proton0"])
+
+    def test_vpn_coming_up_and_going_down_is_followed(self):
+        captures = self.captures()
+        self.scan(captures)
+        self.up["proton0"] = "10.2.0.2"
+        self.scan(captures)
+        self.assertIn("proton0", self.server.offered)
+        vpn = self.started[-1][2]
+        del self.up["proton0"]
+        self.scan(captures)
+        self.assertNotIn("proton0", self.server.offered)
+        self.assertTrue(vpn.terminated)
+        self.assertTrue(any("proton0 is gone" in m for m in self.messages))
+        self.assertEqual(self.notes, [])        # a VPN switched off is no failure
+
+    def test_address_change_restarts_the_capture(self):
+        captures = self.captures()
+        self.scan(captures)
+        self.up["enp9s0"] = "10.0.4.91"
+        self.scan(captures)
+        self.assertEqual(self.server.offered, {"enp9s0": "10.0.4.91"})
+        self.assertEqual([a for _, a, _ in self.started], ["10.0.4.90", "10.0.4.91"])
+
+    def test_failed_dumpcap_is_reported_once_and_not_restarted_in_a_loop(self):
+        captures = self.captures()
+        self.scan(captures)
+        self.started[0][2].returncode = 1
+        for _ in range(3):
+            self.scan(captures)
+        self.assertEqual(len(self.started), 1)
+        self.assertEqual(len(self.notes), 1)
+        self.assertIn("enp9s0", self.notes[0])
+        self.assertNotIn("enp9s0", self.server.offered)
+        self.assertTrue(any("a2qlinux-setup" in m for m in self.messages))
+        self.up["enp9s0"] = "10.0.4.91"         # a new address: tried again
+        self.scan(captures)
+        self.assertEqual(len(self.started), 2)
+
+    def test_wanted_limits_capture_and_a_missing_one_is_told_once(self):
+        self.up["proton0"] = "10.2.0.2"
+        captures = self.captures(wanted=("proton0", "wg1"))
+        self.scan(captures)
+        self.scan(captures)
+        self.assertEqual(self.server.offered, {"proton0": "10.2.0.2"})
+        self.assertEqual(len([m for m in self.messages if "wg1" in m]), 1)
+
+    def test_no_interface_is_told_once_and_capture_starts_later(self):
+        self.up.clear()
+        captures = self.captures()
+        self.scan(captures)
+        self.scan(captures)
+        self.assertEqual(len([m for m in self.messages if "No network interface" in m]), 1)
+        self.up["enp9s0"] = "10.0.4.90"
+        self.scan(captures)
+        self.assertEqual(self.server.offered, {"enp9s0": "10.0.4.90"})
+
+    def test_scan_waits_between_looks(self):
+        captures = self.captures()
+        captures.scan(10.0)
+        self.up["proton0"] = "10.2.0.2"
+        captures.scan(10.5)
+        self.assertNotIn("proton0", self.server.offered)
+        captures.scan(10.0 + q.CAPTURE_SCAN_EVERY)
+        self.assertIn("proton0", self.server.offered)
+
+    def test_game_on_an_uncaptured_address_is_reported_once_per_occurrence(self):
+        self.up["proton0"] = "10.2.0.2"
+        captures = self.captures(wanted=("enp9s0",))
+        self.game.add("10.2.0.2")
+        self.scan(captures)
+        self.scan(captures)
+        self.assertEqual(len(self.notes), 1)
+        self.assertIn("10.2.0.2", self.notes[0])
+        self.assertTrue(any("'interface' limits capture to enp9s0" in m for m in self.messages))
+        self.game.clear()
+        self.scan(captures)
+        self.game.add("10.2.0.2")                 # back again later: told again
+        self.scan(captures)
+        self.assertEqual(len(self.notes), 2)
+
+    def test_game_on_a_captured_address_is_quiet(self):
+        self.up["proton0"] = "10.2.0.2"
+        captures = self.captures()
+        self.game.add("10.2.0.2")
+        self.scan(captures)
+        self.assertEqual(self.notes, [])
+
+
+class GameConnectionAddressesTest(unittest.TestCase):
+    def test_reads_established_connections_to_the_game_port(self):
+        table = ("  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid\n"
+                 # 10.2.0.2:35886 -> 193.202.112.131:13328, ESTABLISHED
+                 "   0: 0200020A:8C2E 8370CAC1:3410 01 00000000:00000000 00:00000000 00000000  1000\n"
+                 # 10.0.4.90 -> :13328, CLOSE_WAIT: not counted
+                 "   1: 5A04000A:8C2F 8370CAC1:3410 08 00000000:00000000 00:00000000 00000000  1000\n"
+                 # 10.0.4.90 -> :443, ESTABLISHED: another port
+                 "   2: 5A04000A:8C30 8370CAC1:01BB 01 00000000:00000000 00:00000000 00000000  1000\n")
+        with tempfile.NamedTemporaryFile("w", suffix="tcp") as f:
+            f.write(table)
+            f.flush()
+            self.assertEqual(q.game_connection_addresses(f.name), {"10.2.0.2"})
+
+    def test_this_machine_now(self):
+        q.game_connection_addresses()             # the real table parses (whatever it holds)
+
+
+class PumpRecordsTest(unittest.TestCase):
+    def test_link_type_questlog_cannot_read_is_reported(self):
+        import io
+        import struct
+        messages = []
+        for linktype, told in ((101, False), (9, True)):
+            header = struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 262144, linktype)
+            capture = {"error": None}
+            q.pump_records("ppp0", io.BytesIO(header), FakeServer(), {"packets": 0}, capture, messages.append)
+            self.assertEqual(any("link type 9" in m for m in messages), told)
+            self.assertEqual(capture["error"], "dumpcap stopped")

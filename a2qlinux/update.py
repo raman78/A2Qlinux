@@ -131,6 +131,9 @@ def compatibility_problems(app_dir):
         problems.append(f"it calls libpcap functions the bridge DLL lacks: {', '.join(sorted(calls - PCAP_CALLS))}")
     if not calls:
         problems.append("its capture worker calls no libpcap functions any more")
+    if not re.search(r"\.addresses\.includes\(", worker):
+        problems.append("its capture worker no longer picks the capture device by the game connection's address "
+                        "(A2Qlinux offers one device per network interface and relies on it)")
     electron = re.search(rb"Electron/(\d+\.\d+\.\d+)", (app_dir / "Questlog.exe").read_bytes()) \
         if (app_dir / "Questlog.exe").is_file() else None
     if not electron:

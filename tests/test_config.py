@@ -38,7 +38,19 @@ class LoadTest(unittest.TestCase):
         self.assertEqual((settings.after_game, settings.after_game_delay, settings.auto_update),
                          ("close", 20.0, False))
         self.assertEqual(settings.questlog_dir, Path("/opt/ql"))
-        self.assertEqual(settings.interface, "eth0")
+        self.assertEqual(settings.interface, ("eth0",))
+
+    def test_interface_takes_a_list_and_empty_means_all(self):
+        settings, problems = self.load('interface = ["enp9s0", "proton0"]\n')
+        self.assertEqual(problems, [])
+        self.assertEqual(settings.interface, ("enp9s0", "proton0"))
+        self.assertEqual(self.load('interface = ""\n')[0].interface, ())
+
+    def test_interface_list_of_non_names_is_reported(self):
+        settings, problems = self.load('interface = ["enp9s0", 3]\n')
+        self.assertEqual(len(problems), 1)
+        self.assertIn("interface names", problems[0])
+        self.assertEqual(settings.interface, ())
 
     def test_unknown_setting_is_reported_with_its_line(self):
         settings, problems = self.load('auto_update = true\nafter_gaem = "close"\n')

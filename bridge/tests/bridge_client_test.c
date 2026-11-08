@@ -1,10 +1,14 @@
 /* Test client for wpcap.dll: calls it the way Questlog's capture loop does
- * (findalldevs, open_live, setnonblock, datalink, compile/setfilter, then
- * next_ex until it returns 0, every 25 ms) and writes a report to
- * C:\bridge_client_test.txt: packets received and, per packet, receive time
- * minus the capture timestamp in its header (the end-to-end delay). */
+ * (findalldevs, then open_live on the device whose address is the one given
+ * as the first argument - Questlog uses its game connection's local address -
+ * or on the first device without one; setnonblock, datalink,
+ * compile/setfilter, then next_ex until it returns 0, every 25 ms) and writes
+ * a report to C:\bridge_client_test.txt: every listed device, packets
+ * received and, per packet, receive time minus the capture timestamp in its
+ * header (the end-to-end delay). */
 #include <windows.h>
 #include <stdio.h>
+#include <string.h>
 
 struct pcap_addr { struct pcap_addr *next; struct sockaddr *addr, *netmask, *broadaddr, *dstaddr; };
 typedef struct pcap_if { struct pcap_if *next; char *name; char *description; struct pcap_addr *addresses; unsigned flags; } pcap_if_t;
@@ -41,9 +45,22 @@ int main(void)
     if (((findalldevs_t)GetProcAddress(m, "pcap_findalldevs"))(&devs, err) != 0) {
         fprintf(out, "findalldevs error: %s\n", err); fclose(out); return 1;
     }
-    unsigned char *a = (unsigned char *)devs->addresses->addr;
-    fprintf(out, "device: %s family=%u ip=%u.%u.%u.%u\n", devs->name, *(unsigned short *)a, a[4], a[5], a[6], a[7]);
-    void *p = ((open_live_t)GetProcAddress(m, "pcap_open_live"))(devs->name, 65535, 0, 1, err);
+    /* Built with main as the entry point and no C runtime start-up code
+     * (build.sh), so there is no argv: the address is the command line's last word. */
+    const char *want = strrchr(GetCommandLineA(), ' ');
+    want = want && strchr(want, '.') ? want + 1 : NULL;
+    pcap_if_t *chosen = NULL;
+    for (pcap_if_t *d = devs; d; d = d->next) {
+        unsigned char *a = (unsigned char *)d->addresses->addr;
+        char ip[16];
+        snprintf(ip, sizeof(ip), "%u.%u.%u.%u", a[4], a[5], a[6], a[7]);
+        fprintf(out, "device: %s (%s) family=%u ip=%s\n", d->name, d->description, *(unsigned short *)a, ip);
+        if (!chosen && (!want || strcmp(ip, want) == 0))
+            chosen = d;
+    }
+    if (!chosen) { fprintf(out, "no device with address %s\n", want ? want : "(any)"); fclose(out); return 1; }
+    fprintf(out, "opening: %s\n", chosen->name);
+    void *p = ((open_live_t)GetProcAddress(m, "pcap_open_live"))(chosen->name, 65535, 0, 1, err);
     if (!p) { fprintf(out, "open_live error: %s\n", err); fclose(out); return 1; }
     ((setnonblock_t)GetProcAddress(m, "pcap_setnonblock"))(p, 1, err);
     struct bpf_program prog;

@@ -39,8 +39,10 @@ class Setting:
 SETTINGS = {
     "questlog_dir": Setting("~/Games/Questlog", str,
                             "Folder with Questlog.exe (the QUESTLOG_DIR environment variable overrides it)."),
-    "interface": Setting("", str,
-                         "Network interface carrying the game's traffic; empty: the only one besides lo."),
+    "interface": Setting("", (str, list),
+                         'Network interfaces to capture on: a name, or a list such as ["enp9s0", "proton0"]; '
+                         "empty: every one with an IPv4 address besides lo (Questlog follows the game's "
+                         "connection on whichever it uses, a VPN included)."),
     "after_game": Setting("keep", str,
                           '"keep": Questlog stays open after the game, and Steam sees the game as closed; '
                           '"close": Questlog closes with the game.',
@@ -58,7 +60,7 @@ SETTINGS = {
 @dataclass(frozen=True)
 class Settings:
     questlog_dir: Path
-    interface: str
+    interface: tuple
     after_game: str
     after_game_delay: float
     auto_update: bool
@@ -99,6 +101,10 @@ def load(path=CONFIG_PATH):
             problems.append(f"{where}: '{name}' must be {_kind_name(spec.kind)}, not {value!r}; "
                             f"using {spec.default!r}.")
             continue
+        if isinstance(value, list) and not all(isinstance(item, str) and item for item in value):
+            problems.append(f"{where}: '{name}' must list interface names as quoted texts, not {value!r}; "
+                            f"using {spec.default!r}.")
+            continue
         if spec.choices and value not in spec.choices:
             problems.append(f"{where}: '{name}' must be one of {', '.join(map(repr, spec.choices))}, "
                             f"not {value!r}; using {spec.default!r}.")
@@ -110,6 +116,8 @@ def load(path=CONFIG_PATH):
         values[name] = value
     env_dir = os.environ.get("QUESTLOG_DIR")
     values["questlog_dir"] = Path(env_dir or values["questlog_dir"]).expanduser()
+    interface = values["interface"]
+    values["interface"] = tuple(interface) if isinstance(interface, list) else ((interface,) if interface else ())
     values["after_game_delay"] = float(values["after_game_delay"])
     values["update_check_hours"] = float(values["update_check_hours"])
     return Settings(**values), problems
@@ -120,6 +128,8 @@ def _kind_name(kind):
         return "true or false"
     if kind is str:
         return "a quoted text"
+    if kind == (str, list):
+        return "a quoted text or a list of them"
     return "a number"
 
 
