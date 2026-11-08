@@ -113,8 +113,21 @@ class SessionLockTest(unittest.TestCase):
                 q.os.close(fd)
 
 
+# An app id no Steam game has: the test's stand-in steam.exe carries it, so a
+# real AION 2 running meanwhile is never touched (with the real id, the test
+# ended the running game's own steam.exe on 8 November 2026).
+FAKE_APPID = 999999901
+
+
 class GameSteamHelperTest(unittest.TestCase):
     """Only a steam.exe carrying the game's app id is ended."""
+
+    def setUp(self):
+        self.saved_appid = q.APPID
+        q.APPID = FAKE_APPID
+
+    def tearDown(self):
+        q.APPID = self.saved_appid
 
     def test_ends_the_games_steam_exe_and_nothing_else(self):
         def start(appid):
