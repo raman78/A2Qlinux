@@ -3,13 +3,16 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
-## [Unreleased]
+## [0.3.0] — 2026-11-08
 
 ### Added
 - Playing through a VPN needs no setting. A2Qlinux listens on all network
   connections at once (cable, Wi-Fi, VPN), and Questlog reads the game on
   whichever one it uses. A VPN changing servers during play is picked up
   within seconds, without a restart.
+- When the VPN is switched off during play, the status window and a
+  notification say that the game's connection has lost its network and the
+  game has to reconnect.
 - A warning in the status window and a notification when the game runs
   through a connection that `interface` in the settings file leaves out.
 - `interface` can name several connections, as a list:
