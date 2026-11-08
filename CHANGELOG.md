@@ -8,8 +8,8 @@ What changed for players, release by release. Technical details are in
 ### Added
 - Playing through a VPN needs no setting. A2Qlinux listens on all network
   connections at once (cable, Wi-Fi, VPN), and Questlog reads the game on
-  whichever one it uses. Switching the VPN on or off during play is picked
-  up within seconds, without a restart.
+  whichever one it uses. A VPN changing servers during play is picked up
+  within seconds, without a restart.
 - A warning in the status window and a notification when the game runs
   through a connection that `interface` in the settings file leaves out.
 - `interface` can name several connections, as a list:

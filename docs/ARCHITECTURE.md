@@ -271,7 +271,17 @@ again.
    address that no capture covers (the setting excludes its interface, or
    capture there failed) is logged with what is captured instead, and
    notified, once each time it appears. This check is what made the
-   recreated-interface case of step 4 visible before step 4 existed. Without this, Questlog's own message
+   recreated-interface case of step 4 visible before step 4 existed.
+   An address that no interface has at all is a different case, told
+   differently (`AION 2's connection to its server still uses <address>,
+   which no network interface has any more …`): the kernel keeps a
+   connection "established" after its local address has gone, until the
+   program gives up on it. Seen when the VPN was switched off during play
+   (8 November 2026): the game's connection stayed on `10.2.0.2` with a
+   growing send queue (13,937 bytes, then 21,112), the game froze, and it did
+   not reconnect by itself. Nothing passes on such a connection, with or
+   without A2Qlinux, which only reads a copy of the traffic; the message
+   names the cause instead of pointing at the settings. Without this, Questlog's own message
    would be the only sign. The game runs in Steam's runtime container, which
    shares the host's network namespace, so its connections are in that
    table (seen: the game's connection from `10.2.0.2`).
@@ -797,6 +807,7 @@ the session itself.
 | "Capture bridge not reachable (is A2Qlinux running?)" | launcher not running (terminal closed) | status window |
 | "Capture bridge closed the connection …" | launcher stopped, or it dropped a connection | status window |
 | Questlog: "Npcap lists no adapter with this address" | the game's connection uses an address no capture covers | status window: "AION 2's connection … uses …, which A2Qlinux does not capture on" (§4.3, step 8) |
+| "AION 2's connection … still uses …, which no network interface has any more" | the VPN was switched off under a running game; its connection is dead until the game reconnects | none on our side; the game has to reconnect (§4.3, step 8) |
 | Questlog: "A2Qlinux does not capture on <name> (any more) …" | the interface went away between Questlog's list and its open | none; Questlog lists again on its next pass |
 | "Capture on <name> … ended" (and a notification) | `dumpcap` failed on that interface, usually capture permission | `dumpcap`'s own line above it; `a2qlinux-setup` |
 | "Interface <name> delivers link type N, which Questlog cannot read" | an interface type Questlog's decoder skips (§4.3) | none from our side; game traffic on that interface is not counted |
@@ -948,11 +959,15 @@ automatic update
    match was corrected.
 5. Questlog's keyboard shortcuts while the game has focus have not been
    tested.
-6. A VPN switching servers while the game runs, tried once with the game
-   (8 November 2026), lost capture on `proton0`: the interface was
-   recreated between two scans, which led to §4.3 step 4. The fix is tested
-   with a real `dumpcap` on a recreated interface in a private network
-   namespace, not yet with the game.
+6. A VPN switching servers while the game runs, tried with the game
+   (8 November 2026): the first try lost capture on `proton0`, because the
+   interface was recreated between two scans, which led to §4.3 step 4. With
+   that fix, the second try: `proton0` came back with a new index, capture
+   restarted within a second, the game reconnected 2 s later from the same
+   address and data flowed to Questlog again. Switching the VPN off froze
+   the game, whose connection stayed on the vanished address (§4.3, step 8);
+   Questlog following the game onto the network card once the game has
+   reconnected has not been seen yet.
 
 ## 12. Packaging and releases
 

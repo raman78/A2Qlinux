@@ -367,6 +367,7 @@ class Captures:
             return
         self.next_scan = now + CAPTURE_SCAN_EVERY
         up = self.interfaces()
+        every_address = set(up.values())     # before the settings' filter: which addresses exist at all
         if self.wanted:
             for name in self.wanted:
                 if name not in up and name not in self.told_missing:
@@ -422,13 +423,22 @@ class Captures:
             self.told_none = True
         elif up:
             self.told_none = False
-        self._check_game_connection()
+        self._check_game_connection(every_address)
 
-    def _check_game_connection(self):
+    def _check_game_connection(self, every_address):
         """Say so when the game's connection uses an address no capture covers: Questlog would get nothing."""
         captured = {capture["address"]: name for name, capture in self.running.items()}
         uncaptured = self.game_addresses() - set(captured)
         for address in uncaptured - self.told_uncaptured:
+            if address not in every_address:
+                # The kernel keeps a connection "established" after its address has gone (a VPN
+                # switched off) until the game gives up on it; nothing passes there meanwhile.
+                self.log(f"AION 2's connection to its server still uses {address}, which no network interface "
+                         "has any more (a VPN switched off?). Nothing can pass on that connection: the game "
+                         "has to reconnect, and Questlog follows it once it has.")
+                self.notify(f"AION 2's connection lost its network ({address} is gone, a VPN switched off?); "
+                            "the game has to reconnect.")
+                continue
             why = (f"the setting 'interface' limits capture to {', '.join(self.wanted)}" if self.wanted
                    else "no capture runs on its interface")
             self.log(f"AION 2's connection to its server uses {address}, which A2Qlinux does not capture on "

@@ -510,6 +510,20 @@ class CapturesTest(unittest.TestCase):
         self.scan(captures)
         self.assertEqual(len(self.notes), 2)
 
+    def test_game_on_an_address_that_no_longer_exists_is_told_as_a_lost_network(self):
+        # VPN switched off (8 November 2026): the game's connection stayed "established"
+        # from 10.2.0.2 after proton0 had gone, and the game froze until it reconnected.
+        self.up["proton0"] = "10.2.0.2"
+        captures = self.captures()
+        self.game.add("10.2.0.2")
+        self.scan(captures)
+        del self.up["proton0"]
+        self.scan(captures)
+        self.scan(captures)
+        self.assertEqual(len(self.notes), 1)
+        self.assertIn("lost its network", self.notes[0])
+        self.assertFalse(any("does not capture on" in m for m in self.messages))
+
     def test_game_on_a_captured_address_is_quiet(self):
         self.up["proton0"] = "10.2.0.2"
         captures = self.captures()

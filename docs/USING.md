@@ -93,9 +93,16 @@ that has it, the same way it does on Windows.
 
 Because of that:
 
-- Switching the VPN on or off needs no restart of Questlog. A2Qlinux
-  notices the change within a few seconds, and Questlog moves over once the
-  game has reconnected through the new connection.
+- Switching the VPN on or off, or to another server, needs no restart of
+  Questlog. A2Qlinux notices the change within a few seconds, and Questlog
+  moves over once the game has reconnected through the new connection.
+- Changing VPN servers keeps your VPN address, and the game reconnects in a
+  moment. Switching the VPN **off** while playing is different: the address
+  the game was talking from disappears, and the game freezes until it gives
+  up and reconnects, which can take a while. That happens with or without
+  A2Qlinux; the status window says "AION 2's connection … still uses …,
+  which no network interface has any more". Switch the VPN off between
+  play sessions instead.
 - Right after the switch, Questlog may show "Npcap lists no adapter with
   this address" for a few seconds. It goes away on its own.
 - Listening on a connection the game does not use costs nothing: nothing
