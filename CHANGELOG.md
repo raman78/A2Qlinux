@@ -6,20 +6,20 @@ What changed for players, release by release. Technical details are in
 ## [Unreleased]
 
 ### Added
-- A VPN no longer needs any setting. A2Qlinux listens on all your network
-  connections at once, and Questlog reads the game on whichever one it uses.
-  Switching the VPN on or off while you play is noticed within seconds. The
-  status window says which connection Questlog follows, and warns you if the
-  game runs through one A2Qlinux has been told to leave out.
-- `interface` in the settings file can now name several connections, as a
-  list.
+- Playing through a VPN needs no setting. A2Qlinux listens on all network
+  connections at once (cable, Wi-Fi, VPN), and Questlog reads the game on
+  whichever one it uses. Switching the VPN on or off during play is picked
+  up within seconds, without a restart.
+- A warning in the status window and a notification when the game runs
+  through a connection that `interface` in the settings file leaves out.
+- `interface` can name several connections, as a list:
+  `interface = ["enp9s0", "proton0"]`.
 
 ### Changed
-- A2Qlinux used to refuse to start when the computer had more than one
-  network connection, for example with a VPN on, until you named one in
-  the settings. That stop is gone.
+- A2Qlinux no longer refuses to start when the computer has more than one
+  network connection, for example with a VPN on.
 - The status window no longer prints a line every time Questlog reconnects
-  to the game traffic, which it does on every zone change. It says which
+  to the game traffic, which it does on every zone change. It names the
   connection Questlog follows, once, and again only when that changes;
   problems are still reported as before.
 

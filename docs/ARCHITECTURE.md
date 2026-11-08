@@ -134,14 +134,16 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
    per captured interface, named `\Device\NPF_A2Qlinux_<interface>`, with
    that interface's address. `pcap_open_live` connects again, sends
    `QLPB2 <token> open <interface>`, and receives `OK` followed by that
-   interface's pcap file header, or `ERR <reason>`, which Questlog shows.
+   interface's pcap file header, or `ERR <reason>`, which Questlog shows
+   (the requests: §4.1).
 6. Every 25 ms Questlog calls `pcap_next_ex` until it returns 0 and
    reassembles the TCP streams itself. Packet times come from the record
    headers, i.e. from when `dumpcap` captured them. `dumpcap` writes
    nanosecond timestamps; the server converts them to microseconds, which is
    what Questlog reads.
 7. On a zone change Questlog opens a new device before closing the old one.
-   The server serves any number of connections, each with every packet. A
+   The server serves any number of connections, each with every packet of
+   its interface. A
    connection that stops reading (`CLIENT_QUEUE_RECORDS`, 5000 records
    queued) is dropped with a message; Questlog reopens it within a second.
    The status window names the interface Questlog follows
@@ -163,6 +165,19 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
 
 The first call to `pcap_findalldevs` or `pcap_open_live` also starts the
 window-order guard (§6.1).
+
+**Bridge requests.** Each DLL connection to `BridgeServer` sends one line,
+`QLPB2 <token> <request>`, and gets one of these answers (the code's copy of
+this contract is the docstring of `a2qlinux/pcap_bridge.py`):
+
+| Request | Sent by | Answer |
+|---|---|---|
+| `list` | `pcap_findalldevs` | `<interface> <IPv4>` per captured interface, one per line, then an empty line; the server closes |
+| `open <interface>` | `pcap_open_live` | `OK`, the interface's 24-byte pcap header, then its records for as long as the connection lives; or `ERR <reason>` and the server closes |
+| anything else, a wrong token, or `QLPB1 …` (the one-device protocol before November 2026) | — | the connection is closed and the refusal logged |
+
+The list needs the token too: interface names and addresses are not given
+to programs that cannot also read the traffic (I4).
 
 ### 4.2 Latency and load
 
@@ -196,14 +211,20 @@ encrypted, of no use to Questlog. With the VPN off it runs through the
 card. The launcher cannot know in advance which one: before the game starts
 there is no connection to look at, a VPN can go up or down in the middle of
 a session, and with split tunnelling the default route says nothing about
-the game. So it does not choose. It captures on every interface and lets
-Questlog choose, as it does on Windows among Npcap's adapters: Questlog
-lists the devices anew for each new game connection and takes the one whose
-address is the connection's local address (in its capture worker:
-`addresses.includes(<local address>)`). If no device has that address, it
-records "Npcap lists no adapter with this address" and tries again on its
-next pass over the connections, with a fresh list. A device that appears
-later is therefore picked up without a restart.
+the game. So the launcher does not choose. It captures on every interface
+and leaves the choice to Questlog, which has the one fact that decides it:
+the local address of the game's connection.
+
+**How Questlog chooses** (read in its capture worker, `combat.cjs`): on
+each pass over the game's connections it groups them by local address. For
+an address that has no open device yet it lists the devices anew and opens
+the one whose addresses include it (`addresses.includes(<local address>)`),
+as it does on Windows among Npcap's adapters. If none does, it records
+"Npcap lists no adapter with this address" for that address and tries again
+on the next pass, with a fresh list. A device that appears later is
+therefore picked up without a restart, and a device that is withdrawn ends
+its connection (`pcap_next_ex` returns -1), after which Questlog lists
+again.
 
 **What `Captures.scan` does**, at start and then every `CAPTURE_SCAN_EVERY`
 (3 s) from the launcher's main loop:
@@ -211,21 +232,27 @@ later is therefore picked up without a restart.
 1. Read the interfaces that are up with an IPv4 address (`usable_interfaces`:
    `if_nameindex`, then `SIOCGIFADDR` per name), keeping only those named in
    `interface` / `--interface` when that is set.
-2. Interface gone (a VPN switched off): stop its `dumpcap`, withdraw the
+2. Interface gone (a VPN switched off): stop its `dumpcap` and withdraw the
    channel (`BridgeServer.remove_interface`, which disconnects its clients,
-   so Questlog lists again), log it. This is normal and raises no
-   notification.
+   so Questlog lists again). Status window:
+   `Interface proton0 is gone (a VPN switched off?); capture there stopped.`
+   This is normal and raises no notification.
 3. Address changed (a new DHCP lease, a VPN reconnecting): stop and start
-   again, since the address is part of `dumpcap`'s filter.
-4. `dumpcap` ended by itself while its interface is still up: logged with the
-   exit code and a pointer to `a2qlinux-setup`, plus one desktop
-   notification. That interface is not retried until its address changes or
-   it comes back, so a permission problem is reported once, not every 3 s.
-   The launcher keeps running: other interfaces may still carry the game.
-5. New interface: register the channel, start `dumpcap`, log
+   again, since the address is part of `dumpcap`'s filter. Status window:
+   `Interface <name> changed its address from <old> to <new>; capturing there again.`
+4. `dumpcap` ended by itself while its interface is still up: status window
+   `Capture on <name> (<address>) ended: …`, with the exit code and a pointer
+   to `a2qlinux-setup`; `dumpcap`'s own message is the line before it. One
+   desktop notification. That interface is not retried until its address
+   changes or it comes back, so a permission problem is reported once, not
+   every 3 s. The launcher keeps running: other interfaces may still carry
+   the game. (Before this design a stopped `dumpcap` ended the launcher;
+   with several interfaces one failure must not take the others down.)
+5. New interface: register the channel, start `dumpcap`. Status window:
    `Capturing on <name> (<address>), TCP port 13328.`
-6. Nothing up: one line saying capture starts as soon as an interface is.
-   An interface from the settings that is not up: one line per name.
+6. Nothing up: `No network interface with an IPv4 address is up; capture
+   starts as soon as one is.`, once. An interface named in the settings
+   that is not up: one line per name, again only after it has been up.
 7. **Where the game is** (`game_connection_addresses`): read the kernel's
    `/proc/net/tcp` for established connections to port 13328. A local
    address that no capture covers (the setting excludes its interface, or
@@ -239,8 +266,11 @@ later is therefore picked up without a restart.
 pcap header, and the DLL reports it from `pcap_datalink`. Questlog's frame
 decoder reads Ethernet (1), BSD loopback (0, 108) and raw IP (12, 101), and
 skips any other frame without a word. `pump_records` therefore logs an
-interface whose link type is outside `QUESTLOG_LINKTYPES`. WireGuard and
-OpenVPN `tun` interfaces deliver raw IP (101).
+interface whose link type is outside `QUESTLOG_LINKTYPES`
+(`Interface <name> delivers link type N, which Questlog cannot read …`).
+Measured: `enp9s0` delivers 1, the WireGuard interface `proton0` delivers
+101. Other VPN kinds (OpenVPN's `tun`, for one) have not been tried; an
+unreadable type would show as that line.
 
 **Cost.** One `dumpcap` per interface. With the filter, an interface without
 game traffic delivers nothing (measured: 0 packets on `enp9s0` while the
@@ -258,8 +288,11 @@ Then Questlog itself, started into the running game's session: it opened
 `proton0` and recorded the character's session and four encounters, two
 ending in a kill, all through the VPN. During a crowded event in that session
 (about 600,000 logged events a minute, 1378 entities) the kills were saved
-0.4–1.4 s after they happened. That is Questlog's processing time under
-that load; the bridge's share stayed at about 140 ms.
+0.4–1.4 s after they happened, against 0.12–0.21 s in quieter fights
+(§4.2). The difference is Questlog's processing under that load: the bridge
+and `dumpcap` measured 138 ms on the same interface minutes earlier, and
+the log held almost no repeated events (a few dozen in 20,000 lines), so
+packets were not delivered twice.
 
 **Rejected: choosing one interface at start** (by the game's connection or
 the default route). There is no connection before the game starts, a VPN
@@ -901,6 +934,10 @@ automatic update
    match was corrected.
 5. Questlog's keyboard shortcuts while the game has focus have not been
    tested.
+6. A VPN switched on or off while the game runs has not been tried with the
+   game. The parts are tested on their own (`CapturesTest`: an interface
+   coming and going; Questlog lists the devices again for each new
+   connection, §4.3), not the whole sequence.
 
 ## 12. Packaging and releases
 

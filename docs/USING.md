@@ -80,13 +80,30 @@ after `a2qlinux` in the menu entry's command, or between `a2qlinux-steam` and
 
 ## A VPN or several network connections
 
-You do not need to set anything. A2Qlinux listens on every network
-connection the computer has (cable, Wi-Fi, a VPN), and Questlog picks the
-one the game is using, the way it does on Windows. When the game runs
-through a VPN, Questlog reads it there; switch the VPN on or off while
-playing and A2Qlinux notices within a few seconds, and Questlog follows.
+You do not need to set anything for a VPN, Wi-Fi next to a cable, or any
+other mix of network connections.
 
-The status window shows what is happening:
+**How it works.** Every network connection of your computer has its own
+address. When a VPN is on, the game talks to its server from the VPN's
+address, and the cable or Wi-Fi only carries an encrypted copy that
+Questlog cannot read. So A2Qlinux does not try to guess the right
+connection in advance. It listens on all of them at once, and Questlog
+looks at the address the game is actually using and reads the connection
+that has it, the same way it does on Windows.
+
+Because of that:
+
+- Switching the VPN on or off needs no restart of Questlog. A2Qlinux
+  notices the change within a few seconds, and Questlog moves over once the
+  game has reconnected through the new connection.
+- Right after the switch, Questlog may show "Npcap lists no adapter with
+  this address" for a few seconds. It goes away on its own.
+- Listening on a connection the game does not use costs nothing: nothing
+  of the game passes there, so nothing is read.
+
+**What you see.** The status window lists every connection it listens on,
+then says which one Questlog follows once the game is connected. With a
+VPN on it looks like this, for example:
 
 ```
 [a2qlinux] Capturing on enp9s0 (10.0.4.90), TCP port 13328.
@@ -95,9 +112,20 @@ The status window shows what is happening:
 [a2qlinux] Game traffic is flowing to Questlog.
 ```
 
-Set `interface` only to keep A2Qlinux off some connections. If the game
-then runs through one you left out, the status window and a notification
-say so.
+The first line, for the cable, is normal: A2Qlinux listens there too, in
+case the VPN is switched off.
+
+**Leaving connections out.** Set `interface` in the settings file only if
+you want A2Qlinux to stay off some connections. This command lists your
+connections by name, with their addresses:
+
+```
+ip -brief address
+```
+
+Put the names you want in a list, for example
+`interface = ["enp9s0", "proton0"]`. If the game later runs through a
+connection you left out, the status window and a notification say so.
 
 ## The tray icon
 
