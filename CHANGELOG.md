@@ -13,7 +13,7 @@ What changed for players, release by release. Technical details are in
 - A warning in the status window and a notification when the game runs
   through a connection that `interface` in the settings file leaves out.
 - `interface` can name several connections, as a list:
-  `interface = ["enp9s0", "proton0"]`.
+  `interface = ["eth0", "wg0"]`.
 
 ### Changed
 - A2Qlinux no longer refuses to start when the computer has more than one

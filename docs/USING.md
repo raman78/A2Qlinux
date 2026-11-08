@@ -62,7 +62,7 @@ are read when A2Qlinux starts.
 | Setting | Default | What it does |
 |---|---|---|
 | `questlog_dir` | `"~/Games/Questlog"` | folder with Questlog |
-| `interface` | `""` | network interfaces to listen on: a name such as `"enp9s0"`, or a list such as `["enp9s0", "proton0"]`; empty: all of them, and Questlog follows the game on whichever it uses |
+| `interface` | `""` | network interfaces to listen on: a name such as `"eth0"`, or a list such as `["eth0", "wg0"]`; empty: all of them, and Questlog follows the game on whichever it uses |
 | `after_game` | `"keep"` | after the game: `"keep"` keeps Questlog open, `"close"` closes it |
 | `after_game_delay` | `15` | with `"close"`: seconds after the game before Questlog closes; at least 10.5, so that Questlog has saved |
 | `auto_update` | `true` | update Questlog automatically ([UPDATING.md](UPDATING.md)) |
@@ -108,14 +108,20 @@ Because of that:
 - Listening on a connection the game does not use costs nothing: nothing
   of the game passes there, so nothing is read.
 
+It does not matter which VPN you use. Each VPN program names its
+connection in its own way: `wg0` for WireGuard, `tun0` for many OpenVPN
+setups, `proton0` for Proton VPN, `tailscale0` for Tailscale, and so on.
+A2Qlinux does not look at the name; it listens on every connection that has
+an address, whatever it is called.
+
 **What you see.** The status window lists every connection it listens on,
 then says which one Questlog follows once the game is connected. With a
-VPN on it looks like this, for example:
+VPN on it looks like this, for example (your names and addresses differ):
 
 ```
-[a2qlinux] Capturing on enp9s0 (10.0.4.90), TCP port 13328.
-[a2qlinux] Capturing on proton0 (10.2.0.2), TCP port 13328.
-[a2qlinux] Questlog follows the game's connection on proton0 (10.2.0.2).
+[a2qlinux] Capturing on eth0 (192.168.1.20), TCP port 13328.
+[a2qlinux] Capturing on wg0 (10.2.0.2), TCP port 13328.
+[a2qlinux] Questlog follows the game's connection on wg0 (10.2.0.2).
 [a2qlinux] Game traffic is flowing to Questlog.
 ```
 
@@ -131,7 +137,8 @@ ip -brief address
 ```
 
 Put the names you want in a list, for example
-`interface = ["enp9s0", "proton0"]`. If the game later runs through a
+`interface = ["eth0", "wg0"]`, using the names the command shows on your
+computer. If the game later runs through a
 connection you left out, the status window and a notification say so.
 
 ## The tray icon

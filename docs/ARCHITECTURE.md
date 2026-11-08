@@ -147,7 +147,7 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
    connection that stops reading (`CLIENT_QUEUE_RECORDS`, 5000 records
    queued) is dropped with a message; Questlog reopens it within a second.
    The status window names the interface Questlog follows
-   (`Questlog follows the game's connection on proton0 (10.2.0.2).`) on its
+   (`Questlog follows the game's connection on wg0 (10.2.0.2).`) on its
    first connection and whenever the interface changes; the reconnects that
    every zone change brings are normal and pass silently, while a refused or
    dropped connection is always logged.
@@ -204,9 +204,12 @@ copy of the traffic and does not affect the connection to the game server.
 
 ### 4.3 Several interfaces: the network card and a VPN
 
-**Why every interface.** With a VPN on (Proton VPN here, a WireGuard
-interface `proton0`), the game's connection runs from the VPN's address
-(`10.2.0.2`) through `proton0`. The network card carries the same traffic
+**Why every interface.** With a VPN on, the game's connection runs from the
+VPN interface's address through that interface (measured here with Proton
+VPN, whose WireGuard interface is `proton0`, address `10.2.0.2`). Nothing in
+the code depends on a VPN's name or kind: interface names differ between
+VPN programs (`wg0`, `tun0`, `proton0`, `tailscale0`, …), and every
+interface with an IPv4 address is captured. The network card carries the same traffic
 encrypted, of no use to Questlog. With the VPN off it runs through the
 card. The launcher cannot know in advance which one: before the game starts
 there is no connection to look at, a VPN can go up or down in the middle of
@@ -235,7 +238,7 @@ again.
 2. Interface gone (a VPN switched off): stop its `dumpcap` and withdraw the
    channel (`BridgeServer.remove_interface`, which disconnects its clients,
    so Questlog lists again). Status window:
-   `Interface proton0 is gone (a VPN switched off?); capture there stopped.`
+   `Interface wg0 is gone (a VPN switched off?); capture there stopped.`
    This is normal and raises no notification.
 3. Address changed (a new DHCP lease, a VPN reconnecting): stop and start
    again, since the address is part of `dumpcap`'s filter. Status window:
@@ -292,9 +295,12 @@ decoder reads Ethernet (1), BSD loopback (0, 108) and raw IP (12, 101), and
 skips any other frame without a word. `pump_records` therefore logs an
 interface whose link type is outside `QUESTLOG_LINKTYPES`
 (`Interface <name> delivers link type N, which Questlog cannot read …`).
-Measured: `enp9s0` delivers 1, the WireGuard interface `proton0` delivers
-101. Other VPN kinds (OpenVPN's `tun`, for one) have not been tried; an
-unreadable type would show as that line.
+Measured on the kinds of interface VPNs use, created in a private network
+namespace (`unshare -rn`): `tun` (OpenVPN in tun mode and many commercial
+VPNs) and WireGuard deliver 101, `tap` (OpenVPN in tap mode) delivers 1;
+with the game, the network card `enp9s0` delivered 1 and Proton VPN's
+WireGuard `proton0` 101. All are in `QUESTLOG_LINKTYPES`; a kind outside it
+would show as that line.
 
 **Cost.** One `dumpcap` per interface. With the filter, an interface without
 game traffic delivers nothing (measured: 0 packets on `enp9s0` while the

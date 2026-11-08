@@ -40,7 +40,7 @@ SETTINGS = {
     "questlog_dir": Setting("~/Games/Questlog", str,
                             "Folder with Questlog.exe (the QUESTLOG_DIR environment variable overrides it)."),
     "interface": Setting("", (str, list),
-                         'Network interfaces to capture on: a name, or a list such as ["enp9s0", "proton0"]; '
+                         'Network interfaces to capture on: a name, or a list such as ["eth0", "wg0"]; '
                          "empty: every one with an IPv4 address besides lo (Questlog follows the game's "
                          "connection on whichever it uses, a VPN included)."),
     "after_game": Setting("keep", str,
