@@ -185,8 +185,11 @@ Questlog starts.
   taskbar or the tray icon.
 - You can quit Questlog during play and start it again from the menu; the
   game keeps running. After such a restart the **Tracker Map** overlay stays
-  empty, and the meter shows no fights, until you change zone. That is when
-  Questlog learns who and where your character is.
+  empty, and the meter shows no fights, until you change zone or log in
+  again. Questlog learns who and where your character is only from what the
+  game sends at those moments, and it says so itself: "Detecting
+  character…" with "Change zone or log in so the meter knows who you are."
+  This is how Questlog works on Windows too.
 - Questlog's alerts work in the overlay. Its desktop pop-up notifications do
   not work under Proton.
 - **Black Market Cards**, and moving overlays with Alt+E, need a step of

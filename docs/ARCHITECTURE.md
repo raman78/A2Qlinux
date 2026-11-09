@@ -970,7 +970,7 @@ do.
 | "Aion 2's traffic can't be read" before logging in | §7.3, harmless | — |
 | "A2Qlinux is already running in another window" | second launcher refused (I1) | use the running one |
 | "Questlog is already running in the game prefix without the capture bridge" | Questlog started outside A2Qlinux | quit it from its own tray icon |
-| Tracker Map overlay blank, and no fights in the meter, after restarting Questlog mid-game | Questlog learns the character and its zone only at login or zone change | change zone |
+| Tracker Map overlay blank, and no fights in the meter ("Detecting character…"), after restarting Questlog mid-game | Questlog learns the character (`self`) and its zone only from the login (`Login_RS`) and map-enter (`PrepareEnterMap_NT`) packets; it flags the gap itself once positions or damage arrive for 5 s without a known character. The same on Windows | change zone, or log back in. Replaying earlier traffic from the launcher was rejected: without decoding it, only the whole stream since the connection began could be replayed, and Questlog would count old fights again and upload them again |
 | Black Market Cards (and the overlay controls icon) never show over the full-screen game; Alt+E only flashes | KDE keeps the game above Questlog's full-screen HUD (§6.8) | `a2qlinux-setup --kde-overlays` on Plasma 6; elsewhere none |
 | `a2qlinux-setup`: "Note: KDE overlays: …" | a tool or KWin refused (§6.8); nothing else is affected | the reason in the note |
 | game froze after **Quit Questlog** during play (A2Qlinux 0.3.0 and earlier) | Questlog's launch ended and protontricks took the game's session down with its container (§5.1, "The launch holds the session") | update A2Qlinux |
