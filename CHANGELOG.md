@@ -3,19 +3,31 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
-## [Unreleased]
+## [0.4.0] — 2026-11-09
 
 ### Added
-- On KDE Plasma 6, `a2qlinux-setup` offers to let Questlog's **Black
-  Market Cards** show above the full-screen game (a KDE window rule and a
-  small KDE script, explained before it asks).
-  `a2qlinux-setup --no-kde-overlays` removes them. Other desktops are not
-  changed.
+- After updating on KDE Plasma 6, run `a2qlinux-setup` once more to make
+  two Questlog features work that stayed hidden behind the full-screen game
+  on Linux:
+  - the **Black Market Cards** overlay, which writes Questlog's notes onto
+    the cards of the in-game Black Market shop (your pet's level and souls,
+    what an item unlocks or completes, the deals worth taking, how rare an
+    item is);
+  - moving and resizing overlays with **Alt+E**, which until now showed only
+    a brief flash over the game.
+  The setup explains the change and asks (Enter means yes); these then show
+  while the game is in front and hide when another program is.
+  `a2qlinux-setup --no-kde-overlays` takes it back out.
+  **Tested and working on KDE Plasma 6.8.2 (Wayland).** Other Plasma 6
+  versions may behave differently; on other desktops nothing is changed and
+  these two features are not guaranteed to work. If they do not work,
+  nothing else is affected.
 
 ### Fixed
-- **Quit Questlog** in the tray during play no longer freezes the game.
-  Questlog can be quit and started again from the menu while you play; the
-  meter picks the game up again after the next zone change.
+- **Quit Questlog** in the tray while AION 2 was running froze the game,
+  which then had to be ended. The game now keeps running, and Questlog can
+  be started again from the menu during play; its meter and Tracker Map
+  show the game again after the next zone change.
 
 ## [0.3.0] — 2026-11-08
 
