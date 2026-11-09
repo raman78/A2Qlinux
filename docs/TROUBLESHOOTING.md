@@ -18,6 +18,9 @@ A2Qlinux, what causes them and what to do, followed by common questions.
 | two Questlog icons in the tray | hiding Questlog's own icon failed | the status window says why; both icons work, but use A2Qlinux's |
 | clicks in the game open Questlog's window | the click fix did not start | look for lines starting `[a2qlinux]` in `~/Games/Questlog/proton-stream/questlog.log` |
 | after starting Questlog again during play, the meter shows no fights and the Tracker Map is empty | Questlog learns your character only when you log in or change zone | change zone (teleport or walk into another area) |
+| Black Market Cards never shows in the shop | the overlay is off in Questlog, or (KDE) the KDE overlays are not set up, or another desktop | turn it on in Questlog's overlay list; on KDE Plasma 6 run `a2qlinux-setup --kde-overlays`; on other desktops it cannot show yet |
+| Black Market Cards shows, but the notes miss the cards | Questlog's UI scale size differs from the game's interface size | set the overlay's UI scale size to match (see "Using Questlog while you play" in [USING.md](USING.md)) |
+| Black Market Cards stays over other programs after Alt+Tab | (KDE) the rule works but the KDE script does not | close the shop in the game; run `a2qlinux-setup --kde-overlays` again |
 | Questlog closes right after starting | its graphics process failed | send `~/Games/Questlog/proton-stream/questlog.log` with your report |
 | notification "Questlog X does not fit this A2Qlinux yet" | the new Questlog changed something A2Qlinux relies on | keep using the current version; the reason is in the notification |
 | "Questlog update check failed" in the status window | no internet connection at that moment | nothing; it tries again later |

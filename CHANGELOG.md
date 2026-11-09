@@ -5,6 +5,13 @@ What changed for players, release by release. Technical details are in
 
 ## [Unreleased]
 
+### Added
+- On KDE Plasma 6, `a2qlinux-setup` offers to let Questlog's **Black
+  Market Cards** show above the full-screen game (a KDE window rule and a
+  small KDE script, explained before it asks).
+  `a2qlinux-setup --no-kde-overlays` removes them. Other desktops are not
+  changed.
+
 ### Fixed
 - **Quit Questlog** in the tray during play no longer freezes the game.
   Questlog can be quit and started again from the menu while you play; the

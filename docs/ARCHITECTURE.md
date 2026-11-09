@@ -864,6 +864,82 @@ down during a restart, the game may join a session that is closing. Not
 observed; the window is a few seconds, and only after a game that started
 the session itself.
 
+### 6.8 Questlog's full-screen overlay layer on KDE Plasma
+
+**Symptom.** On KDE Plasma, with the game full screen, the **Black Market
+Cards** overlay (Questlog's notes drawn on the shop's own cards) and the
+overlay controls icon never show, while the meter, alerts and the Black
+Market panel do.
+
+**Cause.** Questlog keeps one transparent window over the game, the HUD
+(class `steam_proton`, title `questlog.gg - Wiki, Builds, Guides, Database and
+Tools for Aion 2`, Questlog's default page title, ex-style `WS_EX_TOPMOST |
+WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TRANSPARENT`). Each overlay widget
+gets a small window of its own, owned by the HUD, but the cards and the
+controls icon are drawn in the HUD itself, which covers the whole screen.
+In Wine's own window order the HUD is above the game. winex11 hands a popup
+window that covers the whole screen to the window manager (a *managed* X
+window); small owned popups stay *unmanaged* (override-redirect) and so
+above everything. KWin puts the active full-screen game in its active
+layer, above any managed window that is not active, so the game hides the
+HUD. Measured with a test program in a throwaway prefix under `xvfb-run`
+with Proton's Wine (9-10 November 2026): a full-screen popup became
+managed, one a pixel shorter stayed unmanaged, and a window that had once
+been managed stayed managed after shrinking, and after hiding, shrinking
+and showing again. Nothing outside Questlog's browser process, which
+creates the HUD, can change that.
+
+**Remedy, KDE Plasma 6 only** (`a2qlinux/kde_overlays.py`), set up by
+`a2qlinux-setup` with the user's consent:
+
+- a KWin window rule `a2qlinux-questlog-hud` in `~/.config/kwinrulesrc`,
+  appended to the rule list `Order` (KWin 6.8 reads that list; a rule in
+  `rules` alone was not applied, checked through the window's `layer` as a
+  KWin script reads it). It matches class `steam_proton` exactly and the
+  title by the substring `questlog.gg - Wiki`, forces the layer `overlay`
+  and never gives the window focus. Questlog's main window is titled
+  `Questlog` and is not matched.
+- a KWin script `a2qlinux-questlog-hud` in `~/.local/share/kwin/scripts`,
+  enabled in `kwinrc` (`[Plugins]`). The rule alone left the cards above
+  other programs after Alt+Tab with the shop open, since Questlog relies on
+  the HUD being ordered just above the game. The script sets the HUD's
+  opacity (compositor-side; Wine and Questlog do not see it) to 1 while the
+  active window is AION 2 (`steam_app_3393110`) or the HUD, else to 0. A
+  script cannot set the layer itself: KWin's `Window.layer` is read-only.
+
+`a2qlinux-setup` on Plasma 6 (`XDG_CURRENT_DESKTOP` contains `KDE`,
+`KDE_SESSION_VERSION` at least 6) explains this and asks, with yes as the
+default; without a terminal it only names `--kde-overlays`. Once set up, a
+later run refreshes both pieces without asking. `--kde-overlays` sets up
+without asking, `--no-kde-overlays` removes: the rule's keys and its name in
+`Order`, the `kwinrc` entry, the script (unloaded by name over D-Bus: a
+reload alone left it running once its files were gone) and its folder, and
+a one-off script sets the HUD's opacity back to 1. KWin is reloaded over
+D-Bus (`org.kde.KWin.reconfigure`) each time. Checked on this desktop
+(10 November 2026): install, cards shown, cards hidden over other programs,
+removal left `kwinrulesrc` byte for byte as before and the HUD back below
+the game.
+
+On every other desktop, Plasma 5 included, nothing is written and the
+overlays behave as before. Whatever fails here (a tool missing, KWin
+refusing, a Questlog update changing the HUD's title so the rule no longer
+matches) leaves the overlays as they were and nothing else changes; the
+setup reports it as a note, not as a problem. The one case worse than
+before: the rule working without the script, which leaves the cards above
+other programs after Alt+Tab with the shop open, until the shop is closed.
+
+**Cost.** GPU load and power with the game standing still, 15 s each, the
+HUD below the game, above it, below again: 42 % and 133 W in all three
+(RTX 3060 Ti, the game's frame rate capped). Questlog's widget windows
+already sit above the game, so KWin composites over it in any case.
+
+**Rejected.** Wine's `Managed` setting for Questlog alone
+(`AppDefaults\Questlog.exe\X11 Driver`) would also unmanage Questlog's main
+window, which then could not take keyboard focus. A HUD a pixel smaller
+than the screen would stay unmanaged and fix this on every desktop; that is
+Questlog's code, so it is a request to Questlog, not something A2Qlinux can
+do.
+
 ## 7. Failure modes
 
 | Symptom | Cause | Where to look |
@@ -885,6 +961,8 @@ the session itself.
 | "A2Qlinux is already running in another window" | second launcher refused (I1) | use the running one |
 | "Questlog is already running in the game prefix without the capture bridge" | Questlog started outside A2Qlinux | quit it from its own tray icon |
 | Tracker Map overlay blank, and no fights in the meter, after restarting Questlog mid-game | Questlog learns the character and its zone only at login or zone change | change zone |
+| Black Market Cards (and the overlay controls icon) never show over the full-screen game | KDE keeps the game above Questlog's full-screen HUD (§6.8) | `a2qlinux-setup --kde-overlays` on Plasma 6; elsewhere none |
+| `a2qlinux-setup`: "Note: KDE overlays: …" | a tool or KWin refused (§6.8); nothing else is affected | the reason in the note |
 | game froze after **Quit Questlog** during play (versions before this fix) | Questlog's launch ended and protontricks took the game's session down with its container (§5.1, "The launch holds the session") | update A2Qlinux |
 | "Questlog update check failed (…)" | no network, CDN change | none; retried at the next check |
 | "Questlog X does not fit this A2Qlinux yet …" (notification) | a check of §10 failed | A2Qlinux needs a change for that version; the installed one stays |
@@ -981,6 +1059,7 @@ one** — §6.4.
 | `questlog_ctl.exe` by hand | `protontricks-launch --appid 3393110 <package>/a2qlinux/bin/questlog_ctl.exe hide-tray` (or `show-tray`, `close-window`, `end-session`); `<package>` is printed by `python -c 'import a2qlinux; print(a2qlinux.__path__[0])'` in A2Qlinux's environment |
 | `questlog_ctl.exe` without the game prefix | Questlog in a throwaway prefix: `wine Questlog.exe --no-sandbox --disable-gpu` under `xvfb-run`, then the commands through `wine` |
 | who owns the game connection | `tools/tcp_owner_probe.exe` in the prefix |
+| KDE overlays (§6.8) | `tests/test_kde_overlays.py` runs against stand-ins for KDE's config tools and `dbus-send`, and, where `kwriteconfig6` is installed, checks with the real tools that removal gives the rule file back byte for byte; on the desktop, a one-off KWin script that prints the HUD's `layer` and `opacity` shows what KWin applied |
 | does the session survive a quit (§5.1) | without the game: a Windows program that only waits, started as `systemd-run --user --unit=<name> protontricks-launch --appid 3393110 <program>.exe`, plays the game; quit Questlog and check that the program, the `wineserver` and `explorer.exe /desktop` run on, and which unit holds them (`/proc/<pid>/cgroup`) |
 | Wine's view of windows and focus | run `WINEDEBUG=+event,+x11drv,+win a2qlinux-run`; the log grows about 40 KB/s, so only briefly |
 
@@ -1139,7 +1218,10 @@ where a number is expected is refused rather than read as 1/0.
 
 ## 14. Distributions and desktops
 
-Developed and played on the one setup named at the top of this document. What depends on the
+Developed and played on the one setup named at the top of this document.
+Questlog's full-screen overlays (Black Market Cards) show above the
+full-screen game only on KDE Plasma 6, with the KDE overlays of §6.8; on
+other desktops they stay behind it, as before. What depends on the
 distribution or desktop, how A2Qlinux copes with it, and how that was
 established. Package names per distribution are in `docs/INSTALL.md`; they
 were read from each distribution's package index (Debian, Ubuntu through

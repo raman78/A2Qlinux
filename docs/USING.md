@@ -189,3 +189,15 @@ Questlog starts.
   Questlog learns who and where your character is.
 - Questlog's alerts work in the overlay. Its desktop pop-up notifications do
   not work under Proton.
+- **Black Market Cards** draws Questlog's notes on the shop's own cards. It
+  needs a different kind of window than the other overlays, one that covers
+  the whole screen, and the desktop keeps the full-screen game above it. On
+  KDE Plasma 6, `a2qlinux-setup` offers to fix this (the "KDE overlays"):
+  the cards then show while the game is the active window and disappear
+  when you switch to another program. On other desktops the cards stay
+  hidden. Turn the overlay on in Questlog's overlay list; new overlays are
+  not added to a list you saved earlier. Set its **UI scale size** to the
+  game's interface size (1 = 75 %, 2 = 80 %, 3 = 85 %, 4 = 90 %, 5 = 100 %),
+  or the notes miss the cards. To set the KDE overlays up later, or to
+  remove them: `a2qlinux-setup --kde-overlays`, `a2qlinux-setup
+  --no-kde-overlays`.

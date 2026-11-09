@@ -183,6 +183,7 @@ What the setup does, in order:
 | installs Questlog in its folder (`~/Games/Questlog`, or the one given with `--questlog-dir`) if it is not there yet (about 130 MB) | `Downloading Questlog …`, then `Installed Questlog …` |
 | takes Questlog's icon from it (A2Qlinux does not ship Questlog's logo) | `Icon: …` |
 | creates the "Questlog (AION 2)" entry in your applications menu | `Menu entry: …` |
+| on KDE Plasma 6 only: explains the KDE overlays, which let Questlog's Black Market Cards show above the game, and asks whether to set them up (Enter means yes) | the explanation, `Set this up now? [Y/n]`, then `KDE: window rule … are in place.` |
 | prints the line for Steam's launch options, used in the optional last section | `Steam > AION 2 > …` |
 
 It runs nothing with `sudo` and changes nothing in the game; the commands
@@ -330,7 +331,8 @@ Next: [USING.md](USING.md).
 
 ## Removing A2Qlinux
 
-1. Quit Questlog from the tray icon.
+1. Quit Questlog from the tray icon. On KDE, if you set up the KDE overlays,
+   remove them first with `a2qlinux-setup --no-kde-overlays`.
 2. Clear AION 2's launch options in Steam.
 3. Uninstall A2Qlinux:
    ```

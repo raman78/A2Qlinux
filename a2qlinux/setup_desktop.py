@@ -1,6 +1,6 @@
 """a2qlinux-setup: the menu entry for Questlog (AION 2), and a check of what A2Qlinux needs.
 
-    a2qlinux-setup [--questlog-dir DIR] [--desktop-shortcut]
+    a2qlinux-setup [--questlog-dir DIR] [--desktop-shortcut] [--kde-overlays | --no-kde-overlays]
 
 What it does, in order:
   1. Checks the programs A2Qlinux uses. For the missing ones it prints the
@@ -18,7 +18,12 @@ What it does, in order:
      its app.asar) - the icon is Questlog's and is not shipped here.
   7. Writes the menu entry "Questlog (AION 2)" (and, with --desktop-shortcut,
      the same on the desktop), running the `a2qlinux` command.
-  8. Prints the Steam launch option to set by hand.
+  8. On KDE Plasma 6, offers the KDE overlays (a2qlinux.kde_overlays): a
+     window rule and a script that show Questlog's full-screen overlay layer
+     (Black Market Cards) above the game. It explains them and asks, with
+     yes as the default; --kde-overlays sets them up without asking,
+     --no-kde-overlays removes them. Once set up, a later run refreshes them.
+  9. Prints the Steam launch option to set by hand.
 
 Run it again after fixing what it lists, and after moving Questlog's folder.
 """
@@ -32,6 +37,7 @@ import subprocess
 import sys
 
 from . import config
+from . import kde_overlays
 from .desktop import TERMINALS, terminal_command
 from .update import install_fresh, read_asar_file
 
@@ -320,6 +326,12 @@ def main():
                              "written into the settings file. Without Questlog.exe in it, the newest Questlog "
                              "is installed there")
     parser.add_argument("--desktop-shortcut", action="store_true", help="also put the entry on the desktop")
+    kde = parser.add_mutually_exclusive_group()
+    kde.add_argument("--kde-overlays", dest="kde_overlays", action="store_const", const=True, default=None,
+                     help="KDE Plasma 6: show Questlog's full-screen overlays (Black Market Cards) above the "
+                          "game, without asking")
+    kde.add_argument("--no-kde-overlays", dest="kde_overlays", action="store_const", const=False,
+                     help="remove what --kde-overlays set up")
     args = parser.parse_args()
     created = not config.CONFIG_PATH.exists()
     if args.questlog_dir:
@@ -392,6 +404,11 @@ def main():
         shortcut.write_text(entry)
         shortcut.chmod(0o755)
         print(f"Desktop shortcut: {shortcut}")
+
+    # A note, not a problem: everything else works without the KDE overlays.
+    kde_problem = kde_overlays.setup_step(args.kde_overlays, input, sys.stdin.isatty())
+    if kde_problem:
+        print(f"Note: {kde_problem}.", file=sys.stderr)
 
     print("\nSteam > AION 2 > Properties > General > Launch Options (optional, starts Questlog with the game):")
     print(f"    {command('a2qlinux-steam')} %command%")
