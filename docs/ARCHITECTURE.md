@@ -1229,9 +1229,13 @@ where a number is expected is refused rather than read as 1/0.
 ## 14. Distributions and desktops
 
 Developed and played on the one setup named at the top of this document.
-Questlog's full-screen overlays (Black Market Cards) show above the
-full-screen game only on KDE Plasma 6, with the KDE overlays of §6.8; on
-other desktops they stay behind it, as before. What depends on the
+Questlog's full-screen overlays (Black Market Cards, Alt+E editing) show
+above the full-screen game only on KDE Plasma 6, with the KDE overlays of
+§6.8, which were tested on Plasma 6.8.2 (Wayland) only: the rule list
+`Order` and the script API were checked on that version, and an earlier
+Plasma 6 that reads another list would leave the rule unapplied, that is,
+the overlays as before. On other desktops they stay behind the game and
+nothing is guaranteed. What depends on the
 distribution or desktop, how A2Qlinux copes with it, and how that was
 established. Package names per distribution are in `docs/INSTALL.md`; they
 were read from each distribution's package index (Debian, Ubuntu through

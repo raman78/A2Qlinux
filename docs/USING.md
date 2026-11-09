@@ -221,6 +221,13 @@ program, so the notes never hang over your other windows.
 | KDE Plasma 6, KDE overlays not set up | hidden behind the game | a brief flash, nothing to move |
 | any other desktop | hidden behind the game; nothing is changed there | as before |
 
+Warning: the KDE overlays were tested and work on KDE Plasma 6.8.2 in a
+Wayland session. Other Plasma 6 versions may behave differently, and on
+other desktops these two features are not expected to work. If the KDE
+overlays do not work on your Plasma, nothing else is affected: the cards
+and Alt+E simply stay hidden, as before, and `a2qlinux-setup
+--no-kde-overlays` removes what was added.
+
 To use the cards:
 
 1. In Questlog's overlay list, turn on **Black Market Cards**. If you had
