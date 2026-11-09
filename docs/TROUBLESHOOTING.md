@@ -18,8 +18,9 @@ A2Qlinux, what causes them and what to do, followed by common questions.
 | two Questlog icons in the tray | hiding Questlog's own icon failed | the status window says why; both icons work, but use A2Qlinux's |
 | clicks in the game open Questlog's window | the click fix did not start | look for lines starting `[a2qlinux]` in `~/Games/Questlog/proton-stream/questlog.log` |
 | after starting Questlog again during play, the meter shows no fights and the Tracker Map is empty | Questlog learns your character only when you log in or change zone | change zone (teleport or walk into another area) |
-| Black Market Cards never shows in the shop | the overlay is off in Questlog; on KDE, the KDE overlays are not set up; on other desktops it cannot show yet | see "Black Market Cards" in [USING.md](USING.md) |
-| Black Market Cards shows, but the notes sit beside the cards | the overlay's UI scale size differs from the game's interface size | set them to the same size ("Black Market Cards" in [USING.md](USING.md)) |
+| Black Market Cards never shows in the shop | the overlay is off in Questlog; on KDE, the KDE overlays are not set up; on other desktops it cannot show yet | see "Black Market Cards and moving overlays (Alt+E)" in [USING.md](USING.md) |
+| Black Market Cards shows, but the notes sit beside the cards | the overlay's UI scale size differs from the game's interface size | set them to the same size ("Black Market Cards and moving overlays (Alt+E)" in [USING.md](USING.md)) |
+| Alt+E shows only a brief flash, and overlays cannot be moved over the game | (KDE) the KDE overlays are not set up | see "Black Market Cards and moving overlays (Alt+E)" in [USING.md](USING.md) |
 | (KDE) Black Market Cards stays over other programs after Alt+Tab | only half of the KDE overlays is working: the part that hides the cards when the game is not in front did not start | go back to the game and leave the shop; run `a2qlinux-setup --kde-overlays` again |
 | `a2qlinux-setup` ends with "Note: KDE overlays: …" | KDE refused the change, or a KDE tool is missing; the note says which | everything else is set up; the cards stay hidden until the cause in the note is fixed |
 | Questlog closes right after starting | its graphics process failed | send `~/Games/Questlog/proton-stream/questlog.log` with your report |

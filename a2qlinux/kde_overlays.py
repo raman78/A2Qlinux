@@ -2,7 +2,8 @@
 
 Questlog draws some overlays - Black Market Cards on the game's own shop
 cards, the overlay controls icon - in one transparent window that covers the
-whole screen. Wine hands a window of that size to the window manager, and
+whole screen, and in its overlay editing mode (Alt+E) every overlay is drawn
+there. Wine hands a window of that size to the window manager, and
 KWin keeps the active full-screen game above it, so those overlays stay
 hidden behind the game. Questlog's smaller overlay windows (meter, alerts)
 are not affected: Wine keeps them out of the window manager's hands.
@@ -91,9 +92,9 @@ METADATA = {
 
 EXPLANATION = """\
 KDE Plasma: Questlog draws some of its overlays - Black Market Cards on the
-shop's cards, the overlay controls icon - in one window that covers the whole
-screen, and KDE keeps the full-screen game above that window, so you do not
-see them. A2Qlinux can add a KDE window rule and a small KDE script for that
+shop's cards, the overlay controls icon, and every overlay while you move
+them with Alt+E - in one window that covers the whole screen, and KDE keeps
+the full-screen game above that window, so you do not see them. A2Qlinux can add a KDE window rule and a small KDE script for that
 one window: it is then shown above AION 2 while the game is active, and
 hidden when you switch to another program. Nothing else in KDE changes;
 `a2qlinux-setup --no-kde-overlays` removes both."""

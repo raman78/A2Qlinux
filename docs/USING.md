@@ -189,9 +189,10 @@ Questlog starts.
   Questlog learns who and where your character is.
 - Questlog's alerts work in the overlay. Its desktop pop-up notifications do
   not work under Proton.
-- **Black Market Cards** needs a step of its own; see the next section.
+- **Black Market Cards**, and moving overlays with Alt+E, need a step of
+  their own; see the next section.
 
-### Black Market Cards
+### Black Market Cards and moving overlays (Alt+E)
 
 Black Market Cards is the Questlog overlay that writes its notes straight
 onto the cards of the in-game Black Market shop: your pet's level and souls,
@@ -203,19 +204,22 @@ hide until you open a tab again.
 **Why it needs extra help on Linux.** Most of Questlog's overlays (the
 meter, alerts, the Black Market list) are small windows, and they always
 stay above the game. The cards are drawn in one transparent window that
-covers the whole screen, together with the small overlay-controls icon.
+covers the whole screen, together with the small overlay-controls icon. So
+is Questlog's overlay editing mode: while you move and resize overlays with
+Alt+E, all of them are drawn in that one window.
 Your desktop treats a window of that size like an ordinary program window
 and keeps the full-screen game above it, so without help you never see the
-cards. On KDE Plasma 6, A2Qlinux can add a KDE window rule for that one
+cards, and Alt+E shows only a brief flash instead of overlays you can move.
+On KDE Plasma 6, A2Qlinux can add a KDE window rule for that one
 window, the "KDE overlays". The window then shows above AION 2 while the
 game is the window in front, and turns invisible when you switch to another
 program, so the notes never hang over your other windows.
 
-| Your desktop | Black Market Cards |
-|---|---|
-| KDE Plasma 6, KDE overlays set up | shown over the shop while the game is in front |
-| KDE Plasma 6, KDE overlays not set up | hidden behind the game |
-| any other desktop | hidden behind the game; nothing is changed there |
+| Your desktop | Black Market Cards | Alt+E (moving overlays) |
+|---|---|---|
+| KDE Plasma 6, KDE overlays set up | shown over the shop while the game is in front | works over the game |
+| KDE Plasma 6, KDE overlays not set up | hidden behind the game | a brief flash, nothing to move |
+| any other desktop | hidden behind the game; nothing is changed there | as before |
 
 To use the cards:
 

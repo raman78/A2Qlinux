@@ -869,14 +869,17 @@ the session itself.
 **Symptom.** On KDE Plasma, with the game full screen, the **Black Market
 Cards** overlay (Questlog's notes drawn on the shop's own cards) and the
 overlay controls icon never show, while the meter, alerts and the Black
-Market panel do.
+Market panel do; and Questlog's overlay editing mode (Alt+E) shows only a
+brief flash, with nothing to move.
 
 **Cause.** Questlog keeps one transparent window over the game, the HUD
 (class `steam_proton`, title `questlog.gg - Wiki, Builds, Guides, Database and
 Tools for Aion 2`, Questlog's default page title, ex-style `WS_EX_TOPMOST |
 WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TRANSPARENT`). Each overlay widget
 gets a small window of its own, owned by the HUD, but the cards and the
-controls icon are drawn in the HUD itself, which covers the whole screen.
+controls icon are drawn in the HUD itself, which covers the whole screen,
+and so is every widget while the editing mode is on (Questlog's renderer
+opens a widget's own window only outside editing).
 In Wine's own window order the HUD is above the game. winex11 hands a popup
 window that covers the whole screen to the window manager (a *managed* X
 window); small owned popups stay *unmanaged* (override-redirect) and so
@@ -922,7 +925,8 @@ without asking, `--no-kde-overlays` removes: the rule's keys and its name in
 reload alone left it running once its files were gone) and its folder, and
 a one-off script sets the HUD's opacity back to 1. KWin is reloaded over
 D-Bus (`org.kde.KWin.reconfigure`) each time. Checked on this desktop
-(10 November 2026): install, cards shown, cards hidden over other programs,
+(10 November 2026): install, cards shown, cards hidden over other programs, Alt+E editing
+usable over the game (overlays moved),
 removal left `kwinrulesrc` byte for byte as before and the HUD back below
 the game.
 
@@ -967,7 +971,7 @@ do.
 | "A2Qlinux is already running in another window" | second launcher refused (I1) | use the running one |
 | "Questlog is already running in the game prefix without the capture bridge" | Questlog started outside A2Qlinux | quit it from its own tray icon |
 | Tracker Map overlay blank, and no fights in the meter, after restarting Questlog mid-game | Questlog learns the character and its zone only at login or zone change | change zone |
-| Black Market Cards (and the overlay controls icon) never show over the full-screen game | KDE keeps the game above Questlog's full-screen HUD (§6.8) | `a2qlinux-setup --kde-overlays` on Plasma 6; elsewhere none |
+| Black Market Cards (and the overlay controls icon) never show over the full-screen game; Alt+E only flashes | KDE keeps the game above Questlog's full-screen HUD (§6.8) | `a2qlinux-setup --kde-overlays` on Plasma 6; elsewhere none |
 | `a2qlinux-setup`: "Note: KDE overlays: …" | a tool or KWin refused (§6.8); nothing else is affected | the reason in the note |
 | game froze after **Quit Questlog** during play (A2Qlinux 0.3.0 and earlier) | Questlog's launch ended and protontricks took the game's session down with its container (§5.1, "The launch holds the session") | update A2Qlinux |
 | "Questlog update check failed (…)" | no network, CDN change | none; retried at the next check |
