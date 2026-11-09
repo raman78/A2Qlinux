@@ -97,9 +97,9 @@ them with Alt+E - in one window that covers the whole screen, and KDE keeps
 the full-screen game above that window, so you do not see them. A2Qlinux can
 add a KDE window rule and a small KDE script for that one window: it is then
 shown above AION 2 while the game is active, and hidden when you switch to
-another program. Nothing else in KDE changes; `a2qlinux-setup --no-kde-
-overlays` removes both. Tested on KDE Plasma 6.8.2; on other versions it may
-not work, and then the overlays stay as before."""
+another program. Nothing else in KDE changes; `a2qlinux-setup
+--no-kde-overlays` removes both. Tested on KDE Plasma 6.8.2; on other
+versions it may not work, and then the overlays stay as before."""
 
 
 def script_dir():
