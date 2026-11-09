@@ -189,15 +189,51 @@ Questlog starts.
   Questlog learns who and where your character is.
 - Questlog's alerts work in the overlay. Its desktop pop-up notifications do
   not work under Proton.
-- **Black Market Cards** draws Questlog's notes on the shop's own cards. It
-  needs a different kind of window than the other overlays, one that covers
-  the whole screen, and the desktop keeps the full-screen game above it. On
-  KDE Plasma 6, `a2qlinux-setup` offers to fix this (the "KDE overlays"):
-  the cards then show while the game is the active window and disappear
-  when you switch to another program. On other desktops the cards stay
-  hidden. Turn the overlay on in Questlog's overlay list; new overlays are
-  not added to a list you saved earlier. Set its **UI scale size** to the
-  game's interface size (1 = 75 %, 2 = 80 %, 3 = 85 %, 4 = 90 %, 5 = 100 %),
-  or the notes miss the cards. To set the KDE overlays up later, or to
-  remove them: `a2qlinux-setup --kde-overlays`, `a2qlinux-setup
-  --no-kde-overlays`.
+- **Black Market Cards** needs a step of its own; see the next section.
+
+### Black Market Cards
+
+Black Market Cards is the Questlog overlay that writes its notes straight
+onto the cards of the in-game Black Market shop: your pet's level and souls,
+what an item unlocks or completes, the deals worth taking and how rare an
+item is. It appears when you open a shop tab, while the game's mouse cursor
+is visible. Once the cursor goes away, back in the game world, the notes
+hide until you open a tab again.
+
+**Why it needs extra help on Linux.** Most of Questlog's overlays (the
+meter, alerts, the Black Market list) are small windows, and they always
+stay above the game. The cards are drawn in one transparent window that
+covers the whole screen, together with the small overlay-controls icon.
+Your desktop treats a window of that size like an ordinary program window
+and keeps the full-screen game above it, so without help you never see the
+cards. On KDE Plasma 6, A2Qlinux can add a KDE window rule for that one
+window, the "KDE overlays". The window then shows above AION 2 while the
+game is the window in front, and turns invisible when you switch to another
+program, so the notes never hang over your other windows.
+
+| Your desktop | Black Market Cards |
+|---|---|
+| KDE Plasma 6, KDE overlays set up | shown over the shop while the game is in front |
+| KDE Plasma 6, KDE overlays not set up | hidden behind the game |
+| any other desktop | hidden behind the game; nothing is changed there |
+
+To use the cards:
+
+1. In Questlog's overlay list, turn on **Black Market Cards**. If you had
+   saved your overlay list before this overlay existed, it is off: Questlog
+   does not add new overlays to a list you saved.
+2. On KDE Plasma 6, run `a2qlinux-setup` and answer the question about the
+   KDE overlays with Enter (yes). If you said no earlier, this sets them up
+   without asking:
+   ```
+   a2qlinux-setup --kde-overlays
+   ```
+3. In the overlay's options, set **UI scale size** to the size of the
+   game's interface: 1 = 75 %, 2 = 80 %, 3 = 85 %, 4 = 90 %, 5 = 100 %.
+   Questlog places the notes where the cards are at that size, so with the
+   wrong value they land beside the cards.
+4. Open a tab in the Black Market. The notes appear on the cards.
+
+To remove the KDE overlays again, run `a2qlinux-setup --no-kde-overlays`.
+It takes out exactly what was added and leaves the rest of your KDE
+settings as they were.

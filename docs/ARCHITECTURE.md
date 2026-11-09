@@ -907,6 +907,12 @@ creates the HUD, can change that.
   active window is AION 2 (`steam_app_3393110`) or the HUD, else to 0. A
   script cannot set the layer itself: KWin's `Window.layer` is read-only.
 
+Both act on the HUD alone, matched by class and title, which keeps I2: the
+game, Questlog's other windows and other programs' windows are neither
+matched by the rule nor changed by the script, which only reads which
+window is active. The rule list is appended to, never rewritten, so other
+programs' rules (A2Tools adds three) stay as they were.
+
 `a2qlinux-setup` on Plasma 6 (`XDG_CURRENT_DESKTOP` contains `KDE`,
 `KDE_SESSION_VERSION` at least 6) explains this and asks, with yes as the
 default; without a terminal it only names `--kde-overlays`. Once set up, a
@@ -963,7 +969,7 @@ do.
 | Tracker Map overlay blank, and no fights in the meter, after restarting Questlog mid-game | Questlog learns the character and its zone only at login or zone change | change zone |
 | Black Market Cards (and the overlay controls icon) never show over the full-screen game | KDE keeps the game above Questlog's full-screen HUD (§6.8) | `a2qlinux-setup --kde-overlays` on Plasma 6; elsewhere none |
 | `a2qlinux-setup`: "Note: KDE overlays: …" | a tool or KWin refused (§6.8); nothing else is affected | the reason in the note |
-| game froze after **Quit Questlog** during play (versions before this fix) | Questlog's launch ended and protontricks took the game's session down with its container (§5.1, "The launch holds the session") | update A2Qlinux |
+| game froze after **Quit Questlog** during play (A2Qlinux 0.3.0 and earlier) | Questlog's launch ended and protontricks took the game's session down with its container (§5.1, "The launch holds the session") | update A2Qlinux |
 | "Questlog update check failed (…)" | no network, CDN change | none; retried at the next check |
 | "Questlog X does not fit this A2Qlinux yet …" (notification) | a check of §10 failed | A2Qlinux needs a change for that version; the installed one stays |
 | "Questlog X ended within 60 s … going back" | the new version did not start under Proton | the previous version runs again; the failed one is in `<folder>-X-failed` |
