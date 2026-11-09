@@ -29,6 +29,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import shlex
 import signal
 import socket
 import stat
@@ -966,7 +967,50 @@ def close_questlog(prefix, protontricks, log_path):
             ender.wait(timeout=5)
 
 
-def launch_questlog(executable, server, protontricks, log_path, hidden=False):
+class QuestlogLaunch:
+    """Questlog started so that its launch outlives it while the Wine session is in use (§5.1).
+
+    protontricks ends the Steam Runtime container of a call once the call's
+    command returns, and everything started in it with it. Questlog's launch
+    usually brings up the prefix's Wine session - wineserver, services,
+    explorer.exe - inside that container, and the game joins it; a call that
+    ended with Questlog took the game's session along and froze the game. So
+    the call runs `wine Questlog.exe …; echo $? > exit_file; wineserver -w`:
+    the shell records Questlog's own exit code, then waits until the session
+    has ended. poll(), wait() and returncode follow Questlog itself - the
+    exit file - or the call, if that ends first (protontricks failed).
+    """
+
+    def __init__(self, process, exit_file):
+        self.process = process
+        self.exit_file = Path(exit_file)
+        self.returncode = None
+
+    def poll(self):
+        if self.returncode is None:
+            text = _read(self.exit_file).strip()
+            if text:
+                self.returncode = int(text) if text.lstrip("-").isdigit() else -1
+            elif self.process.poll() is not None:
+                self.returncode = self.process.returncode
+        return self.returncode
+
+    def wait(self, timeout=None):
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while self.poll() is None:
+            if deadline is not None and time.monotonic() >= deadline:
+                raise subprocess.TimeoutExpired("Questlog", timeout)
+            time.sleep(0.2)
+        return self.returncode
+
+
+def launch_questlog(executable, server, protontricks, log_path, hidden=False, hold_session=True):
+    """Start Questlog in the game prefix; a QuestlogLaunch (hold_session) or the bare launch.
+
+    hold_session=False is for a second start that only hands a request over
+    to the running Questlog and ends at once (show_questlog_window): it must
+    not wait for the session.
+    """
     env = os.environ.copy()
     env["QUESTLOG_PROTON_BRIDGE"] = server.environment_value()
     # Wine ships a builtin wpcap.dll and loads it instead of ours even when
@@ -980,9 +1024,27 @@ def launch_questlog(executable, server, protontricks, log_path, hidden=False):
     # the Windows security boundaries that sandbox relies on in any case.
     # --hidden is Questlog's own switch: start with its window hidden, tray only.
     extra = ["--hidden"] if hidden else []
-    return subprocess.Popen([protontricks, "--appid", str(APPID), str(executable), "--no-sandbox", *extra],
-                            cwd=str(executable.parent), env=env, start_new_session=True,
-                            stdin=subprocess.DEVNULL, stdout=log_path.open("ab"), stderr=subprocess.STDOUT)
+    output = dict(cwd=str(executable.parent), env=env, start_new_session=True,
+                  stdin=subprocess.DEVNULL, stdout=log_path.open("ab"), stderr=subprocess.STDOUT)
+    if not hold_session:
+        return subprocess.Popen([protontricks, "--appid", str(APPID), str(executable), "--no-sandbox", *extra],
+                                **output)
+    exit_file = log_path.with_name("questlog.exit")
+    exit_file.unlink(missing_ok=True)
+    command = " ".join(["wine", shlex.quote(str(executable)), "--no-sandbox", *extra]) \
+        + f"; echo $? > {shlex.quote(str(exit_file))}; wineserver -w"
+    beside = Path(protontricks).with_name("protontricks")
+    tool = str(beside) if beside.is_file() else (shutil.which("protontricks") or "protontricks")
+    # No background wineserver: its keepalive program stays in the session until
+    # the call ends, and `wineserver -w` would wait for it for ever.
+    call = [tool, "--no-background-wineserver", "-c", command, str(APPID)]
+    # A scope of its own: whatever ends the launcher - a quit, or the
+    # systemd-run service the Steam launch option starts it in - must not take
+    # the session along. The call stays this process's child either way.
+    if shutil.which("systemd-run"):
+        call = ["systemd-run", "--user", "--scope", "--quiet", "--collect",
+                f"--unit=questlog-{os.getpid()}-{time.monotonic_ns()}", *call]
+    return QuestlogLaunch(subprocess.Popen(call, **output), exit_file)
 
 
 def main():
@@ -1069,7 +1131,7 @@ def main():
                 return started
 
             def start_again():
-                return launch_questlog(executable, server, protontricks, log_path)
+                return launch_questlog(executable, server, protontricks, log_path, hold_session=False)
 
             questlog = start_questlog()
             if auto_update:

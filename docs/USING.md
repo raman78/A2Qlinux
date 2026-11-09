@@ -183,8 +183,9 @@ Questlog starts.
 - With Questlog's full window open behind the game, clicks in the game stay
   in the game. To work in Questlog's window, switch to it with Alt+Tab, the
   taskbar or the tray icon.
-- If you restart Questlog during a play session, the **Tracker Map** overlay
-  stays empty until you change zone. That is when Questlog learns where your
-  character is.
+- You can quit Questlog during play and start it again from the menu; the
+  game keeps running. After such a restart the **Tracker Map** overlay stays
+  empty, and the meter shows no fights, until you change zone. That is when
+  Questlog learns who and where your character is.
 - Questlog's alerts work in the overlay. Its desktop pop-up notifications do
   not work under Proton.

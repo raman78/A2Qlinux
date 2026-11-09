@@ -17,6 +17,7 @@ A2Qlinux, what causes them and what to do, followed by common questions.
 | Steam keeps saying "launching" while Questlog is open | Play was pressed without the launch option | set the Steam launch option; meanwhile A2Qlinux closes Questlog, lets the game start and reopens it |
 | two Questlog icons in the tray | hiding Questlog's own icon failed | the status window says why; both icons work, but use A2Qlinux's |
 | clicks in the game open Questlog's window | the click fix did not start | look for lines starting `[a2qlinux]` in `~/Games/Questlog/proton-stream/questlog.log` |
+| after starting Questlog again during play, the meter shows no fights and the Tracker Map is empty | Questlog learns your character only when you log in or change zone | change zone (teleport or walk into another area) |
 | Questlog closes right after starting | its graphics process failed | send `~/Games/Questlog/proton-stream/questlog.log` with your report |
 | notification "Questlog X does not fit this A2Qlinux yet" | the new Questlog changed something A2Qlinux relies on | keep using the current version; the reason is in the notification |
 | "Questlog update check failed" in the status window | no internet connection at that moment | nothing; it tries again later |

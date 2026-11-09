@@ -3,6 +3,13 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
+## [Unreleased]
+
+### Fixed
+- **Quit Questlog** in the tray during play no longer freezes the game.
+  Questlog can be quit and started again from the menu while you play; the
+  meter picks the game up again after the next zone change.
+
 ## [0.3.0] — 2026-11-08
 
 ### Added

@@ -227,6 +227,95 @@ class AfterGameTest(unittest.TestCase):
         self.assertEqual(q.AfterGame(exited_at=100.0).next("free", 100.0), "free")
 
 
+class QuestlogLaunchTest(unittest.TestCase):
+    """Questlog's launch waits for the Wine session to end; the launcher still sees Questlog itself end."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        self.saved = q.shutil.which, q.os.environ.get("PATH")
+        # Stand-ins for protontricks, wine and wineserver: protontricks runs the
+        # command through the shell as the real one does; wine is "Questlog",
+        # exiting with code 7; `wineserver -w` lasts until the session-end file appears.
+        bin_dir = self.dir / "bin"
+        bin_dir.mkdir()
+        self.session_end = self.dir / "session-ended"
+        scripts = {
+            "protontricks": '#!/bin/bash\n[ "$1" = --no-background-wineserver ] || exit 90\nexec bash -c "$3"\n',
+            "protontricks-launch": "#!/bin/bash\nexit 0\n",
+            "wine": "#!/bin/bash\nexit 7\n",
+            # Also ends when the test's folder is gone, so a failed test leaves nothing running.
+            "wineserver": f'#!/bin/bash\nwhile [ ! -e {self.session_end} ] && [ -d {bin_dir} ]; do sleep 0.05; done\n',
+        }
+        for name, text in scripts.items():
+            (bin_dir / name).write_text(text)
+            (bin_dir / name).chmod(0o755)
+        q.os.environ["PATH"] = f"{bin_dir}:{self.saved[1]}"
+        q.shutil.which = lambda name: None if name == "systemd-run" else self.saved[0](name)
+        self.exe = self.dir / "Questlog.exe"
+        self.exe.touch()
+
+        class Server:
+            def environment_value(self):
+                return "127.0.0.1:1:token"
+        self.server = Server()
+
+    def tearDown(self):
+        q.shutil.which = self.saved[0]
+        q.os.environ["PATH"] = self.saved[1]
+        self.session_end.touch()
+        self.tmp.cleanup()
+
+    def test_questlogs_end_is_seen_while_its_launch_still_holds_the_session(self):
+        launch = q.launch_questlog(self.exe, self.server, str(self.dir / "bin" / "protontricks-launch"),
+                                   self.dir / "questlog.log")
+        self.assertEqual(launch.wait(timeout=10), 7)
+        self.assertIsNone(launch.process.poll())          # still waiting for the session to end
+        self.session_end.touch()
+        self.assertEqual(launch.process.wait(timeout=10), 0)
+
+    def test_a_failed_call_counts_as_questlog_ended(self):
+        (self.dir / "bin" / "protontricks").write_text("#!/bin/bash\nexit 3\n")
+        launch = q.launch_questlog(self.exe, self.server, str(self.dir / "bin" / "protontricks-launch"),
+                                   self.dir / "questlog.log")
+        self.assertEqual(launch.wait(timeout=10), 3)
+
+    def test_wait_gives_up_after_its_timeout(self):
+        (self.dir / "bin" / "wine").write_text(f"#!/bin/bash\nsleep 5\n")
+        launch = q.launch_questlog(self.exe, self.server, str(self.dir / "bin" / "protontricks-launch"),
+                                   self.dir / "questlog.log")
+        with self.assertRaises(q.subprocess.TimeoutExpired):
+            launch.wait(timeout=0.3)
+        self.session_end.touch()
+        launch.process.kill()
+
+    def test_command_and_its_scope(self):
+        calls = []
+        saved_popen = q.subprocess.Popen
+        q.subprocess.Popen = lambda command, **kwargs: calls.append((command, kwargs)) or saved_popen(["true"])
+        q.shutil.which = lambda name: "/usr/bin/systemd-run" if name == "systemd-run" else self.saved[0](name)
+        try:
+            q.launch_questlog(self.exe, self.server, str(self.dir / "bin" / "protontricks-launch"),
+                              self.dir / "questlog.log", hidden=True)
+            q.launch_questlog(self.exe, self.server, str(self.dir / "bin" / "protontricks-launch"),
+                              self.dir / "questlog.log", hold_session=False)
+        finally:
+            q.subprocess.Popen = saved_popen
+        held, handover = calls
+        command, kwargs = held
+        self.assertEqual(command[:3], ["systemd-run", "--user", "--scope"])
+        tool = command[command.index("-c") - 2:]
+        self.assertEqual(tool[0], str(self.dir / "bin" / "protontricks"))
+        self.assertEqual(tool[1:3], ["--no-background-wineserver", "-c"])
+        self.assertTrue(tool[3].startswith(f"wine {self.exe} --no-sandbox --hidden; echo $? > "))
+        self.assertTrue(tool[3].endswith("; wineserver -w"))
+        self.assertEqual(tool[4], str(q.APPID))
+        self.assertEqual(kwargs["env"]["QUESTLOG_PROTON_BRIDGE"], "127.0.0.1:1:token")
+        self.assertIn("wpcap=n", kwargs["env"]["WINEDLLOVERRIDES"])
+        self.assertEqual(handover[0][0], str(self.dir / "bin" / "protontricks-launch"))
+        self.assertNotIn("wineserver -w", " ".join(handover[0]))
+
+
 class ReleaseSteamAfterQuestlogTest(unittest.TestCase):
     """After Questlog is ended with the game gone, a steam.exe left over is ended once the session closes."""
 

@@ -46,7 +46,7 @@ Terms used below:
  |  |   +- BridgeServer 127.0.0.1:port +---->| Questlog.exe --no-sandbox     |
  |  |      (pcap_bridge, token)        | TCP |  +- wpcap.dll (ours, in       |
  |  +- Tray -> a2qlinux.tray (desktop) |     |  |   System32\Npcap)          |
- |  +- protontricks-launch ------------+---->|  |   pcap_next_ex every 25 ms |
+ |  +- protontricks -c (own scope) ----+---->|  |   pcap_next_ex every 25 ms |
  |  +- protontricks-launch ------------+---->|  +- window-order guard thread |
  |       questlog_ctl.exe <command>    |     | questlog_ctl.exe (short-lived)|
  +-------------------------------------+     +-------------------------------+
@@ -119,8 +119,11 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
    (`BRIDGE_SIGNATURE`, kept from the project's first name: a new string
    would make an installed build look foreign). Any other file there, such as a real Npcap, is left
    alone and reported.
-4. It starts Questlog in the prefix through `protontricks-launch`
-   (`launch_questlog`), with:
+4. It starts Questlog in the prefix through protontricks
+   (`launch_questlog`): `protontricks -c 'wine Questlog.exe …; echo $? >
+   questlog.exit; wineserver -w'` in a systemd scope of its own, so that the
+   launch outlives Questlog for as long as the Wine session is in use (§5.1,
+   "The launch holds the session"). It passes:
    - `QUESTLOG_PROTON_BRIDGE=127.0.0.1:<port>:<token>`, read by the DLL;
    - `WINEDLLOVERRIDES=wpcap=n`, because Wine ships a builtin `wpcap` and
      loads it instead of a native file of that name, even when Questlog
@@ -374,6 +377,56 @@ the time Questlog's Wine session takes to come up. Waiting for it also keeps
 the two from bringing up the prefix's Wine at the same moment, which could
 make two separate sessions.
 
+#### The launch holds the session
+
+protontricks ends the Steam Runtime container of every call once the
+call's command returns (`launcher_process.terminate()` in the `finally` of
+its `run_command`), and everything started in that container goes with it.
+Questlog's launch usually brings up the session: the `wineserver`, the
+session's services (`services.exe`, `winedevice.exe`, `plugplay.exe`, …) and
+the desktop process `explorer.exe /desktop` are all started from it and live
+in its container. While Questlog was started as `protontricks-launch
+Questlog.exe`, its call ended with Questlog, and a quit, crash or restart of
+Questlog during play took the game's session along: the game froze
+(10 November 2026, from **Quit Questlog** in the tray). A stand-in program
+in place of the game showed the same, and the order of exits put the
+container first: Questlog's call, its container, the `wineserver` and the
+services all within the same 0.1 s. Killing only the `protontricks-launch`
+process, so that its `finally` never ran, left the session running.
+
+So `launch_questlog` runs Questlog as `protontricks
+--no-background-wineserver -c 'wine Questlog.exe --no-sandbox; echo $? >
+proton-stream/questlog.exit; wineserver -w' 3393110`:
+
+- the shell writes Questlog's own exit code to `questlog.exit`, then
+  `wineserver -w` waits until the session has ended, so the call, and the
+  container holding the session, last as long as anything runs in it;
+- `QuestlogLaunch` wraps the call for the launcher: `poll()`, `wait()` and
+  `returncode` follow Questlog itself through that file, or the call if it
+  ends first (protontricks failed), so the launcher's handling of Questlog
+  ending (quit, restart after the game, update trial) is unchanged;
+- `--no-background-wineserver`, because protontricks' background wineserver
+  keeps a Windows program (`wineserver-keepalive.bat`) in the session until
+  the call ends, and `wineserver -w` would wait for it for ever;
+- the call runs under `systemd-run --user --scope` (`questlog-<pid>-<n>`):
+  it stays the launcher's child, but in a cgroup of its own. The service
+  `a2qlinux-steam` starts the launcher in kills what is left in its cgroup
+  when the launcher exits, which would take the session along just the same.
+
+A Questlog started again during play joins the running session. The calls
+of earlier Questlog starts wait in their scopes until the session ends,
+then end together with it. `show_questlog_window`'s second start, which
+only hands a request to the running Questlog, keeps `protontricks-launch`
+(`hold_session=False`): it must end at once.
+
+Checked with a stand-in program for the game (10 November 2026): after
+**Quit Questlog** the session, its services and the stand-in ran on;
+Questlog started again from the menu joined the same `wineserver`; once the
+stand-in ended, every waiting call ended within a second and nothing was
+left. Checked with the game the same day: **Quit Questlog** during play, the
+game ran on; Questlog started again from the menu read the game again (after
+a zone change, see §7); after the game Steam was released as before (§6.7).
+
 Checked with the game (17 October 2026): Questlog opened without the game,
 then Play. The game started at once, with one `wineserver` shared by both.
 Checked with the game from Play alone (20 October 2026): Questlog came up in
@@ -592,6 +645,13 @@ session to close and ends any `steam.exe` of the game left over (§6.7, step
 Steam after the game would leave Steam showing AION 2 as running. While the
 game runs, or with no `steam.exe` of the game left, it does nothing and does
 not wait.
+
+A quit during play ends Questlog only. The game's Wine session stays,
+because Questlog's launch waits for the session to end before its
+container goes (§5.1, "The launch holds the session"); the game runs on, and
+Questlog started again from the menu joins it. Questlog then shows the game
+in full only after a zone change, which is when it learns the character
+(§7).
 
 Electron's auto-update would install on quit (`autoInstallOnAppQuit`); it is
 switched off (§6.6), and the session end would skip it anyway.
@@ -824,7 +884,8 @@ the session itself.
 | "Aion 2's traffic can't be read" before logging in | §7.3, harmless | — |
 | "A2Qlinux is already running in another window" | second launcher refused (I1) | use the running one |
 | "Questlog is already running in the game prefix without the capture bridge" | Questlog started outside A2Qlinux | quit it from its own tray icon |
-| Tracker Map overlay blank after restarting Questlog mid-game | Questlog learns the character's zone only at login or zone change | change zone |
+| Tracker Map overlay blank, and no fights in the meter, after restarting Questlog mid-game | Questlog learns the character and its zone only at login or zone change | change zone |
+| game froze after **Quit Questlog** during play (versions before this fix) | Questlog's launch ended and protontricks took the game's session down with its container (§5.1, "The launch holds the session") | update A2Qlinux |
 | "Questlog update check failed (…)" | no network, CDN change | none; retried at the next check |
 | "Questlog X does not fit this A2Qlinux yet …" (notification) | a check of §10 failed | A2Qlinux needs a change for that version; the installed one stays |
 | "Questlog X ended within 60 s … going back" | the new version did not start under Proton | the previous version runs again; the failed one is in `<folder>-X-failed` |
@@ -920,6 +981,7 @@ one** — §6.4.
 | `questlog_ctl.exe` by hand | `protontricks-launch --appid 3393110 <package>/a2qlinux/bin/questlog_ctl.exe hide-tray` (or `show-tray`, `close-window`, `end-session`); `<package>` is printed by `python -c 'import a2qlinux; print(a2qlinux.__path__[0])'` in A2Qlinux's environment |
 | `questlog_ctl.exe` without the game prefix | Questlog in a throwaway prefix: `wine Questlog.exe --no-sandbox --disable-gpu` under `xvfb-run`, then the commands through `wine` |
 | who owns the game connection | `tools/tcp_owner_probe.exe` in the prefix |
+| does the session survive a quit (§5.1) | without the game: a Windows program that only waits, started as `systemd-run --user --unit=<name> protontricks-launch --appid 3393110 <program>.exe`, plays the game; quit Questlog and check that the program, the `wineserver` and `explorer.exe /desktop` run on, and which unit holds them (`/proc/<pid>/cgroup`) |
 | Wine's view of windows and focus | run `WINEDEBUG=+event,+x11drv,+win a2qlinux-run`; the log grows about 40 KB/s, so only briefly |
 
 Logs: the launcher's messages in its status window (the terminal); Questlog's and Wine's
