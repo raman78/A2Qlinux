@@ -25,6 +25,8 @@ from PyQt6.QtCore import QSocketNotifier
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
+from a2qlinux import shown_version
+
 ICON = Path.home() / ".local" / "share" / "icons" / "questlog-aion2.png"   # written by a2qlinux-setup
 
 
@@ -43,9 +45,12 @@ def main():
     if "--check" in sys.argv[1:]:
         return 0
 
+    version = f"A2Qlinux {shown_version()}"
     tray = QSystemTrayIcon(QIcon(str(ICON)), app)
-    tray.setToolTip("Questlog (AION 2)")
+    tray.setToolTip(f"Questlog (AION 2) — {version}")
     menu = QMenu()
+    menu.addAction(version).setEnabled(False)   # which A2Qlinux runs, for reports; not clickable
+    menu.addSeparator()
     menu.addAction("Open Questlog").triggered.connect(lambda: report("open"))
     menu.addSeparator()
     menu.addAction("Quit Questlog").triggered.connect(lambda: report("quit"))

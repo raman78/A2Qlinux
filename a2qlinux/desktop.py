@@ -108,6 +108,10 @@ def notify(text):
 
 
 def main():
+    if "--version" in sys.argv[1:]:          # answered here: passed on, it would open a terminal window
+        from . import shown_version
+        print(f"A2Qlinux {shown_version()}")
+        return 0
     try:
         from .setup_desktop import refresh_entries
         refresh_entries(lambda text: print(f"a2qlinux: {text}", file=sys.stderr))

@@ -57,6 +57,13 @@ icon instead, which needs a system tray too, and whose menu opens only once
 under Proton. Closing the status window does not quit Questlog either; it
 only stops the live traffic. So get the tray icon working before you play.
 
+## Reporting a problem
+
+Say which A2Qlinux you have: it is the first, greyed-out line of the tray
+icon's menu, the first line of the status window (`A2Qlinux …`), or the
+output of `a2qlinux --version`. Add what the status window says around the
+moment it went wrong.
+
 ## FAQ
 
 **Q:** Is this against the game's rules?

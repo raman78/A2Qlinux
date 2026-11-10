@@ -563,7 +563,9 @@ upstream Wine included. Trace: `set_foreground_window hwnd <icon window> …
 StatusNotifierItem; Qt falls back to an XEmbed tray icon on X11 desktops
 without a StatusNotifierItem host). Its menu is drawn by the desktop, outside
 Wine's foreground rules. The tray process only prints `open` or `quit` on stdout; class `Tray`
-in `a2qlinux/launcher.py` reads that into `Requests`. The tray runs in its own
+in `a2qlinux/launcher.py` reads that into `Requests`. The menu's first line,
+greyed out, and the tooltip carry A2Qlinux's version (§12, "Shown
+version"). The tray runs in its own
 session, so a Ctrl+C for the launcher does not reach it. It ends when its
 stdin closes.
 
@@ -1151,6 +1153,26 @@ the two dependencies that are not part of a desktop system: PyQt6 (tray) and
 python-xlib (finding Questlog's window). The version comes from the git tag
 through hatch-vcs (`v0.1.0` → 0.1.0; between tags `0.1.devN`), written to
 `a2qlinux/_version.py` at build time and read by `a2qlinux.__version__`.
+
+**Shown version.** People see the version in three places, all from
+`a2qlinux.shown_version`: the first line of the status window
+(`A2Qlinux <version>.`), `--version` on `a2qlinux`, `a2qlinux-run` and
+`a2qlinux-setup` (`a2qlinux` answers it itself; passed on to the launcher
+it would open a terminal window), and the tray icon (a greyed-out first
+menu line, and the tooltip `Questlog (AION 2) — A2Qlinux <version>`). The
+point is reports: which A2Qlinux a problem happened on, and whether an
+update actually took effect. An installed package shows
+`a2qlinux.__version__`. An editable install from a git checkout
+(`pipx install --editable .`) writes `_version.py` once, at install time,
+and never again, so there the number would be weeks stale (measured
+2026-11-10: `0.1.1.dev15` while the tree was 0.4.0 plus 2 commits). When the
+folder above the package holds `.git`, `shown_version` therefore asks
+`git describe --tags --dirty` instead and shows e.g.
+`0.4.0-2-g2321dc5-dirty (source checkout)`. If git fails, it shows the
+built number with `(source checkout; git describe failed: <reason>)`, so a
+wrong number never looks like a right one. A tag created on GitHub by a
+release is not in a local clone until `git fetch --tags`; until then
+`git describe` names the tag before it.
 
 **Windows parts.** `wpcap.dll` and `questlog_ctl.exe` are built by
 `bridge/build.sh` into `a2qlinux/bin/` and shipped inside the package, so a

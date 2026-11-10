@@ -39,7 +39,7 @@ import sys
 import threading
 import time
 
-from . import config
+from . import config, shown_version
 from . import update as questlog_update
 from .pcap_bridge import BridgeServer, read_records
 
@@ -1090,7 +1090,10 @@ def main():
     parser.add_argument("--close-with-game", action="store_true",
                         help=f"close Questlog {GAME_EXIT_GRACE} s after AION 2 exits "
                              "(default: Questlog stays open, e.g. to look through fights afterwards)")
+    version = shown_version()
+    parser.add_argument("--version", action="version", version=f"A2Qlinux {version}")
     args = parser.parse_args()
+    log(f"A2Qlinux {version}.")
     close_with_game = args.close_with_game or settings.after_game == "close"
     auto_update = settings.auto_update and not args.no_auto_update
     for problem in config_problems:

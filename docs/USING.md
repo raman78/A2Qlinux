@@ -158,11 +158,18 @@ its menu opens only once and then stops responding.
 ```
    right-click the icon
    ┌──────────────────────┐
+   │  A2Qlinux 0.4.0      │   (greyed out: which A2Qlinux runs)
+   ├──────────────────────┤
    │  Open Questlog       │
    ├──────────────────────┤
    │  Quit Questlog       │
    └──────────────────────┘
 ```
+
+The first line only shows which A2Qlinux you have; it does nothing when
+clicked. The same number appears when you hover over the icon, as the first
+line of the status window, and from `a2qlinux --version` in a terminal.
+Mention it when you report a problem.
 
 | You do | What happens |
 |---|---|

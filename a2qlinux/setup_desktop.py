@@ -36,7 +36,7 @@ import struct
 import subprocess
 import sys
 
-from . import config
+from . import config, shown_version
 from . import kde_overlays
 from .desktop import TERMINALS, terminal_command
 from .update import install_fresh, read_asar_file
@@ -332,6 +332,7 @@ def main():
                           "game, without asking")
     kde.add_argument("--no-kde-overlays", dest="kde_overlays", action="store_const", const=False,
                      help="remove what --kde-overlays set up")
+    parser.add_argument("--version", action="version", version=f"A2Qlinux {shown_version()}")
     args = parser.parse_args()
     created = not config.CONFIG_PATH.exists()
     if args.questlog_dir:
