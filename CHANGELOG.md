@@ -3,6 +3,38 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
+## [0.5.0] — 2026-11-10
+
+### Added
+- `a2qlinux --diagnose` checks what A2Qlinux needs and how AION 2 is
+  started from Steam, without changing anything, and prints one line per
+  check: `ok`, `note`, or `PROBLEM` with what to do. It notices, for
+  example, a missing Steam launch option, one that keeps the game from
+  starting, and a Questlog that was started outside A2Qlinux, which the
+  game would wait for.
+- `a2qlinux --diagnose --report` also writes a report file with that
+  diagnosis and A2Qlinux's recent messages, with the home folder, user
+  name, computer name, Steam account number and network addresses
+  replaced, shows it, and on request opens a filled-in GitHub issue in
+  the browser. Nothing is sent until the issue is submitted.
+- Which A2Qlinux runs is shown as the first, greyed-out line of the tray
+  icon's menu, when hovering over the icon, as the first line of the
+  status window, and by `a2qlinux --version`.
+- Everything the status window shows is also kept, with the time, in
+  `launcher.log` in the `proton-stream` folder inside Questlog's folder,
+  so it is still there after the window has closed. At most 2 MB are
+  kept.
+
+### Changed
+- At its end, `a2qlinux-setup` says whether AION 2's Steam launch option
+  is set, and prints the line to paste only when it is not. A launch
+  option that keeps the game from starting (without `%command%`, or
+  pointing at a file that is gone) is listed as a problem.
+- The terminal no longer shows the lines `Capturing on '…'` and
+  `File: -`, which looked like a file being sent somewhere. Messages
+  from the capture program now appear in the status window marked
+  `dumpcap on <connection>:`.
+
 ## [0.4.0] — 2026-11-09
 
 ### Added
