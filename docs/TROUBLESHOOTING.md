@@ -61,8 +61,18 @@ only stops the live traffic. So get the tray icon working before you play.
 
 Say which A2Qlinux you have: it is the first, greyed-out line of the tray
 icon's menu, the first line of the status window (`A2Qlinux …`), or the
-output of `a2qlinux --version`. Add what the status window says around the
+output of `a2qlinux --version`. Add what the status window said around the
 moment it went wrong.
+
+The status window closes by itself when A2Qlinux ends, but everything it
+showed is also kept, with the time, in `launcher.log` in the `proton-stream`
+folder inside Questlog's folder (by default
+`~/Games/Questlog/proton-stream/launcher.log`). Send that file, and say
+roughly at what time the problem happened. It holds only A2Qlinux's own
+messages: which network connections it listens on, with their local
+addresses (as in the status window), and when Questlog and the game started
+and ended. It stays small: once it reaches 1 MB it is moved to
+`launcher.log.1` and a new one starts.
 
 ## FAQ
 

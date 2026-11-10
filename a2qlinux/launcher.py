@@ -53,8 +53,74 @@ BRIDGE_DLL = BIN / "wpcap.dll"
 BRIDGE_SIGNATURE = b"questlog-proton bridge"
 
 
+LAUNCHER_LOG_LIMIT = 1_000_000   # bytes per file; one older file is kept, so at most twice this on disk
+
+
+class LogFile:
+    """The status window's lines, kept in proton-stream/launcher.log with the time.
+
+    The status window closes by itself when the launcher ends normally, and
+    with it the only record of what the launcher did. Lines logged before the
+    file is opened (settings problems) are kept and written once it is. When
+    the file passes LAUNCHER_LOG_LIMIT it becomes launcher.log.1 (replacing
+    the previous one) and a new file starts, so the log never grows without
+    bound. A file that cannot be written is said once in the window; the
+    launcher runs on without it.
+    """
+
+    def __init__(self, limit=LAUNCHER_LOG_LIMIT, say=None):
+        self.limit = limit
+        self.say = say or (lambda text: print(f"[a2qlinux] {text}", flush=True))
+        self.lock = threading.Lock()
+        self.path = None
+        self.file = None
+        self.size = 0
+        self.pending = []
+        self.broken = False
+
+    def open(self, path):
+        with self.lock:
+            self.path = Path(path)
+            pending, self.pending = self.pending, []
+            for line in pending:
+                self._write(line)
+
+    def write(self, message):
+        now = time.time()
+        line = f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now))}.{int(now % 1 * 1000):03d} {message}\n"
+        with self.lock:
+            if self.path is None:
+                self.pending.append(line)
+            else:
+                self._write(line)
+
+    def _write(self, line):
+        if self.broken:
+            return
+        data = line.encode("utf-8", "replace")
+        try:
+            if self.file is None:
+                self.file = open(self.path, "ab")
+                self.size = self.file.tell()
+            if self.size and self.size + len(data) > self.limit:
+                self.file.close()
+                os.replace(self.path, self.path.with_name(self.path.name + ".1"))
+                self.file = open(self.path, "ab")
+                self.size = 0
+            self.file.write(data)
+            self.file.flush()
+            self.size += len(data)
+        except OSError as error:
+            self.broken = True
+            self.say(f"Cannot write {self.path} ({error}); this run's messages are only in this window.")
+
+
+LOG_FILE = LogFile()
+
+
 def log(message):
     print(f"[a2qlinux] {message}", flush=True)
+    LOG_FILE.write(message)
 
 
 # ---------------------------------------------------------------- processes
@@ -1093,7 +1159,7 @@ def main():
     version = shown_version()
     parser.add_argument("--version", action="version", version=f"A2Qlinux {version}")
     args = parser.parse_args()
-    log(f"A2Qlinux {version}.")
+    log(f"A2Qlinux {version} (launcher PID {os.getpid()}).")
     close_with_game = args.close_with_game or settings.after_game == "close"
     auto_update = settings.auto_update and not args.no_auto_update
     for problem in config_problems:
@@ -1116,6 +1182,8 @@ def main():
     try:
         state_dir = executable.parent / "proton-stream"
         session_lock(state_dir)
+        # Only the launcher holding the lock writes the file; earlier lines are kept until now.
+        LOG_FILE.open(state_dir / "launcher.log")
         dumpcap = system_dumpcap()
         running = game_processes(APPID, ["questlog.exe"])["questlog.exe"]
         if running:
@@ -1321,6 +1389,7 @@ def main():
             server.stop()
     except (OSError, RuntimeError) as error:
         print(f"a2qlinux: {error}", file=sys.stderr)
+        LOG_FILE.write(f"Ended with an error: {error}")
         return 1
 
 
@@ -1329,6 +1398,7 @@ def run():
     try:
         return main()
     except KeyboardInterrupt:
+        LOG_FILE.write("Stopped with Ctrl+C.")
         print("\nStopped. Questlog keeps running without live traffic; quit it from its own tray icon, "
               "which is shown again.", file=sys.stderr)
         return 130

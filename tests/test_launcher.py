@@ -678,3 +678,41 @@ class PumpRecordsTest(unittest.TestCase):
             q.pump_records("ppp0", io.BytesIO(header), FakeServer(), {"packets": 0}, capture, messages.append)
             self.assertEqual(any("link type 9" in m for m in messages), told)
             self.assertEqual(capture["error"], "dumpcap stopped")
+
+
+class LogFileTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "launcher.log"
+        self.said = []
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_lines_before_the_file_is_opened_are_written_once_it_is(self):
+        logs = q.LogFile(say=self.said.append)
+        logs.write("Settings: line 3 is wrong")
+        self.assertFalse(self.path.exists())
+        logs.open(self.path)
+        logs.write("Capturing on eth0")
+        lines = self.path.read_text().splitlines()
+        self.assertEqual([line.split(" ", 2)[2] for line in lines], ["Settings: line 3 is wrong", "Capturing on eth0"])
+
+    def test_the_log_is_capped_keeping_one_older_file(self):
+        logs = q.LogFile(limit=200, say=self.said.append)
+        logs.open(self.path)
+        for n in range(30):
+            logs.write(f"line {n:02d} " + "x" * 20)
+        older = self.path.with_name("launcher.log.1")
+        self.assertLessEqual(self.path.stat().st_size, 200)
+        self.assertLessEqual(older.stat().st_size, 200)
+        self.assertEqual(sorted(p.name for p in self.path.parent.iterdir()), ["launcher.log", "launcher.log.1"])
+        self.assertIn("line 29", self.path.read_text())
+
+    def test_an_unwritable_log_is_said_once_and_the_launcher_goes_on(self):
+        logs = q.LogFile(say=self.said.append)
+        logs.open(Path(self.tmp.name) / "missing" / "launcher.log")
+        logs.write("one")
+        logs.write("two")
+        self.assertEqual(len(self.said), 1)
+        self.assertIn("only in this window", self.said[0])

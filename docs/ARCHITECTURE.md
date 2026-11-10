@@ -1088,8 +1088,23 @@ one** — §6.4.
 | does the session survive a quit (§5.1) | without the game: a Windows program that only waits, started as `systemd-run --user --unit=<name> protontricks-launch --appid 3393110 <program>.exe`, plays the game; quit Questlog and check that the program, the `wineserver` and `explorer.exe /desktop` run on, and which unit holds them (`/proc/<pid>/cgroup`) |
 | Wine's view of windows and focus | run `WINEDEBUG=+event,+x11drv,+win a2qlinux-run`; the log grows about 40 KB/s, so only briefly |
 
-Logs: the launcher's messages in its status window (the terminal); Questlog's and Wine's
-output, including the guard's lines, in `proton-stream/questlog.log`,
+Logs: the launcher's messages in its status window (the terminal), and the
+same lines with the time to the millisecond in `proton-stream/launcher.log`
+(`LogFile` in `a2qlinux/launcher.py`). The window closes by itself when the
+launcher ends normally, and before the file existed that took the only
+record of what the launcher had done; a quit that went wrong could then be
+read only from systemd's journal, which shows when Questlog's scopes
+(`questlog-<launcher PID>-<n>`) started and ended but not why. Each run
+starts with `A2Qlinux <version> (launcher PID <pid>).`, so a run in the
+file can be matched to those scopes. Lines logged before the lock is taken
+(settings problems, the version line) are held and written once it is; only
+the launcher holding the lock writes the file. When the file passes
+`LAUNCHER_LOG_LIMIT` (1 MB, some ten thousand lines, many days of play) it
+becomes `launcher.log.1`, replacing the one before, so at most 2 MB are kept.
+A file that cannot be written is said once in the window. Not recorded: a
+launcher ended by closing its window (SIGHUP ends Python without a word) and
+Python tracebacks, which only the window shows. Questlog's and Wine's
+output, including the guard's lines, is in `proton-stream/questlog.log`,
 rewritten on each launcher start; Steam verb switches in
 `proton-stream/steam_launch.log`.
 
