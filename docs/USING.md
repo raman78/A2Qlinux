@@ -20,13 +20,33 @@ option (set it up as in
 [INSTALL.md](INSTALL.md#starting-questlog-with-the-game-from-steam-optional)),
 Play starts Questlog first and the game a few seconds later,
 once Questlog runs. If Questlog is already open when you press Play, the game
-starts at once and joins it; nothing restarts.
+starts at once and joins it; nothing restarts. `a2qlinux-setup` tells you at
+its end whether the launch option is set.
+
+**Play without the launch option, with Questlog open.** This works too, but
+you will see Questlog close and come back. The reason: before Steam starts
+the game under Proton, it waits until nothing else runs in the game's
+Windows environment, and Questlog runs there. Left alone, the game would
+wait for as long as Questlog stays open. So when A2Qlinux sees Steam
+waiting, it closes Questlog (the status window says `Steam is starting
+AION 2 and waits …`), lets the game start, and opens Questlog again a few
+seconds later (`AION 2 is running; reopening Questlog.`). With the launch
+option none of this happens, because Questlog is then started first and the
+game joins it instead of waiting for it.
+
+Questlog cannot simply run in a Windows environment of its own to avoid
+this: it recognises the game by looking for it among the programs running
+next to it, and under Proton it only sees the programs in its own
+environment.
 
 Keep the status window open while you use Questlog. It carries the traffic
 to Questlog, and it shows what A2Qlinux is doing. The line
 `Game traffic is flowing to Questlog.` means everything is connected. The
 window closes by itself when Questlog quits. If something fails, it stays
-open with the message until you press Enter.
+open with the message until you press Enter. Everything it shows is also
+kept, with the time, in a file (`launcher.log`), so nothing is lost when it
+closes; [TROUBLESHOOTING.md](TROUBLESHOOTING.md#reporting-a-problem) says
+where it is and how to send it with a problem report.
 
 **When the game ends**, Questlog stays with you: look through your fights,
 use the database or the map. It also waits for the game: start it again and
@@ -158,7 +178,7 @@ its menu opens only once and then stops responding.
 ```
    right-click the icon
    ┌──────────────────────┐
-   │  A2Qlinux 0.4.0      │   (greyed out: which A2Qlinux runs)
+   │  A2Qlinux x.y.z      │   (greyed out: which A2Qlinux runs)
    ├──────────────────────┤
    │  Open Questlog       │
    ├──────────────────────┤

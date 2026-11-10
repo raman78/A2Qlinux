@@ -60,7 +60,9 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
 `a2qlinux` (`a2qlinux.desktop:main`), `a2qlinux-run`
 (`a2qlinux.launcher:run`, the launcher in the current terminal),
 `a2qlinux-setup` (`a2qlinux.setup_desktop:main`) and `a2qlinux-steam`
-(`a2qlinux.steam:main`).
+(`a2qlinux.steam:main`). `a2qlinux --version` and `a2qlinux --diagnose
+[--report]` are answered by `a2qlinux.desktop:main` itself, before it would
+open a status window (§12 "Shown version", §9.1).
 
 | Module or file | Runs where | Role |
 |---|---|---|
@@ -1100,6 +1102,14 @@ first listed its `cmd.exe` and `ping.exe`, in the second neither, only its
 own nine processes. Questlog in a prefix of its own would never see the
 game. Making it see the game would mean faking Windows' process list for
 it, which is not worth the gain.
+
+**The Steam launch option is checked, never written.** `a2qlinux-setup`
+and `a2qlinux --diagnose` read AION 2's launch option and print the line to
+paste (§9.1); A2Qlinux could also write it into `localconfig.vdf` itself,
+which would remove the one manual step players skip (the first problem
+report came down to it). Rejected on 10 November 2026: the launch option
+is the player's own Steam setting, which they may want to keep as it is
+or keep A2Qlinux out of, and the menu entry works without it (§5.2).
 
 **Our tray instead of fixing the Wine one** — §6.2. **The guard instead of a
 patched Proton** — §6.1. **Session end after a delay instead of an immediate

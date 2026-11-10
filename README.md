@@ -29,7 +29,7 @@ game:
   back if they do not start.
 
 Status: in daily use on CachyOS, KDE Plasma 6 (Wayland), Proton 11
-(`proton-cachyos-slr`), Questlog 0.1.37. Other distributions and desktops
+(`proton-cachyos-slr`), Questlog 0.1.51. Other distributions and desktops
 are untested; what they need (Steam from the distribution or Valve, not
 Flatpak; a system tray; Python 3.11 or newer; the packages per distribution)
 is in [docs/INSTALL.md](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#what-you-need-before-you-start).
@@ -48,7 +48,7 @@ for Arch, Debian, Ubuntu, Fedora and openSUSE. In short:
    everything else and prints the command for anything still missing — see
    [Installing A2Qlinux and Questlog](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#installing-a2qlinux-and-questlog).
 4. Start **Questlog (AION 2)** from the menu, or set the Steam launch option
-   that `a2qlinux-setup` prints.
+   that `a2qlinux-setup` prints (it says when the option is already set).
 
 ## Documentation
 
@@ -56,7 +56,8 @@ for Arch, Debian, Ubuntu, Fedora and openSUSE. In short:
 - [docs/USING.md](https://github.com/raman78/A2Qlinux/blob/main/docs/USING.md) — starting, tray icon, playing.
 - [docs/UPDATING.md](https://github.com/raman78/A2Qlinux/blob/main/docs/UPDATING.md) — Questlog updates, installing Questlog
   by hand, and updating A2Qlinux itself (`pipx upgrade a2qlinux`).
-- [docs/TROUBLESHOOTING.md](https://github.com/raman78/A2Qlinux/blob/main/docs/TROUBLESHOOTING.md) — problems, FAQ.
+- [docs/TROUBLESHOOTING.md](https://github.com/raman78/A2Qlinux/blob/main/docs/TROUBLESHOOTING.md) — problems, reporting one
+  (`a2qlinux --diagnose --report`), FAQ.
 - [docs/ARCHITECTURE.md](https://github.com/raman78/A2Qlinux/blob/main/docs/ARCHITECTURE.md) — how it works and why, failure
   modes, tests, what a Questlog update can break.
 

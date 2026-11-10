@@ -107,7 +107,9 @@ pipx fetches the newest version from PyPI and replaces A2Qlinux's own files.
 The menu entry, the Steam launch option, your settings file and Questlog
 itself stay as they are: they point at the `a2qlinux` commands in
 `~/.local/bin`, which keep their names. Which version you have:
-`pipx list`.
+`a2qlinux --version`, or the first line of the tray icon's menu once
+Questlog runs again (if that still shows the old number, Questlog was not
+quit before the upgrade: quit it and start it again).
 
 If you installed A2Qlinux from a downloaded `.whl` file before it was on
 PyPI, pipx keeps using that file: `pipx upgrade` says A2Qlinux "is
