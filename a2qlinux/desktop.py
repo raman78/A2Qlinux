@@ -112,6 +112,9 @@ def main():
         from . import shown_version
         print(f"A2Qlinux {shown_version()}")
         return 0
+    if "--diagnose" in sys.argv[1:]:        # read only; answered here like --version
+        from .diagnose import main as diagnose
+        return diagnose(sys.argv[1:])
     try:
         from .setup_desktop import refresh_entries
         refresh_entries(lambda text: print(f"a2qlinux: {text}", file=sys.stderr))

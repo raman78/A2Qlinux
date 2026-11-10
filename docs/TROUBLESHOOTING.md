@@ -59,6 +59,28 @@ only stops the live traffic. So get the tray icon working before you play.
 
 ## Reporting a problem
 
+The quickest way is one command in a terminal:
+
+```
+a2qlinux --diagnose --report
+```
+
+It checks what A2Qlinux needs and how the game is started from Steam
+(without changing anything), and prints one line per check: `ok`, `note`,
+or `PROBLEM` with what to do. Often that line already says what is wrong;
+`a2qlinux --diagnose` alone gives just these lines.
+
+With `--report` it also writes a report file in your home folder and shows
+it to you. Before writing it, it replaces what could identify you: your home
+folder, user name, computer name, Steam account number and network
+addresses. Read it all the same. Then it asks whether to open a new issue on
+GitHub in your browser. If you say yes, the issue opens filled in; you log in
+with your GitHub account, drag the report file into it, say what happened
+and roughly when, and submit. Nothing is sent until you press Submit, and
+the issue is public.
+
+If you prefer to report by hand:
+
 Say which A2Qlinux you have: it is the first, greyed-out line of the tray
 icon's menu, the first line of the status window (`A2Qlinux …`), or the
 output of `a2qlinux --version`. Add what the status window said around the

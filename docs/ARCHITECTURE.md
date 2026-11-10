@@ -72,6 +72,7 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
 | `a2qlinux/config.py` | Linux, in every command | user settings from `~/.config/a2qlinux/config.toml` (§13) |
 | `a2qlinux/update.py` | Linux, in the launcher; `install_fresh` from `a2qlinux-setup` | stages new Questlog versions in the background, installs them at the next start; installs Questlog the first time (§6.6) |
 | `a2qlinux/setup_desktop.py` (`a2qlinux-setup`) | Linux, by hand; `refresh_entries` on every `a2qlinux` start | dependency, capture and tray checks with the commands that fix them (§14); first Questlog installation (§6.6); menu entry, icon; keeps the menu entry (and an existing desktop shortcut) running this installation's `a2qlinux` |
+| `a2qlinux/diagnose.py` | Linux, `a2qlinux --diagnose [--report]` by hand | read-only diagnosis, and a problem report the user can file as a GitHub issue (§9.1) |
 | `a2qlinux/bin/wpcap.dll` (from `bridge/wpcap_bridge.c`) | prefix, in Questlog's NodeService process | libpcap stand-in; window-order guard |
 | `a2qlinux/bin/questlog_ctl.exe` (from `bridge/questlog_ctl.c`) | prefix, started per command | hides/shows Questlog's tray icon, closes its window, ends its session |
 
@@ -1111,6 +1112,77 @@ rewritten on each launcher start; Steam verb switches in
 The test programs use `xvfb-run` so that they take no focus on the desktop.
 Throwaway prefixes keep the game's prefix free of anything but A2Qlinux's
 own files.
+
+### 9.1 `a2qlinux --diagnose` and problem reports
+
+**Why.** When a player reports a problem, the facts that decide it are
+spread over Steam's settings, A2Qlinux's files and the process table, and
+until now had to be collected by hand with commands written for one
+machine. The first such report (10 November 2026: the game would not start
+while Questlog was open) came down to the Steam launch option not being set,
+which no part of A2Qlinux checked.
+
+**What it does** (`a2qlinux/diagnose.py`, answered by `a2qlinux` itself,
+like `--version`, without opening a status window). It only reads, so it is
+safe at any time, the game running or not. In order:
+
+1. A2Qlinux's version (`shown_version`, §12), the settings file and its
+   problems, Questlog's folder and version.
+2. The checks `a2qlinux-setup` makes, by calling the same functions
+   (`missing_packages`, `capture_problem`, `tray_problem`,
+   `windows_parts_problem`): there is one implementation of each.
+3. Steam (`steam_roots`, the Flatpak case of §14), the game's prefix
+   (`game_prefix`), and whether the `wpcap.dll` there carries
+   `BRIDGE_SIGNATURE`.
+4. AION 2's launch option, from every Steam account's
+   `userdata/<id>/config/localconfig.vdf`, path
+   `UserLocalConfigStore > Software > Valve > Steam > apps > 3393110 >
+   LaunchOptions`. `parse_vdf` reads Steam's KeyValues text format with
+   keys lower-cased, since Steam writes `apps` and `Apps` in different
+   places. `judge_launch_option` tells apart: not set (a note: the fallback
+   of §5.2 still lets the game start); without `a2qlinux-steam`; no
+   `%command%` (the game never starts); `a2qlinux-steam` without its
+   folder (Steam does not find it, §5.1); a path that does not exist; a
+   path that is another installation's. Words before it, such as
+   `PROTON_FSR4_UPGRADE=1`, are left alone. When Steam writes the file
+   after a change has not been measured, so the diagnosis says where it
+   read the option from and to close Steam and look again if that
+   disagrees. Then the last line of `steam_launch.log`: whether the option
+   ever ran, and how.
+5. What runs now: the launcher (`launcher_running`, `launcher_pid`),
+   Questlog and whether it carries `QUESTLOG_PROTON_BRIDGE` (one that does
+   not was started outside A2Qlinux: it gets no traffic, and the game waits
+   for it, §5.1), and the game.
+6. On Plasma 6, whether the KDE overlays are installed (§6.8).
+
+Each check gives lines of `ok`, `note` or `PROBLEM`; the exit code is 1
+when there is a problem. A check that raises is reported as a problem
+itself instead of hiding the checks after it.
+
+**`--report`.** Writes `~/a2qlinux-report-<date>-<time>.txt`: the
+diagnosis, the last `REPORT_LOG_LINES` (400) lines of `launcher.log` and the
+last 10 of `steam_launch.log`, all passed through `Anonymiser`. That
+replaces the home folder with `~`, the user name as a path component with
+`<user>`, Steam account folders with `userdata/<steam-id-N>`, the host name
+with `<host>`, and IPv4/IPv6 addresses with `<private-N>` (RFC 1918,
+100.64.0.0/10, link-local), `<public-N>` or `<ipv6-N>`; loopback and
+`0.0.0.0` stay. The same value always gets the same name, so "the game uses
+`<private-2>`" still matches the interface line that captured on
+`<private-2>`. The report is printed in full, and only then does it ask,
+default no, whether to open a new GitHub issue. On yes, `xdg-open` opens
+`github.com/raman78/A2Qlinux/issues/new` with a title and a body: a place
+to say what happened, the request to attach the report file, the diagnosis,
+and as many of the log's last lines as fit. The user logs in with their own
+account, can change everything, and submits. A2Qlinux holds no token and
+sends nothing itself; the issue is public, which is why the anonymising
+happens before the file is written. Without a terminal to ask in, it only
+says where the file is and where to file it.
+
+The body is limited by the length of the URL: measured on 10 November 2026
+without being logged in, GitHub took 6500 characters (redirecting to its
+login page, which carries the whole URL along) and answered 7000 with an
+error 500. `ISSUE_URL_LIMIT` is 6000; the full log is in the attached file.
+If even the diagnosis does not fit, it is cut with a line saying so.
 
 ## 10. What Questlog updates can break
 
