@@ -266,7 +266,27 @@ def usable_interfaces():
 def start_dumpcap(dumpcap, interface, address):
     command = [str(dumpcap), "-i", interface, "-p", "-F", "pcap", "-q", "-s", "262144", "-B", "8",
                "--update-interval", "20", "-f", f"tcp and host {address} and port {GAME_PORT}", "-w", "-"]
-    return subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, start_new_session=True)
+    return subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            start_new_session=True)
+
+
+# What dumpcap writes to stderr on every start, even with -q: the interface it
+# opened and where the packets go ("-" = its stdout, the pipe to this launcher).
+# Our own "Capturing on <name> (<address>)" line says the same, so these two are
+# not repeated; read bare, "File: -" looks like a file being sent somewhere.
+DUMPCAP_START_LINES = (re.compile(r"Capturing on '.*'"), re.compile(r"File: -"))
+
+
+def relay_dumpcap_messages(name, stream, log=log):
+    """Thread body: pass one dumpcap's own messages on, marked with its interface.
+
+    Everything but the start banner is passed on: error messages (why a capture
+    ended) and the counts dumpcap writes when it stops, dropped packets included.
+    """
+    for raw in stream:
+        line = raw.decode("utf-8", "replace").rstrip()
+        if line and not any(pattern.fullmatch(line) for pattern in DUMPCAP_START_LINES):
+            log(f"dumpcap on {name}: {line}")
 
 
 def stop_process(process):
@@ -397,9 +417,11 @@ class Captures:
                 if (name, capture["address"]) in self.reported:
                     continue
                 self.reported.add((name, capture["address"]))
+                # dumpcap's own message is meant to stand above ours: let its relay finish.
+                capture["messages"].join(timeout=1)
                 reason = capture["error"] or "dumpcap stopped"
                 self.log(f"Capture on {name} ({capture['address']}) ended: {reason} "
-                         f"(dumpcap exit code {capture['process'].returncode}; its own message is above). "
+                         f"(dumpcap exit code {capture['process'].returncode}; its own message, if any, is above). "
                          "Run a2qlinux-setup, which tests capture permission and says what to do. "
                          f"{name} is tried again every {CAPTURE_RETRY_EVERY} s, and at once when its "
                          "address changes; this is not reported again.")
@@ -417,6 +439,9 @@ class Captures:
             self.running[name] = capture
             threading.Thread(target=pump_records, args=(name, capture["process"].stdout, self.server,
                                                          self.status, capture, self.log), daemon=True).start()
+            capture["messages"] = threading.Thread(target=relay_dumpcap_messages, daemon=True,
+                                                   args=(name, capture["process"].stderr, self.log))
+            capture["messages"].start()
             self.log(f"Capturing on {name} ({address}), TCP port {GAME_PORT}.")
         if not up and not self.told_none:
             self.log("No network interface with an IPv4 address is up" + (" among those in the settings"

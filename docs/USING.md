@@ -128,6 +128,14 @@ VPN on it looks like this, for example (your names and addresses differ):
 The first line, for the cable, is normal: A2Qlinux listens there too, in
 case the VPN is switched off.
 
+Lines that start with `dumpcap on <name>:` come from `dumpcap`, the
+Wireshark program that does the listening. It writes them when it stops
+listening on a connection (how many packets it saw, and whether it lost
+any), and when something goes wrong, for example a missing capture
+permission. Nothing is saved to a file and nothing is sent anywhere: the
+packets go straight from `dumpcap` to A2Qlinux and on to Questlog on the
+same computer.
+
 **Leaving connections out.** Set `interface` in the settings file only if
 you want A2Qlinux to stay off some connections. This command lists your
 connections by name, with their addresses:

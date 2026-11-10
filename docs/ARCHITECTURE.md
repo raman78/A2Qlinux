@@ -110,6 +110,17 @@ All of A2Qlinux is one Python package, `a2qlinux`, installed with pipx
    each interface with the bridge as a channel. A thread per interface
    (`pump_records`) passes each record to `BridgeServer.publish`. Why every
    interface, and how the set follows a VPN going up and down: §4.3.
+   A second thread per interface (`relay_dumpcap_messages`) reads that
+   `dumpcap`'s stderr and passes each line to the status window as
+   `dumpcap on <name>: <line>`: error messages, and the packet and drop
+   counts `dumpcap` writes when it stops. It leaves out the two lines
+   `dumpcap` writes on every start, even with `-q` (`DUMPCAP_START_LINES`:
+   `Capturing on '<description>'` and `File: -`). The launcher's own
+   `Capturing on <name> (<address>)` line already says the same thing, and
+   `File: -`, read on its own, looks like a file being sent somewhere; it
+   only means that the packets go to `dumpcap`'s stdout, the pipe into the
+   launcher. Before this, `dumpcap` inherited the launcher's stderr and
+   these lines showed up unmarked in the terminal.
 3. It finds the prefix (`game_prefix`): from a running `AION2.exe`'s
    environment, else from the `libraryfolders.vdf` of each native Steam
    installation (`steam_roots`, §14). Then it installs
@@ -259,8 +270,10 @@ again.
    dummy interface in a private network namespace, `unshare -rn`).
 5. `dumpcap` ended by itself while its interface is still up, with the same
    index: status window `Capture on <name> (<address>) ended: …`, with the
-   exit code and a pointer to `a2qlinux-setup`; `dumpcap`'s own message is
-   the line before it. One desktop notification. The interface is tried
+   exit code and a pointer to `a2qlinux-setup`; `dumpcap`'s own message
+   (`dumpcap on <name>: …`, if it wrote one) is the line before it: the scan
+   waits up to a second for that interface's message thread to finish before
+   it writes its own line. One desktop notification. The interface is tried
    again every `CAPTURE_RETRY_EVERY` (30 s), and at once when its address
    changes; a repeated failure on the same interface and address is not
    reported again, so a permission problem gives one message, not one every
@@ -961,7 +974,7 @@ do.
 | Questlog: "Npcap lists no adapter with this address" | the game's connection uses an address no capture covers | status window: "AION 2's connection … uses …, which A2Qlinux does not capture on" (§4.3, step 8) |
 | "AION 2's connection … still uses …, which no network interface has any more" | the VPN was switched off under a running game; its connection is dead until the game reconnects | none on our side; the game has to reconnect (§4.3, step 8) |
 | Questlog: "A2Qlinux does not capture on <name> (any more) …" | the interface went away between Questlog's list and its open | none; Questlog lists again on its next pass |
-| "Capture on <name> … ended" (and a notification) | `dumpcap` failed on that interface, usually capture permission | `dumpcap`'s own line above it; `a2qlinux-setup` |
+| "Capture on <name> … ended" (and a notification) | `dumpcap` failed on that interface, usually capture permission | `dumpcap on <name>: …` above it (`dumpcap`'s own line); `a2qlinux-setup` |
 | "Interface <name> delivers link type N, which Questlog cannot read" | an interface type Questlog's decoder skips (§4.3) | none from our side; game traffic on that interface is not counted |
 | "Refused a connection … from an older A2Qlinux wpcap.dll" | a Questlog still running with the DLL of an older A2Qlinux | quit Questlog and start it through A2Qlinux |
 | Steam "launching" forever while Questlog runs | Proton waiting for an idle prefix (§5.1) | `steam_launch.log`; set the launch option |

@@ -1,4 +1,5 @@
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -428,9 +429,10 @@ if __name__ == "__main__":
 
 
 class FakeDumpcap:
-    def __init__(self):
+    def __init__(self, stderr=b""):
         import io
         self.stdout = io.BytesIO(b"")      # ends at once: the pump records "dumpcap stopped"
+        self.stderr = io.BytesIO(stderr) if isinstance(stderr, bytes) else stderr
         self.returncode = None
         self.terminated = False
 
@@ -468,9 +470,9 @@ class CapturesTest(unittest.TestCase):
         self.game = set()
         self.index = {"enp9s0": 2, "proton0": 5}
 
-    def captures(self, wanted=()):
+    def captures(self, wanted=(), stderr=b""):
         def start(dumpcap, name, address):
-            process = FakeDumpcap()
+            process = FakeDumpcap(stderr)
             self.started.append((name, address, process))
             return process
         self.now = 0.0
@@ -525,6 +527,32 @@ class CapturesTest(unittest.TestCase):
         self.up["enp9s0"] = "10.0.4.91"         # a new address: tried again
         self.scan(captures)
         self.assertEqual(len(self.started), 2)
+
+    def test_dumpcap_start_banner_is_not_repeated_but_its_errors_are_shown_above_ours(self):
+        # What dumpcap 4.x writes on start (measured on lo), then a failure that arrives
+        # late, so the "ended" line would come first if it did not wait for the relay.
+        def stderr():
+            yield b"Capturing on 'Tunnel: proton0'\n"
+            yield b"File: -\n"
+            time.sleep(0.2)
+            yield b"dumpcap: The network adapter on which the capture was being done is no longer attached.\n"
+        captures = self.captures(stderr=stderr())
+        self.scan(captures)
+        self.started[0][2].returncode = 1
+        self.scan(captures)
+        own = [m for m in self.messages if m.startswith("dumpcap on enp9s0:")]
+        self.assertEqual(own, ["dumpcap on enp9s0: dumpcap: The network adapter on which the capture "
+                               "was being done is no longer attached."])
+        ended = next(i for i, m in enumerate(self.messages) if "ended:" in m)
+        self.assertLess(self.messages.index(own[0]), ended)
+
+    def test_dumpcap_counts_on_stop_are_passed_on(self):
+        lines = []
+        stream = [b"Capturing on 'Loopback: lo'\n", b"File: -\n", b"Packets captured: 0\n",
+                  b"Packets received/dropped on interface 'Loopback: lo': 0/0 (0.0%)\n"]
+        q.relay_dumpcap_messages("lo", stream, log=lines.append)
+        self.assertEqual(lines, ["dumpcap on lo: Packets captured: 0",
+                                 "dumpcap on lo: Packets received/dropped on interface 'Loopback: lo': 0/0 (0.0%)"])
 
     def test_failed_capture_is_retried_later_and_reported_only_once(self):
         captures = self.captures()
