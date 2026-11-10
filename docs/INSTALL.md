@@ -184,7 +184,7 @@ What the setup does, in order:
 | takes Questlog's icon from it (A2Qlinux does not ship Questlog's logo) | `Icon: …` |
 | creates the "Questlog (AION 2)" entry in your applications menu | `Menu entry: …` |
 | on KDE Plasma 6 only: explains the KDE overlays, which let Questlog's Black Market Cards show above the game, and asks whether to set them up (Enter means yes) | the explanation, `Set this up now? [Y/n]`, then `KDE: window rule … are in place.` |
-| prints the line for Steam's launch options, used in the optional last section | `Steam > AION 2 > …` |
+| checks Steam's launch option for AION 2, used in the optional last section: says when it is set, otherwise prints the line to paste | `Steam launch option: set (…)`, or `Steam > AION 2 > …` and the line |
 
 It runs nothing with `sudo` and changes nothing in the game; the commands
 that need administrator rights are printed for you to run.
@@ -294,8 +294,9 @@ Steam sees the game as closed as soon as you leave it, while Questlog stays
 open. Why this is so is in [USING.md](USING.md).
 
 1. Find the line to paste. `a2qlinux-setup` printed it at the end, under
-   "Steam > AION 2 > Properties > General > Launch Options". It looks like
-   this, with your user name:
+   "Steam > AION 2 > Properties > General > Launch Options" (if it says
+   `Steam launch option: set (…)` instead, this is already done). It looks
+   like this, with your user name:
    ```
    /home/<you>/.local/bin/a2qlinux-steam %command%
    ```

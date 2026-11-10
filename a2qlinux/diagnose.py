@@ -176,9 +176,6 @@ def check_steam(results, appid, qdir):
         level, text = judge_launch_option(option, ours)
         label = "Launch option" + (f" ({account})" if len(accounts) > 1 else "")
         results.append((level, f"{label}: {text}"))
-    if accounts:
-        results.append((NOTE, "Launch option: read from Steam's saved settings (localconfig.vdf); if you changed "
-                              "it a moment ago and this disagrees, close Steam and run this again"))
 
     runs = qdir / "proton-stream" / "steam_launch.log"
     try:

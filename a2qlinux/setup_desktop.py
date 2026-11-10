@@ -23,7 +23,10 @@ What it does, in order:
      (Black Market Cards) above the game. It explains them and asks, with
      yes as the default; --kde-overlays sets them up without asking,
      --no-kde-overlays removes them. Once set up, a later run refreshes them.
-  9. Prints the Steam launch option to set by hand.
+  9. Checks AION 2's Steam launch option (launch_option_step, judged as
+     a2qlinux --diagnose does): says when it is set, prints the line to set
+     by hand when it is not, and lists it as a problem when it is set so
+     that the game cannot start.
 
 Run it again after fixing what it lists, and after moving Questlog's folder.
 """
@@ -318,6 +321,36 @@ def refresh_entries(log=lambda text: None):
     return written
 
 
+def launch_option_step(steam_command, accounts=None, say=print):
+    """Say whether AION 2's Steam launch option is set, as a2qlinux --diagnose judges it; problems found.
+
+    Optional, so not being set is no problem; set in a way that keeps the
+    game from starting (no %command%, a path that is gone) is one.
+    """
+    from .diagnose import OK, PROBLEM, judge_launch_option, launch_options
+    from .launcher import APPID, steam_roots
+    accounts = launch_options(steam_roots(), APPID) if accounts is None else accounts
+    line = f"    {steam_command} %command%"
+    if not accounts:
+        say("\nSteam > AION 2 > Properties > General > Launch Options (optional, starts Questlog with the game):")
+        say(line)
+        return []
+    problems = []
+    for account, option in accounts:
+        level, text = judge_launch_option(option, steam_command)
+        label = "Steam launch option" + (f" (account {account.name})" if len(accounts) > 1 else "")
+        if level == OK:
+            say(f"{label}: set ({option}).")
+        elif level == PROBLEM:
+            problems.append(f"{label}: {text}")
+        else:
+            say(f"\n{label}: {text}")
+    if any(level != OK for level, _ in (judge_launch_option(o, steam_command) for _, o in accounts)):
+        say("Steam > AION 2 > Properties > General > Launch Options (optional, starts Questlog with the game):")
+        say(line)
+    return problems
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--questlog-dir", type=Path,
@@ -411,8 +444,7 @@ def main():
     if kde_problem:
         print(f"Note: {kde_problem}.", file=sys.stderr)
 
-    print("\nSteam > AION 2 > Properties > General > Launch Options (optional, starts Questlog with the game):")
-    print(f"    {command('a2qlinux-steam')} %command%")
+    problems += launch_option_step(command("a2qlinux-steam"))
 
     if problems:
         print("\nNot ready yet. Fix these, then run a2qlinux-setup again:", file=sys.stderr)

@@ -162,3 +162,32 @@ class CaptureCheckTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LaunchOptionStepTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.ours = Path(self.tmp.name) / "a2qlinux-steam"
+        self.ours.write_text("#!/bin/sh\n")
+        self.said = []
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def step(self, *options):
+        accounts = [(Path(f"/s/userdata/{n}"), option) for n, option in enumerate(options, 1)]
+        return s.launch_option_step(str(self.ours), accounts, say=self.said.append)
+
+    def test_set_says_so_without_the_line_to_paste(self):
+        self.assertEqual(self.step(f"{self.ours} %command%"), [])
+        self.assertEqual(len(self.said), 1)
+        self.assertIn("set (", self.said[0])
+
+    def test_not_set_gives_the_line_to_paste_and_is_no_problem(self):
+        self.assertEqual(self.step(None), [])
+        self.assertTrue(any(line.strip() == f"{self.ours} %command%" for line in self.said))
+
+    def test_set_so_that_the_game_cannot_start_is_a_problem(self):
+        problems = self.step(f"{self.ours}")            # no %command%
+        self.assertEqual(len(problems), 1)
+        self.assertIn("%command%", problems[0])

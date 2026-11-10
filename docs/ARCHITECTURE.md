@@ -1158,11 +1158,13 @@ safe at any time, the game running or not. In order:
    `%command%` (the game never starts); `a2qlinux-steam` without its
    folder (Steam does not find it, §5.1); a path that does not exist; a
    path that is another installation's. Words before it, such as
-   `PROTON_FSR4_UPGRADE=1`, are left alone. When Steam writes the file
-   after a change has not been measured, so the diagnosis says where it
-   read the option from and to close Steam and look again if that
-   disagrees. Then the last line of `steam_launch.log`: whether the option
-   ever ran, and how.
+   `PROTON_FSR4_UPGRADE=1`, are left alone. `a2qlinux-setup` uses the same
+   judgement at its end (`launch_option_step`): "set", or the line to paste,
+   or a problem when the option keeps the game from starting. Steam
+   writes the file within a second of each change in that field while it
+   runs (measured 10 November 2026 by watching the file while the option
+   was edited in Steam), so what is read is what Steam uses. Then the last
+   line of `steam_launch.log`: whether the option ever ran, and how.
 5. What runs now: the launcher (`launcher_running`, `launcher_pid`),
    Questlog and whether it carries `QUESTLOG_PROTON_BRIDGE` (one that does
    not was started outside A2Qlinux: it gets no traffic, and the game waits
