@@ -1085,6 +1085,22 @@ no rebuild. Observed: the build here against system Wine 11.21 runs daily
 under Proton's Wine 11.0, and the PyPI package's parts are built against
 whatever Wine the CI container has.
 
+**Questlog in the game's prefix, not in one of its own.** A prefix of its
+own would remove everything §5 and §6.7 deal with: the game would not wait
+for Questlog (Proton waits only for its own prefix to go idle), so no
+launch option, no closing and reopening around Play, no releasing Steam.
+Questlog cannot work there, though. It finds the game through the Windows
+process list (`CreateToolhelp32Snapshot`, `Process32FirstW`, looking for
+`Aion2.exe` in its game definition); from the game's processes it finds the
+game's window, which its overlays follow, and it checks the game's TCP
+connections with `GetExtendedTcpTable`. Under Wine that process list holds
+only the processes of the same `wineserver`, i.e. the same prefix.
+Measured 10 November 2026 with two throwaway prefixes: `tasklist` in the
+first listed its `cmd.exe` and `ping.exe`, in the second neither, only its
+own nine processes. Questlog in a prefix of its own would never see the
+game. Making it see the game would mean faking Windows' process list for
+it, which is not worth the gain.
+
 **Our tray instead of fixing the Wine one** — §6.2. **The guard instead of a
 patched Proton** — §6.1. **Session end after a delay instead of an immediate
 one** — §6.4.
