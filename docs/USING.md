@@ -174,7 +174,7 @@ Mention it when you report a problem.
 | You do | What happens |
 |---|---|
 | left-click the icon, or **Open Questlog** | Questlog's window opens in front, after about 3 seconds |
-| close Questlog's window (X) | the window hides; Questlog keeps running in the background |
+| close Questlog's window (X) | what Questlog's own setting for closing says: it hides to the background and keeps running, it quits, or (the default) it asks you which; the setting is in Questlog's settings, or is remembered when you tick "remember" in that question |
 | **Quit Questlog** | the icon and window disappear at once; Questlog ends within about a second, or, while the game is running, up to 10 seconds later once it has saved; the status window then closes |
 | start "Questlog (AION 2)" while Questlog runs | Questlog's window opens; no second copy starts |
 

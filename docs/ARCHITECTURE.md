@@ -635,8 +635,22 @@ game running, packets keep arriving, so the quit takes up to 10.5 s:
                +-- otherwise --> launcher ends
 ```
 
-- `close-window` posts `WM_CLOSE` to the main window, which Questlog answers
-  by hiding to the background.
+- `close-window` posts `WM_CLOSE` to the main window. Questlog treats it as
+  a click on the window's X, and its own setting `closeAction` (in
+  `AppData/Roaming/Questlog/state.json` in the prefix, chosen in its
+  settings or by ticking "remember" in its close prompt) decides: `tray`
+  hides the window; `quit` quits Questlog normally, with its own save
+  (`will-quit`), so the launcher sees it end by itself within a second and
+  ends too; `ask`, the default, shows Questlog's prompt in its window, which
+  nobody sees while the window is hidden, and whose answer does not matter:
+  `end-session` follows at the due time whatever it was. All three end
+  without lost data (measured with `quit` on 10 November 2026: Questlog had
+  gone 0.3 s after `close-window`; `ask` read from Questlog's code only).
+  Questlog has no switch or message that makes it quit with its save from
+  outside: its command-line switches are view, game, hidden and paths, a
+  second start only shows its window (`second-instance`), and its other
+  `app.quit()` is the Quit item of its own tray menu, drawn by Electron's
+  own menu code and so not reachable by a window message.
 - `end-session` goes to Questlog's main window only. The game and other
   programs receive nothing (I2), unlike `wineboot -e`, which ends every
   program in the session.
