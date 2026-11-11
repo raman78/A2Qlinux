@@ -2,7 +2,7 @@
 
 This guide sets up Questlog Desktop, the Windows-only damage meter and overlay
 app for AION 2, to run next to the game on Linux. At the end you will have a
-"Questlog (AION 2)" entry in your applications menu. Daily use is in
+"A2Qlinux" entry in your applications menu. Daily use is in
 [USING.md](USING.md); how it works inside is in
 [ARCHITECTURE.md](ARCHITECTURE.md), which you do not need.
 
@@ -52,7 +52,7 @@ whatever your desktop has). Copy each one whole.
   Steam installed from Flatpak does not work: it runs in a sandbox that
   cannot see A2Qlinux, so its launch option cannot start it. Steam from
   Snap is sandboxed in the same way and has not been tried.
-- **A desktop with a system tray**, where A2Qlinux shows its Questlog icon.
+- **A desktop with a system tray**, where A2Qlinux shows its icon: Questlog's Q, in red.
   KDE Plasma, Xfce, Cinnamon and MATE have one. GNOME needs the extension
   "AppIndicator and KStatusNotifierItem Support"; Ubuntu ships it already
   switched on. `a2qlinux-setup` checks the tray for you. It is used
@@ -181,8 +181,8 @@ What the setup does, in order:
 | tries a one-second capture, to see that capturing is allowed | `capturing is not allowed yet …` and the commands, if not |
 | starts A2Qlinux's tray icon for a moment, without showing it, to see that it can run on your desktop | a reason, if not; see "The tray icon" in [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
 | installs Questlog in its folder (`~/Games/Questlog`, or the one given with `--questlog-dir`) if it is not there yet (about 130 MB) | `Downloading Questlog …`, then `Installed Questlog …` |
-| takes Questlog's icon from it (A2Qlinux does not ship Questlog's logo) | `Icon: …` |
-| creates the "Questlog (AION 2)" entry in your applications menu | `Menu entry: …` |
+| takes Questlog's icon from it and colours the white Q red, so that A2Qlinux's icon is told apart from Questlog's own (A2Qlinux does not ship Questlog's logo) | `Icon: …` |
+| creates the "A2Qlinux" entry in your applications menu (searching the menu for "Questlog" finds it too) | `Menu entry: …` |
 | on KDE Plasma 6 only: explains the KDE overlays, which let Questlog's Black Market Cards show above the game, and asks whether to set them up (Enter means yes) | the explanation, `Set this up now? [Y/n]`, then `KDE: window rule … are in place.` |
 | checks Steam's launch option for AION 2, used in the optional last section: says when it is set, otherwise prints the line to paste | `Steam launch option: set (…)`, or `Steam > AION 2 > …` and the line |
 
@@ -217,7 +217,10 @@ Questlog by hand is described in
 The menu entry keeps itself up to date: each time `a2qlinux` starts, it
 checks that the entry (and the desktop icon, if you have one) still runs
 this installation, and writes it again if not, for example after A2Qlinux
-was reinstalled elsewhere. Options you added to the entry by hand stay.
+was reinstalled elsewhere. Options you added to the entry by hand stay. An
+entry from an earlier A2Qlinux, still called "Questlog (AION 2)" with
+Questlog's white icon, gets the name A2Qlinux and the red icon this way; its
+options stay too.
 
 ### From the source code instead
 
@@ -269,11 +272,11 @@ give the folders as `WINE_INCLUDE=<folder with windows/windows.h>` and
 
 ## Checking that it works
 
-1. Start **Questlog (AION 2)** from your applications menu. A small
+1. Start **A2Qlinux** from your applications menu. A small
    terminal window opens, A2Qlinux's status window, and then Questlog.
    Keep the status window open while you use Questlog; it carries the game
    traffic to Questlog.
-2. Look at the system tray: one Questlog icon, A2Qlinux's. Right-click it
+2. Look at the system tray: one icon with a red Q, A2Qlinux's. Right-click it
    to see Open Questlog and Quit Questlog.
 3. Start AION 2 from Steam and log in to a character.
 4. The status window says `Game traffic is flowing to Questlog.` and
@@ -341,7 +344,7 @@ Next: [USING.md](USING.md).
    ```
 4. Delete the menu entry, the icon and the settings file:
    ```
-   rm -r ~/.local/share/applications/questlog-aion2.desktop ~/.local/share/icons/questlog-aion2.png ~/.config/a2qlinux
+   rm -r ~/.local/share/applications/questlog-aion2.desktop ~/.local/share/icons/a2qlinux.png ~/.config/a2qlinux
    ```
    If you made a desktop shortcut, delete `questlog-aion2.desktop` from
    your desktop too.

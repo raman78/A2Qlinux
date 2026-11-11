@@ -23,7 +23,7 @@ What you will notice:
    - "Questlog X does not fit this A2Qlinux yet …" with the reason. Your
      current version stays. This happens when Questlog changed something
      A2Qlinux relies on; A2Qlinux itself needs an update first.
-3. The next time you start "Questlog (AION 2)", the new version is put in
+3. The next time you start "A2Qlinux", the new version is put in
    place before Questlog opens. That takes a few seconds. The status window
    says `Installed Questlog X; Questlog Y is kept in …` and then
    `Starting Questlog X.`
@@ -88,7 +88,7 @@ Windows driver and does not work there; A2Qlinux replaces it.
    ```
    Replace the whole folder rather than copying over it. Some of Questlog's
    files have changing names, and the old ones would pile up.
-5. Start "Questlog (AION 2)". The status window should say
+5. Start "A2Qlinux". The status window should say
    `Starting Questlog <new version>.`, and the tray should show one icon.
 6. If all is well, delete `~/Games/Questlog-old` and `/tmp/qlupd`. If not,
    swap the folders back.

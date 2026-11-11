@@ -18,16 +18,13 @@ starts and the desktop has a system tray, otherwise 1 with the reason on
 stderr (Qt's own message when Qt cannot start). a2qlinux-setup runs it.
 """
 
-from pathlib import Path
 import sys
 
 from PyQt6.QtCore import QSocketNotifier
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from a2qlinux import shown_version
-
-ICON = Path.home() / ".local" / "share" / "icons" / "questlog-aion2.png"   # written by a2qlinux-setup
+from a2qlinux import APP_NAME, ICON, shown_version   # ICON is written by a2qlinux-setup
 
 
 def report(action):
@@ -36,8 +33,8 @@ def report(action):
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("Questlog (AION 2)")
-    app.setDesktopFileName("questlog-aion2")
+    app.setApplicationName(APP_NAME)
+    app.setDesktopFileName("questlog-aion2")   # setup_desktop.ENTRY_ID
     app.setQuitOnLastWindowClosed(False)
     if not QSystemTrayIcon.isSystemTrayAvailable():
         print("a2qlinux tray: the desktop has no system tray", file=sys.stderr)
@@ -47,7 +44,7 @@ def main():
 
     version = f"A2Qlinux {shown_version()}"
     tray = QSystemTrayIcon(QIcon(str(ICON)), app)
-    tray.setToolTip(f"Questlog (AION 2) — {version}")
+    tray.setToolTip(f"{version} — Questlog for AION 2")
     menu = QMenu()
     menu.addAction(version).setEnabled(False)   # which A2Qlinux runs, for reports; not clickable
     menu.addSeparator()

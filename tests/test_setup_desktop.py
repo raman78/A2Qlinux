@@ -11,15 +11,19 @@ class RefreshEntriesTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         root = Path(self.tmp.name)
         self.ours = root / "bin" / "a2qlinux"
-        self.saved = (s.MENU_ENTRY, s.ICON, s.desktop_shortcut_path, s.command)
+        self.saved = (s.MENU_ENTRY, s.ICON, s.OLD_ICON, s.desktop_shortcut_path, s.command)
         s.MENU_ENTRY = root / "applications" / "questlog-aion2.desktop"
-        s.ICON = root / "icons" / "questlog-aion2.png"
+        s.ICON = root / "icons" / "a2qlinux.png"
+        s.OLD_ICON = root / "icons" / "questlog-aion2.png"
         self.shortcut = root / "Desktop" / "questlog-aion2.desktop"
         s.desktop_shortcut_path = lambda: self.shortcut
         s.command = lambda name: str(self.ours)
+        self.saved_questlog_dir = s.config.questlog_dir
+        s.config.questlog_dir = lambda: root / "Questlog"     # empty: not the Questlog of whoever runs the tests
 
     def tearDown(self):
-        s.MENU_ENTRY, s.ICON, s.desktop_shortcut_path, s.command = self.saved
+        s.MENU_ENTRY, s.ICON, s.OLD_ICON, s.desktop_shortcut_path, s.command = self.saved
+        s.config.questlog_dir = self.saved_questlog_dir
         self.tmp.cleanup()
 
     def test_missing_menu_entry_is_created_but_no_desktop_shortcut(self):
@@ -36,12 +40,92 @@ class RefreshEntriesTest(unittest.TestCase):
         self.assertEqual(set(written), {s.MENU_ENTRY, self.shortcut})
         self.assertEqual(s.entry_command(self.shortcut), str(self.ours))
 
-    def test_our_entry_with_options_added_by_hand_is_left_alone(self):
+    def test_our_current_entry_with_options_added_by_hand_is_left_alone(self):
         s.MENU_ENTRY.parent.mkdir(parents=True)
-        mine = f"[Desktop Entry]\nExec=env QUESTLOG_DIR=/x {self.ours} --no-auto-update\n"
+        exec_line = f"Exec=env QUESTLOG_DIR=/x {self.ours} --no-auto-update"
+        mine = s.desktop_entry(None).replace(f"Exec={self.ours}", exec_line)
         s.MENU_ENTRY.write_text(mine)
         self.assertEqual(s.refresh_entries(), [])
         self.assertEqual(s.MENU_ENTRY.read_text(), mine)
+
+    def test_entry_from_before_the_rename_gets_name_and_icon_but_keeps_its_command(self):
+        exec_line = f"Exec=env QUESTLOG_DIR=/x {self.ours} --no-auto-update"
+        old = ("[Desktop Entry]\nType=Application\nName=Questlog (AION 2)\n"
+               f"{exec_line}\nIcon={s.OLD_ICON}\nTerminal=false\nCategories=Game;\n")
+        for path in (s.MENU_ENTRY, self.shortcut):
+            path.parent.mkdir(parents=True)
+            path.write_text(old)
+        self.assertEqual(set(s.refresh_entries()), {s.MENU_ENTRY, self.shortcut})
+        for path in (s.MENU_ENTRY, self.shortcut):
+            lines = path.read_text().splitlines()
+            self.assertIn("Name=A2Qlinux", lines)
+            self.assertIn(f"Icon={s.ICON}", lines)
+            self.assertIn(exec_line, lines)
+            self.assertIn("Keywords=Questlog;AION;AION 2;damage meter;", lines)
+            self.assertEqual(len([l for l in lines if l.startswith("Name=")]), 1)
+        self.assertEqual(s.refresh_entries(), [])
+
+    def test_only_the_desktop_entry_group_is_updated(self):
+        exec_line = f"Exec={self.ours}"
+        old = (f"[Desktop Entry]\nName=Questlog (AION 2)\n{exec_line}\n\n"
+               "[Desktop Action Hidden]\nName=Start hidden\nIcon=other.png\nExec=a2qlinux --hidden\n")
+        updated = s.with_current_keys(old, s.desktop_entry(None))
+        entry, action = updated.split("\n\n[Desktop Action Hidden]\n")
+        self.assertIn("Name=A2Qlinux", entry.splitlines())
+        self.assertIn("Keywords=Questlog;AION;AION 2;damage meter;", entry.splitlines())
+        self.assertIn(f"Icon={s.ICON}", entry.splitlines())
+        self.assertEqual(action, "Name=Start hidden\nIcon=other.png\nExec=a2qlinux --hidden\n")
+
+    def test_missing_icon_is_made_and_the_uncoloured_one_removed(self):
+        made = []
+        saved = s.read_asar_file, s.a2qlinux_icon
+        s.read_asar_file = lambda asar, name: b"questlog png"
+        s.a2qlinux_icon = lambda png: made.append(png) or b"red png"
+        try:
+            s.OLD_ICON.parent.mkdir(parents=True)
+            s.OLD_ICON.write_bytes(b"questlog png")
+            s.refresh_entries()
+        finally:
+            s.read_asar_file, s.a2qlinux_icon = saved
+        self.assertEqual(made, [b"questlog png"])
+        self.assertEqual(s.ICON.read_bytes(), b"red png")
+        self.assertFalse(s.OLD_ICON.exists())
+
+    def test_icon_that_cannot_be_made_is_reported_and_the_old_one_kept(self):
+        s.OLD_ICON.parent.mkdir(parents=True)
+        s.OLD_ICON.write_bytes(b"questlog png")
+        said = []
+        s.refresh_entries(said.append)            # no Questlog in the test folder
+        self.assertFalse(s.ICON.exists())
+        self.assertTrue(s.OLD_ICON.exists())
+        self.assertTrue(any("icon could not be made" in line for line in said), said)
+
+
+class A2QlinuxIconTest(unittest.TestCase):
+    """Questlog's white Q turns red; the dark tile, transparency and soft edges stay."""
+
+    def test_white_becomes_the_colour_and_the_tile_stays(self):
+        from PyQt6.QtCore import QBuffer, QByteArray, QIODevice
+        from PyQt6.QtGui import QColor, QImage
+        image = QImage(4, 1, QImage.Format.Format_RGBA8888)
+        for x, colour in enumerate([QColor(17, 17, 17), QColor(255, 255, 255),
+                                    QColor(136, 136, 136), QColor(0, 0, 0, 0)]):
+            image.setPixelColor(x, 0, colour)
+        data = QByteArray()
+        buffer = QBuffer(data)
+        buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+        image.save(buffer, "PNG")
+        out = QImage.fromData(s.a2qlinux_icon(bytes(data), colour=(220, 40, 40)))
+        pixel = lambda x: out.pixelColor(x, 0).getRgb()
+        self.assertEqual(pixel(0), (17, 17, 17, 255))          # the tile
+        self.assertEqual(pixel(1), (220, 40, 40, 255))         # the Q
+        r, g, b, a = pixel(2)                                  # an edge: half tile, half Q
+        self.assertEqual((r, g, b, a), (118, 28, 28, 255))
+        self.assertEqual(pixel(3)[3], 0)                       # transparent corner
+
+    def test_not_an_image(self):
+        with self.assertRaises(ValueError):
+            s.a2qlinux_icon(b"not a png")
 
 
 # /etc/os-release of each distribution family, as the distributions ship them (abridged).

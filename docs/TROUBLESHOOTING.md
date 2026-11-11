@@ -7,7 +7,7 @@ A2Qlinux, what causes them and what to do, followed by common questions.
 
 | Symptom | Likely cause | What to do |
 |---|---|---|
-| "No capture bridge: start Questlog with A2Qlinux" in Questlog | Questlog was started some other way | quit it, start "Questlog (AION 2)" |
+| "No capture bridge: start Questlog with A2Qlinux" in Questlog | Questlog was started some other way | quit it, start "A2Qlinux" from the menu |
 | "Capture bridge not reachable" | the status window was closed | quit Questlog, start it again from the menu |
 | "Capture bridge closed the connection" | A2Qlinux stopped | read the status window, start again |
 | "Aion 2's traffic can't be read" before you log in | harmless, it goes away on its own | log in to a server |
@@ -15,7 +15,7 @@ A2Qlinux, what causes them and what to do, followed by common questions.
 | "Settings: … line N …" in the status window, or a notification about the settings file | a mistake in `~/.config/a2qlinux/config.toml` | fix that line; until then the setting keeps its default |
 | Steam shows AION 2 as running after you closed it | a program the game started is still ending, or the game was started before Questlog and Questlog restarts about 10 seconds after the game; or another Windows program started in the game's environment still runs | wait 30 seconds; the status window says what it ended or which program holds the game; Stop in Steam is safe, it does not touch Questlog |
 | Steam keeps saying "launching" while Questlog is open | Play was pressed without the launch option | set the Steam launch option; meanwhile A2Qlinux closes Questlog, lets the game start and reopens it. If Questlog does not close by itself and the game only starts once you quit Questlog, run `a2qlinux --diagnose` (below) and report it |
-| two Questlog icons in the tray | hiding Questlog's own icon failed | the status window says why; both icons work, but use A2Qlinux's |
+| two Questlog icons in the tray | hiding Questlog's own icon failed | the status window says why; both icons work, but use A2Qlinux's, the one with the red Q |
 | clicks in the game open Questlog's window | the click fix did not start | look for lines starting `[a2qlinux]` in `~/Games/Questlog/proton-stream/questlog.log` |
 | after starting Questlog again during play, the meter shows no fights and the Tracker Map is empty; Questlog says "Detecting character…" | Questlog learns your character only when you log in or change zone; the same on Windows | change zone (teleport or walk into another area), or go to character select and log back in |
 | Black Market Cards never shows in the shop | the overlay is off in Questlog; on KDE, the KDE overlays are not set up; on other desktops it cannot show yet | see "Black Market Cards and moving overlays (Alt+E)" in [USING.md](USING.md) |

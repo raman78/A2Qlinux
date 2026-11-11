@@ -28,3 +28,15 @@ def shown_version(root=None):
         reason = (done.stderr.strip().splitlines() or [f"exit code {done.returncode}"])[0]
         return f"{__version__} (source checkout; git describe failed: {reason})"
     return f"{done.stdout.strip().removeprefix('v')} (source checkout)"
+
+
+def _icon_path():
+    from pathlib import Path
+    return Path.home() / ".local" / "share" / "icons" / "a2qlinux.png"
+
+
+# What the menu entry, the tray icon and the notifications are called and show.
+# The icon is Questlog's own, recoloured on the player's computer by
+# a2qlinux-setup (setup_desktop.a2qlinux_icon); A2Qlinux does not ship it.
+APP_NAME = "A2Qlinux"
+ICON = _icon_path()

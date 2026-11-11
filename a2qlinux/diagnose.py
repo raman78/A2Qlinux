@@ -201,7 +201,7 @@ def check_running(results, appid):
         if not fed:
             results.append((PROBLEM, "Now: Questlog runs, but was not started by A2Qlinux: it gets no game "
                                      "traffic, and the game waits until it is closed. Quit it from its own tray "
-                                     "icon and start 'Questlog (AION 2)' from the menu"))
+                                     "icon and start 'A2Qlinux' from the menu"))
         elif not running:
             results.append((PROBLEM, "Now: Questlog runs with the bridge, but A2Qlinux has ended (status "
                                      "window closed?): it gets no game traffic. Quit it and start it again"))

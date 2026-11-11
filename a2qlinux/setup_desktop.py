@@ -1,4 +1,4 @@
-"""a2qlinux-setup: the menu entry for Questlog (AION 2), and a check of what A2Qlinux needs.
+"""a2qlinux-setup: the menu entry "A2Qlinux" for Questlog, and a check of what A2Qlinux needs.
 
     a2qlinux-setup [--questlog-dir DIR] [--desktop-shortcut] [--kde-overlays | --no-kde-overlays]
 
@@ -15,8 +15,10 @@ What it does, in order:
   5. Installs the newest Questlog when its folder has no Questlog.exe
      (update.install_fresh: the updater's download and checks).
   6. Takes Questlog's icon from the installed Questlog (resources/icon.png in
-     its app.asar) - the icon is Questlog's and is not shipped here.
-  7. Writes the menu entry "Questlog (AION 2)" (and, with --desktop-shortcut,
+     its app.asar) and colours its white Q red (a2qlinux_icon), so that
+     A2Qlinux's entry and tray icon are told apart from Questlog's own - the
+     icon is Questlog's and is not shipped here.
+  7. Writes the menu entry "A2Qlinux" (and, with --desktop-shortcut,
      the same on the desktop), running the `a2qlinux` command.
   8. On KDE Plasma 6, offers the KDE overlays (a2qlinux.kde_overlays): a
      window rule and a script that show Questlog's full-screen overlay layer
@@ -39,14 +41,16 @@ import struct
 import subprocess
 import sys
 
-from . import config, shown_version
+from . import APP_NAME, ICON, config, shown_version
 from . import kde_overlays
 from .desktop import TERMINALS, terminal_command
 from .update import install_fresh, read_asar_file
 
 BIN = Path(__file__).resolve().parent / "bin"
-ENTRY_ID = "questlog-aion2"
-ICON = Path.home() / ".local" / "share" / "icons" / f"{ENTRY_ID}.png"
+ENTRY_ID = "questlog-aion2"      # the file name from before the entry was called A2Qlinux; kept, so that
+                                 # updating rewrites the one entry instead of adding a second one
+OLD_ICON = Path.home() / ".local" / "share" / "icons" / f"{ENTRY_ID}.png"   # Questlog's icon, uncoloured
+ICON_COLOUR = (220, 40, 40)      # red, for the white of Questlog's Q
 MENU_ENTRY = Path.home() / ".local" / "share" / "applications" / f"{ENTRY_ID}.desktop"
 
 # program -> the package that provides it, by its name in PACKAGES
@@ -256,16 +260,87 @@ def command(name):
     raise RuntimeError(f"the command {name} is not installed; install A2Qlinux with pipx first")
 
 
+def a2qlinux_icon(questlog_png, colour=ICON_COLOUR):
+    """Questlog's icon (PNG bytes) with its white Q in `colour`, as PNG bytes.
+
+    The icon is a white Q on a dark tile. Each pixel is read as a mix of the
+    tile's colour (the darkest opaque pixel) and white, and the white share is
+    given to `colour` instead; so the tile stays as it is and the Q's soft
+    edges stay soft.
+    """
+    from PyQt6.QtCore import QBuffer, QByteArray, QIODevice
+    from PyQt6.QtGui import QImage
+    image = QImage.fromData(questlog_png)
+    if image.isNull():
+        raise ValueError("Questlog's icon is not an image Qt can read")
+    image = image.convertToFormat(QImage.Format.Format_RGBA8888)
+    pixels = bytearray(image.constBits().asarray(image.sizeInBytes()))
+    tile = min((min(pixels[i:i + 3]) for i in range(0, len(pixels), 4) if pixels[i + 3] == 255), default=0)
+    span = max(255 - tile, 1)
+    for i in range(0, len(pixels), 4):
+        white = max(min(pixels[i:i + 3]) - tile, 0) / span
+        if white:
+            for c in range(3):
+                pixels[i + c] = round(min(max(pixels[i + c] - white * (255 - colour[c]), 0), 255))
+    coloured = QImage(bytes(pixels), image.width(), image.height(), image.bytesPerLine(),
+                      QImage.Format.Format_RGBA8888)
+    data = QByteArray()
+    buffer = QBuffer(data)
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    if not coloured.save(buffer, "PNG"):
+        raise ValueError("the coloured icon could not be written as PNG")
+    return bytes(data)
+
+
+def write_icon(questlog_dir):
+    """Write A2Qlinux's icon from the Questlog in `questlog_dir`, and remove the uncoloured one."""
+    icon = a2qlinux_icon(read_asar_file(Path(questlog_dir) / "resources" / "app.asar", "resources/icon.png"))
+    ICON.parent.mkdir(parents=True, exist_ok=True)
+    ICON.write_bytes(icon)
+    OLD_ICON.unlink(missing_ok=True)
+
+
 def desktop_entry(questlog_dir):
     run = command("a2qlinux")      # where Questlog is comes from the settings file
     return ("[Desktop Entry]\n"
             "Type=Application\n"
-            "Name=Questlog (AION 2)\n"
+            f"Name={APP_NAME}\n"
+            "GenericName=Questlog for AION 2\n"
             "Comment=Questlog Desktop for AION 2 under Proton, fed with live game traffic\n"
+            "Keywords=Questlog;AION;AION 2;damage meter;\n"
             f"Exec={run}\n"
             f"Icon={ICON}\n"
             "Terminal=false\n"
             "Categories=Game;\n")
+
+
+def with_current_keys(text, current):
+    """`text` of our own entry, with every key of `current` except Exec as `current` has it.
+
+    Exec is kept, with any options added to it by hand; keys only `text` has
+    are kept too. Only the [Desktop Entry] group is touched (a [Desktop
+    Action …] group added by hand has keys of the same names); keys missing
+    from it are added at its end.
+    """
+    wanted = {}
+    for line in current.splitlines():
+        key, sep, _ = line.partition("=")
+        if sep and key != "Exec":
+            wanted[key] = line
+    lines, group, end = [], None, None
+    for line in text.splitlines():
+        if line.startswith("["):
+            if group == "[Desktop Entry]":
+                end = len(lines)
+            group = line.strip()
+        key, sep, _ = line.partition("=")
+        in_entry = group == "[Desktop Entry]" and sep and key in wanted
+        lines.append(wanted.pop(key) if in_entry else line)
+    end = len(lines) if end is None else end
+    while end > 0 and not lines[end - 1].strip():      # before the blank line that ends the group
+        end -= 1
+    lines[end:end] = list(wanted.values())
+    return "\n".join(lines) + "\n"
 
 
 def desktop_shortcut_path():
@@ -292,11 +367,14 @@ def refresh_entries(log=lambda text: None):
     """Keep the menu entry (and an existing desktop shortcut) pointing at this installation.
 
     Run on every start of `a2qlinux`, like sto-clare does for its own entry.
-    An entry whose command is this installation's `a2qlinux` is left alone,
-    with any options added to it by hand; any other - missing, from an older
-    layout (python3 …/questlog_desktop.py), or from an installation that was
-    moved or removed - is written again. The desktop shortcut is only
-    rewritten if it exists. Returns the paths written.
+    An entry whose command is this installation's `a2qlinux` keeps that
+    command, with any options added to it by hand; only its other lines are
+    brought up to date (the name A2Qlinux and the coloured icon, for entries
+    written before them). Any other entry - missing, from an older layout
+    (python3 …/questlog_desktop.py), or from an installation that was moved
+    or removed - is written again. The desktop shortcut is only rewritten if
+    it exists. A missing icon is made again from Questlog's. Returns the
+    paths written.
     """
     ours = command("a2qlinux")
     questlog_dir = config.questlog_dir().resolve()
@@ -304,20 +382,27 @@ def refresh_entries(log=lambda text: None):
     for path, create in ((MENU_ENTRY, True), (desktop_shortcut_path(), False)):
         if not path.exists() and not create:
             continue
+        current = desktop_entry(questlog_dir)
         if entry_command(path) == ours:
-            continue
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(desktop_entry(questlog_dir))
+            text = path.read_text()
+            updated = with_current_keys(text, current)
+            if updated == text:
+                continue
+            path.write_text(updated)
+            log(f"Updated {path}: name A2Qlinux and its icon.")
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(current)
+            log(f"Rewrote {path}: it did not run this installation's a2qlinux.")
         if path != MENU_ENTRY:
             path.chmod(0o755)
-        log(f"Rewrote {path}: it did not run this installation's a2qlinux.")
         written.append(path)
     if not ICON.exists():
         try:
-            ICON.parent.mkdir(parents=True, exist_ok=True)
-            ICON.write_bytes(read_asar_file(questlog_dir / "resources" / "app.asar", "resources/icon.png"))
-        except (OSError, KeyError, ValueError, struct.error):
-            pass                  # the entry works without its icon; a2qlinux-setup reports why
+            write_icon(questlog_dir)
+        except (OSError, KeyError, ValueError, struct.error) as error:
+            log(f"A2Qlinux's icon could not be made from Questlog's ({error!r}); "
+                "the menu entry works without it, and a2qlinux-setup says why.")
     return written
 
 
@@ -418,9 +503,7 @@ def main():
                 problems.append(str(error))
     if (questlog_dir / "Questlog.exe").is_file():
         try:
-            icon = read_asar_file(asar, "resources/icon.png")
-            ICON.parent.mkdir(parents=True, exist_ok=True)
-            ICON.write_bytes(icon)
+            write_icon(questlog_dir)
             print(f"Icon: {ICON}")
         except (OSError, KeyError, ValueError, struct.error) as error:
             problems.append(f"could not take Questlog's icon from {asar}: {error!r}")
@@ -451,7 +534,7 @@ def main():
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         return 1
-    print("\nReady. Start 'Questlog (AION 2)' from the menu.")
+    print(f"\nReady. Start '{APP_NAME}' from the menu.")
     return 0
 
 

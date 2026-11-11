@@ -39,7 +39,7 @@ import sys
 import threading
 import time
 
-from . import config, shown_version
+from . import APP_NAME, ICON, config, shown_version
 from . import update as questlog_update
 from .pcap_bridge import BridgeServer, read_records
 
@@ -803,9 +803,7 @@ UPDATE_TRIAL = 60               # s: a just-updated Questlog that exits sooner i
 
 def notify(text):
     """Desktop notification, for what the user should know even with the terminal hidden."""
-    subprocess.run(["notify-send", "--app-name=Questlog (AION 2)",
-                    "--icon=" + str(Path.home() / ".local/share/icons/questlog-aion2.png"),
-                    "Questlog (AION 2)", text], check=False)
+    subprocess.run(["notify-send", f"--app-name={APP_NAME}", f"--icon={ICON}", APP_NAME, text], check=False)
 
 
 def check_for_updates(questlog_dir, state_dir):

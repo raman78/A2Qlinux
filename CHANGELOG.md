@@ -3,6 +3,15 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
+## [Unreleased]
+
+### Changed
+- The menu entry, the desktop shortcut and the tray icon are called
+  **A2Qlinux** instead of "Questlog (AION 2)", and their icon is Questlog's
+  Q in red, so they are told apart from Questlog's own icon. Searching the
+  menu for "Questlog" still finds the entry. Existing entries are renamed
+  on the next start, keeping any options added to them by hand.
+
 ## [0.5.0] — 2026-11-10
 
 ### Added

@@ -8,7 +8,7 @@ it is installed ([INSTALL.md](INSTALL.md)). Updates are in
 
 There are two ways, and you can use both.
 
-**From the menu or desktop icon.** "Questlog (AION 2)" opens a small terminal
+**From the menu or desktop icon.** "A2Qlinux" opens a small terminal
 window, A2Qlinux's status window, and then Questlog. This works with or
 without the game: without it, you can look through saved fights, the
 database and the map. When you start the game later, Questlog picks up the
@@ -171,9 +171,10 @@ connection you left out, the status window and a notification say so.
 
 ## The tray icon
 
-While Questlog runs, there is one Questlog icon in your system tray. It is
-A2Qlinux's own icon; Questlog's original icon is hidden, because under Proton
-its menu opens only once and then stops responding.
+While Questlog runs, there is one Questlog icon in your system tray, with a
+red Q. It is A2Qlinux's own icon; Questlog's original icon, with a white Q,
+is hidden, because under Proton its menu opens only once and then stops
+responding.
 
 ```
    right-click the icon
@@ -196,7 +197,7 @@ Mention it when you report a problem.
 | left-click the icon, or **Open Questlog** | Questlog's window opens in front, after about 3 seconds |
 | close Questlog's window (X) | what Questlog's own setting for closing says: it hides to the background and keeps running, it quits, or (the default) it asks you which; the setting is in Questlog's settings, or is remembered when you tick "remember" in that question |
 | **Quit Questlog** | the icon and window disappear at once; Questlog ends within about a second, or, while the game is running, up to 10 seconds later once it has saved; the status window then closes |
-| start "Questlog (AION 2)" while Questlog runs | Questlog's window opens; no second copy starts |
+| start "A2Qlinux" while Questlog runs | Questlog's window opens; no second copy starts |
 
 **Why quitting can take 10 seconds.** Questlog writes what it learns from the
 game to disk within 10 seconds, and the only way to end it from outside under
@@ -206,7 +207,7 @@ closing it) that is already the case and Questlog ends at once; while you
 play, it is hidden first and ended when the 10 seconds are up. The game is
 not touched.
 
-**Changed your mind?** If you start "Questlog (AION 2)" from the menu during
+**Changed your mind?** If you start "A2Qlinux" from the menu during
 that wait, or press Play in Steam, the quit is called off: the icon
 comes back and Questlog keeps running. If it had already ended, a fresh
 Questlog starts.

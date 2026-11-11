@@ -23,6 +23,7 @@ import subprocess
 import sys
 import time
 
+from . import APP_NAME, ICON
 from .desktop import LOCK
 from .launcher import APPID, game_processes
 
@@ -78,7 +79,7 @@ def main():
          sys.executable, "-m", "a2qlinux.desktop", "--for-game", *options],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
     if started.returncode:
-        subprocess.run(["notify-send", "--app-name=Questlog (AION 2)", "Questlog (AION 2)",
+        subprocess.run(["notify-send", f"--app-name={APP_NAME}", f"--icon={ICON}", APP_NAME,
                         "Could not start Questlog from the Steam launch option; start it from its icon."],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
 

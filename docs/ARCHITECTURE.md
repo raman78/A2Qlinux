@@ -73,7 +73,7 @@ open a status window (§12 "Shown version", §9.1).
 | `a2qlinux/steam.py` (`a2qlinux-steam`) | Linux, as Steam's launch option | starts the launcher with the game; lets the game join a running Questlog |
 | `a2qlinux/config.py` | Linux, in every command | user settings from `~/.config/a2qlinux/config.toml` (§13) |
 | `a2qlinux/update.py` | Linux, in the launcher; `install_fresh` from `a2qlinux-setup` | stages new Questlog versions in the background, installs them at the next start; installs Questlog the first time (§6.6) |
-| `a2qlinux/setup_desktop.py` (`a2qlinux-setup`) | Linux, by hand; `refresh_entries` on every `a2qlinux` start | dependency, capture and tray checks with the commands that fix them (§14); first Questlog installation (§6.6); menu entry, icon; keeps the menu entry (and an existing desktop shortcut) running this installation's `a2qlinux` |
+| `a2qlinux/setup_desktop.py` (`a2qlinux-setup`) | Linux, by hand; `refresh_entries` on every `a2qlinux` start | dependency, capture and tray checks with the commands that fix them (§14); first Questlog installation (§6.6); menu entry, icon (§12, "Name and icon"); keeps the menu entry (and an existing desktop shortcut) running this installation's `a2qlinux`, with the current name and icon |
 | `a2qlinux/diagnose.py` | Linux, `a2qlinux --diagnose [--report]` by hand | read-only diagnosis, and a problem report the user can file as a GitHub issue (§9.1) |
 | `a2qlinux/bin/wpcap.dll` (from `bridge/wpcap_bridge.c`) | prefix, in Questlog's NodeService process | libpcap stand-in; window-order guard |
 | `a2qlinux/bin/questlog_ctl.exe` (from `bridge/questlog_ctl.c`) | prefix, started per command | hides/shows Questlog's tray icon, closes its window, ends its session |
@@ -1242,7 +1242,7 @@ automatic update
 | Electron 44.5.1 (`KNOWN_ELECTRON`): tray icon id 3, `WM_ENDSESSION` ending the process | `questlog_ctl.exe` | `grep -aoE 'Electron/[0-9.]+' Questlog.exe`; for another version read `notify_icon_host.cc` and `native_window_views_win.cc` |
 | `second-instance` shows the window | §6.3 | `grep -oE 'on\("second-instance",[^)]*\)' main.cjs` |
 | overlay windows non-activatable (`focusable: false`) | §6.1 | `grep -c 'focusable:!1' main.cjs` |
-| `resources/icon.png` in `app.asar` | `a2qlinux-setup` | rerun `a2qlinux-setup` |
+| `resources/icon.png` in `app.asar`: a white Q on a dark tile | `a2qlinux_icon` (§12) | rerun `a2qlinux-setup` and look at `~/.local/share/icons/a2qlinux.png` |
 
 ## 11. Open questions
 
@@ -1288,7 +1288,7 @@ through hatch-vcs (`v0.1.0` → 0.1.0; between tags `0.1.devN`), written to
 (`A2Qlinux <version>.`), `--version` on `a2qlinux`, `a2qlinux-run` and
 `a2qlinux-setup` (`a2qlinux` answers it itself; passed on to the launcher
 it would open a terminal window), and the tray icon (a greyed-out first
-menu line, and the tooltip `Questlog (AION 2) — A2Qlinux <version>`). The
+menu line, and the tooltip `A2Qlinux <version> — Questlog for AION 2`). The
 point is reports: which A2Qlinux a problem happened on, and whether an
 update actually took effect. An installed package shows
 `a2qlinux.__version__`. An editable install from a git checkout
@@ -1302,6 +1302,32 @@ built number with `(source checkout; git describe failed: <reason>)`, so a
 wrong number never looks like a right one. A tag created on GitHub by a
 release is not in a local clone until `git fetch --tags`; until then
 `git describe` names the tag before it.
+
+**Name and icon.** The menu entry, the desktop shortcut, the tray icon's
+application name and the notifications are called `A2Qlinux`
+(`a2qlinux.APP_NAME`), with `GenericName=Questlog for AION 2` and
+`Keywords=Questlog;AION;…` in the entry, so a menu search for "questlog"
+still finds it. Until v0.5.0 they were called "Questlog (AION 2)" and
+showed Questlog's icon unchanged; that made A2Qlinux look like Questlog
+itself, and when hiding Questlog's own tray icon failed, two identical
+icons stood side by side. The icon (`a2qlinux.ICON`,
+`~/.local/share/icons/a2qlinux.png`) is still Questlog's
+`resources/icon.png`, taken from the player's own installation, because
+A2Qlinux does not ship Questlog's logo; `setup_desktop.a2qlinux_icon`
+colours its white Q red (`ICON_COLOUR`). It treats every pixel as a mix of
+the tile's colour (the darkest opaque pixel) and white, and gives the white
+share to the red, so the tile stays and the Q's anti-aliased edges stay soft;
+a first try that scaled the white by brightness alone left a dark fringe. Qt (`QImage`) does the
+decoding and encoding, since PyQt6 is already a dependency for the tray.
+The entry's file keeps its old name, `questlog-aion2.desktop`
+(`ENTRY_ID`, also the tray's `setDesktopFileName`): a new file name would
+leave the old entry beside the new one on every updated installation.
+`refresh_entries`, run on each `a2qlinux` start, updates an entry that
+already runs this installation key by key (`with_current_keys`: every key
+of `desktop_entry` except `Exec`, so options added to `Exec` by hand stay),
+makes the icon if `a2qlinux.png` is missing and then removes the uncoloured
+`questlog-aion2.png` (`OLD_ICON`). If the icon cannot be made (no Questlog
+yet), the start's log says so and the old icon stays.
 
 **Windows parts.** `wpcap.dll` and `questlog_ctl.exe` are built by
 `bridge/build.sh` into `a2qlinux/bin/` and shipped inside the package, so a

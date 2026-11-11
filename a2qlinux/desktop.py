@@ -23,6 +23,7 @@ import subprocess
 import sys
 import time
 
+from . import APP_NAME, ICON
 from .config import questlog_dir
 
 LOCK = questlog_dir() / "proton-stream" / ".lock"
@@ -102,9 +103,7 @@ def ask_running_launcher(game_starting):
 
 
 def notify(text):
-    subprocess.run(["notify-send", "--app-name=Questlog (AION 2)",
-                    "--icon=" + str(Path.home() / ".local/share/icons/questlog-aion2.png"),
-                    "Questlog (AION 2)", text], check=False)
+    subprocess.run(["notify-send", f"--app-name={APP_NAME}", f"--icon={ICON}", APP_NAME, text], check=False)
 
 
 def main():

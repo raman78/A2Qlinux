@@ -47,7 +47,7 @@ for Arch, Debian, Ubuntu, Fedora and openSUSE. In short:
    `a2qlinux-setup --desktop-shortcut`. It installs Questlog, checks
    everything else and prints the command for anything still missing — see
    [Installing A2Qlinux and Questlog](https://github.com/raman78/A2Qlinux/blob/main/docs/INSTALL.md#installing-a2qlinux-and-questlog).
-4. Start **Questlog (AION 2)** from the menu, or set the Steam launch option
+4. Start **A2Qlinux** from the menu, or set the Steam launch option
    that `a2qlinux-setup` prints (it says when the option is already set).
 
 ## Documentation
@@ -90,7 +90,7 @@ the repository. Releasing:
 A2Qlinux is an independent project, not made or endorsed by Questlog's
 authors or by AION 2's publisher. It contains no Questlog code or assets:
 Questlog is downloaded from its authors, and its icon is taken from your own
-installation. Questlog and its name belong to its authors (questlog.gg).
+installation (and its Q coloured red, for A2Qlinux's menu entry and tray icon). Questlog and its name belong to its authors (questlog.gg).
 
 Whether third-party meters are allowed is for the game's publisher, NCSOFT,
 to decide. It has not said so either way, and its rules forbid
