@@ -1350,7 +1350,9 @@ the toolchain is the one `bridge/build.sh` is used with (Wine is in Arch's
 In the container, `git` is installed before `actions/checkout`, which
 otherwise downloads a tarball without history, leaving hatch-vcs no tag to
 read. The checkout is marked `safe.directory`, because it belongs to another
-user there.
+user there. PyQt6 (`python-pyqt6`) is installed as well, so that
+the icon tests run `setup_desktop.a2qlinux_icon` itself rather than being
+skipped.
 
 **PyPI.** Users install with `pipx install a2qlinux` and update with
 `pipx upgrade a2qlinux`. The `pypi` job in `release.yml` runs after `build`,

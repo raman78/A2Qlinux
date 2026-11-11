@@ -15,7 +15,7 @@ jobs:
       - name: Install tools
         # git before checkout: without it actions/checkout downloads a tarball
         # with no history, and hatch-vcs cannot derive the version from tags.
-        run: pacman -Syu --noconfirm --needed git clang lld wine python p7zip
+        run: pacman -Syu --noconfirm --needed git clang lld wine python python-pyqt6 p7zip
 
       - uses: actions/checkout@v4
         with:

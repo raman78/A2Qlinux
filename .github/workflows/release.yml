@@ -17,7 +17,7 @@ jobs:
     container: archlinux:latest
     steps:
       - name: Install tools
-        run: pacman -Syu --noconfirm --needed git clang lld wine python python-pip p7zip github-cli
+        run: pacman -Syu --noconfirm --needed git clang lld wine python python-pyqt6 python-pip p7zip github-cli
 
       - uses: actions/checkout@v4
         with:
