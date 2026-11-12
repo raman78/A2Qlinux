@@ -1004,59 +1004,80 @@ Questlog waits for its GPU process for ever. A race in Wine, not something
 A2Qlinux or another program can cause: the lock lives in Questlog's own
 memory.
 
-**What the launcher does.** `start_questlog` arms `StartWatch` on every
-start of Questlog (the first, after the game, after a quit called off,
-after an update). The main loop then reads Questlog's processes every
-0.5 s (`questlog_process_states`: PID; whether the command line carries
-Chromium's `--type=`; thread count) until the watch answers:
+**What the launcher does.** Every start of Questlog goes through
+`start_questlog` (the first, the restart after the game, a start when
+Questlog was asked for again while a quit was ending it, the first start
+after an update), and
+each arms `StartWatch`. Until the watch has answered, the main loop reads
+Questlog's processes every 0.5 s with `questlog_process_states`: PID,
+whether the command line carries Chromium's `--type=` (GPU, renderer,
+utility processes do; the main process does not), and the thread count.
 
-- **`up`** — one of Questlog's own processes is there. Measured on a
-  healthy start: the GPU process 1 s after the main process, all ten
-  processes after 3 s. The count of hung starts goes back to 0.
-- **`retry`** — either the same stuck-looking copy has lasted `STUCK_WAIT`
-  (3 s), or none of Questlog's own processes came within `START_WAIT`
-  (30 s) of the main process appearing. A stuck-looking copy
-  (`stuck_copies`) is a Questlog process without `--type=` and with a
-  single thread, beside a main process that has threads of its own; so a
-  main process that has not started its threads yet is never taken for
-  one. A copy that Wine forks normally becomes the new program within a
-  fraction of a second, so 3 s of it are a certain hang: today's case
-  would be acted on about 4 s after Questlog started. The 30 s are for
-  every other way a start could hang, and are long because they cannot
-  tell a hang from a slow start (a cold disk after a reboot, heavy
-  swapping), whose length has not been measured; too short a wait would
-  end a healthy start twice and give up. Both waits count from the main
-  process, not from the start call, so bringing up the Wine session and
-  installing an update do not use them up. `end_hung_questlog` sends
-  SIGTERM to all of Questlog's processes, stuck copies included, and
-  SIGKILL to any left after `HUNG_END_WAIT` (5 s). Questlog has got no game
-  data yet, so nothing is waiting to be saved. The session end of §6.4 is
-  not used: sent to a Questlog still starting, it was ignored for the whole
-  `QUESTLOG_QUIT_WAIT` (20 s, measured). Questlog is then started again on
-  the same bridge, hidden if the hung start was. The game is not touched:
-  Questlog's launch holds the session (§5.1).
-- **`give-up`** — the same, `START_ATTEMPTS` (2) times in a row. The
-  launcher ends Questlog, logs and notifies, and ends with code 1, so the
-  status window stays open with the reason.
+A *stuck copy* (`stuck_copies`) is a Questlog process without `--type=`
+and with a single thread, seen beside a main process that has threads of
+its own. The second condition keeps a main process that has not started
+its threads yet from being taken for one. A copy that Wine forks normally
+becomes the new program within a fraction of a second, so one that lasts
+seconds is a hang.
 
-Checked on 12 November 2026, with the game running: ending the stuck copy
-made Questlog exit by itself (code 0) within seconds, and the game ran on;
-Questlog started again from the menu came up normally. The retry and the
-give-up were run the same day with the game running, by setting
-`START_WAIT` to 0 for the test, so that every healthy start looked hung:
-both Questlog starts were ended within 0.1 s, the launcher ended with
-code 1 and its window stayed open, and the game ran on. Each start's
-launch waits in its scope until the session ends (§5.1), so after a
-retry two of them wait instead of one. A real stuck copy has not met the
-code yet.
+The watch answers once per start:
+
+| Answer | When | What follows |
+|---|---|---|
+| `up` | any process with `--type=` is there | nothing; the count of hung starts goes back to 0 |
+| `retry` | the same stuck copy has lasted `STUCK_WAIT` (3 s), or no process with `--type=` came within `START_WAIT` (30 s) | Questlog is ended and started again on the same bridge, hidden if the hung start was |
+| `give-up` | as `retry`, for the `START_ATTEMPTS`-th (2nd) start in a row | Questlog is ended, a notification is shown, the launcher ends with code 1 |
+
+Both waits count from the moment Questlog's main process appears, not
+from the start call, so bringing up the Wine session and installing an
+update do not use them up. Measured on a healthy start: the GPU process
+1 s after the main process, all ten processes after 3 s. The 12 November
+hang would have been acted on about 4 s after Questlog's main process
+appeared, by `STUCK_WAIT`. `START_WAIT` is for any other way a start
+could hang. It is long because without a stuck copy a hang cannot be told
+from a slow start (a cold disk after a reboot, heavy swapping), whose
+length has not been measured, and too short a wait would end a healthy
+start twice and then give up.
+
+`end_hung_questlog` sends SIGTERM to all of Questlog's processes, stuck
+copies included, and SIGKILL to any still there after `HUNG_END_WAIT`
+(5 s). Questlog has got no game data yet, so nothing is waiting to be
+saved. The session end of §6.4 is not used: sent to a Questlog that was
+still starting, it was ignored for the whole `QUESTLOG_QUIT_WAIT` (20 s,
+measured). The game is not touched, since Questlog's launch holds the
+session (§5.1); only Questlog's processes are signalled (I2).
+
+What the status window shows:
+
+```
+Questlog hung at its start: Wine's start of its first own process hung
+  (stuck process 23549). Ending it and starting it again.
+Questlog's 2 process(es) ended.
+Starting Questlog 0.1.51.
+```
+
+Without a stuck copy the reason reads "none of its own processes followed
+within 30 s". On `give-up` the first line is "Questlog hung at its start
+again (2 starts in a row): …", followed by what to do.
+
+**Checked** on 12 November 2026, with the game running. Ending the stuck
+copy by hand made Questlog exit by itself (code 0) within seconds, and
+the game ran on; Questlog started again from the menu came up normally.
+The retry and the give-up were run the same day by setting `START_WAIT`
+to 0 for the test, so that every healthy start looked hung: both starts
+were ended within 0.1 s, the launcher ended with code 1 with its window
+left open, and the game ran on. A real stuck copy has not met this code
+yet. Each start's launch waits in its scope until the session ends
+(§5.1), so after a retry two launches wait instead of one; they end with
+the session.
 
 **Why not the capture as the sign.** The DLL talks to the bridge only once
 Questlog has found the game's connection (§4, step 5), so without the game
 a healthy and a hung Questlog look the same. The utility process with the
 combat worker (`node.mojom.NodeService`) is no sign either: Questlog starts
 it on demand and stops it 30 s after its last user (`hold()` in its
-`main.cjs`). The GPU process is started with the app, hidden or not, and is
-the one whose start hung.
+`main.cjs`). The GPU process is started with the app, and is the one
+whose start hung.
 
 **Not covered.** A start of a later process (a renderer, the combat worker)
 could hang in the same way while Questlog runs; not observed. The watch
@@ -1067,7 +1088,7 @@ answers once per start, and only `up` resets the count.
 | Symptom | Cause | Where to look |
 |---|---|---|
 | Questlog quits at once, "GPU process isn't usable" | Chromium's sandbox inside Steam's container (§7.1) | `questlog.log` |
-| "Questlog hung at its start: …. Ending it and starting it again." | Wine's start of Questlog's first process hung (§6.9) | none; "stuck process" names the copy that hung |
+| "Questlog hung at its start: … Ending it and starting it again." | Wine's start of Questlog's first process hung (§6.9) | none; "stuck process" names the copy that hung |
 | "Questlog hung at its start again …" (notification), launcher ends with code 1 | the start hung twice in a row (§6.9) | start again from the menu; `questlog.log`, a problem report |
 | Questlog shows "No capture bridge: start Questlog with A2Qlinux" | Questlog started without the launcher | start it from the menu entry |
 | "Capture bridge not reachable (is A2Qlinux running?)" | launcher not running (terminal closed) | status window |
@@ -1383,8 +1404,10 @@ folder above the package holds `.git`, `shown_version` therefore asks
 `0.4.0-2-g2321dc5-dirty (source checkout)`. If git fails, it shows the
 built number with `(source checkout; git describe failed: <reason>)`, so a
 wrong number never looks like a right one. A tag created on GitHub by a
-release is not in a local clone until `git fetch --tags`; until then
-`git describe` names the tag before it.
+release is not in a local clone until it is fetched (a plain
+`git fetch origin` brings it, as the commit it marks is on a fetched
+branch); until then `git describe` names the tag before it. Step 8 of
+`docs/RELEASE.md` fetches it right after each release.
 
 **Name and icon.** The menu entry, the desktop shortcut, the tray icon's
 application name and the notifications are called `A2Qlinux`

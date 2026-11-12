@@ -141,7 +141,13 @@ and re-run only that job: `gh run rerun <run id> --failed`.
 
 ```bash
 git checkout develop
+git fetch origin            # brings the new tag: gh release create made it on GitHub only
+git describe --tags         # vX.Y.Z or vX.Y.Z-<n>-g<commit>
 ```
+
+Without the fetch an editable installation on this machine goes on
+showing the previous version plus a commit count (`docs/ARCHITECTURE.md`
+§12, "Shown version").
 
 ## PyPI
 

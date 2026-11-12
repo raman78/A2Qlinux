@@ -23,8 +23,8 @@ A2Qlinux, what causes them and what to do, followed by common questions.
 | Alt+E shows only a brief flash, and overlays cannot be moved over the game | (KDE) the KDE overlays are not set up | see "Black Market Cards and moving overlays (Alt+E)" in [USING.md](USING.md) |
 | (KDE) Black Market Cards stays over other programs after Alt+Tab | only half of the KDE overlays is working: the part that hides the cards when the game is not in front did not start | go back to the game and leave the shop; run `a2qlinux-setup --kde-overlays` again |
 | `a2qlinux-setup` ends with "Note: KDE overlays: …" | KDE refused the change, or a KDE tool is missing; the note says which | everything else is set up; the cards stay hidden until the cause in the note is fixed |
-| "Questlog hung at its start: … Ending it and starting it again." in the status window | Questlog got stuck while starting, a rare fault in Wine | nothing; A2Qlinux ends it and starts it again by itself |
-| notification "Questlog hung at its start 2 times in a row" | the same fault twice in a row | start "A2Qlinux" from the menu again; if it keeps happening, report it (below) |
+| "Questlog hung at its start: … Ending it and starting it again." in the status window | Questlog got stuck while starting, a rare fault in Wine | nothing; A2Qlinux has already started it again (see "If Questlog gets stuck while starting" in [USING.md](USING.md#starting-questlog)) |
+| notification "Questlog hung at its start 2 times in a row", the status window stays open | the same fault twice in a row, so A2Qlinux stopped trying | press Enter in the status window, then start "A2Qlinux" from the menu again; if it keeps happening, report it (below) |
 | Questlog closes right after starting | its graphics process failed | send `~/Games/Questlog/proton-stream/questlog.log` with your report |
 | notification "Questlog X does not fit this A2Qlinux yet" | the new Questlog changed something A2Qlinux relies on | keep using the current version; the reason is in the notification |
 | "Questlog update check failed" in the status window | no internet connection at that moment | nothing; it tries again later |

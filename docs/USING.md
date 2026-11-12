@@ -48,6 +48,21 @@ kept, with the time, in a file (`launcher.log`), so nothing is lost when it
 closes; [TROUBLESHOOTING.md](TROUBLESHOOTING.md#reporting-a-problem) says
 where it is and how to send it with a problem report.
 
+**If Questlog gets stuck while starting.** Very rarely, Questlog's start
+gets stuck inside Wine (the layer that runs Windows programs on Linux): its
+tray icon appears, but its window stays empty or never comes, and it counts
+no fights. A2Qlinux watches every start of Questlog for this. A healthy
+Questlog starts its own helper programs within a second or two; when they
+do not come, A2Qlinux ends Questlog and starts it again, usually a few
+seconds after the start and at most half a minute after it. The status
+window then says `Questlog hung at its start: … Ending it and starting it
+again.` The game is not touched, and Questlog loses nothing, because it
+has not read any game data yet. If the second start gets stuck too,
+A2Qlinux stops instead of trying for ever: a notification says so, and
+the status window stays open with the reason. Start "A2Qlinux" from the
+menu again; if it keeps happening, send a problem report
+([TROUBLESHOOTING.md](TROUBLESHOOTING.md#reporting-a-problem)).
+
 **When the game ends**, Questlog stays with you: look through your fights,
 use the database or the map. It also waits for the game: start it again and
 the traffic flows to Questlog again, whichever way you start it.

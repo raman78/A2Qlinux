@@ -7,8 +7,8 @@ What changed for players, release by release. Technical details are in
 
 ### Fixed
 - A Questlog that gets stuck while starting (its window stays empty and it
-  counts no fights, because of a rare fault in Wine) is noticed within a
-  few seconds, ended and started again, without touching the game. Only if
+  counts no fights, because of a rare fault in Wine) is noticed, usually
+  within a few seconds, ended and started again, without touching the game. Only if
   the second start gets stuck too does A2Qlinux stop and say so.
 
 ### Changed
