@@ -3,13 +3,7 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
-## [Unreleased]
-
-### Fixed
-- A Questlog that gets stuck while starting (its window stays empty and it
-  counts no fights, because of a rare fault in Wine) is noticed, usually
-  within a few seconds, ended and started again, without touching the game. Only if
-  the second start gets stuck too does A2Qlinux stop and say so.
+## [0.6.0] — 2026-11-12
 
 ### Changed
 - The menu entry, the desktop shortcut and the tray icon are called
@@ -17,6 +11,12 @@ What changed for players, release by release. Technical details are in
   Q in red, so they are told apart from Questlog's own icon. Searching the
   menu for "Questlog" still finds the entry. Existing entries are renamed
   on the next start, keeping any options added to them by hand.
+
+### Fixed
+- A Questlog that gets stuck while starting (its window stays empty and it
+  counts no fights, because of a rare fault in Wine) is noticed, usually
+  within a few seconds, ended and started again, without touching the game.
+  Only if the second start gets stuck too does A2Qlinux stop and say so.
 
 ## [0.5.0] — 2026-11-10
 
