@@ -228,6 +228,97 @@ class AfterGameTest(unittest.TestCase):
         self.assertEqual(q.AfterGame(exited_at=100.0).next("free", 100.0), "free")
 
 
+class StartWatchTest(unittest.TestCase):
+    MAIN = (100, False, 50)
+    GPU = (101, True, 20)
+    STUCK = (102, False, 1)
+
+    def test_up_once_a_helper_process_is_there(self):
+        watch = q.StartWatch(wait=30)
+        watch.started()
+        self.assertIsNone(watch.check([self.MAIN], 10.0))
+        self.assertEqual(watch.check([self.MAIN, self.GPU], 11.0), "up")
+        self.assertIsNone(watch.check([self.MAIN], 100.0))   # one answer per start
+
+    def test_wait_counts_from_the_main_process_not_from_the_start(self):
+        watch = q.StartWatch(wait=30)
+        watch.started()
+        self.assertIsNone(watch.check([], 10.0))             # Wine session still coming up
+        self.assertIsNone(watch.check([self.MAIN], 20.0))
+        self.assertIsNone(watch.check([self.MAIN], 49.9))
+        self.assertEqual(watch.check([self.MAIN], 50.0), "retry")
+
+    def test_a_stuck_copy_is_a_hang_after_the_short_wait(self):
+        watch = q.StartWatch(wait=30, stuck_wait=3)
+        watch.started()
+        self.assertIsNone(watch.check([self.MAIN], 0.0))
+        self.assertIsNone(watch.check([self.MAIN, self.STUCK], 1.0))
+        self.assertIsNone(watch.check([self.MAIN, self.STUCK], 3.9))
+        self.assertEqual(watch.check([self.MAIN, self.STUCK], 4.0), "retry")
+
+    def test_copies_that_come_and_go_are_not_a_hang(self):
+        watch = q.StartWatch(wait=30, stuck_wait=3)
+        watch.started()
+        watch.check([self.MAIN, (102, False, 1)], 0.0)
+        watch.check([self.MAIN, (103, False, 1)], 2.0)      # another copy, not the same one stuck
+        self.assertIsNone(watch.check([self.MAIN, (104, False, 1)], 4.0))
+        self.assertIsNone(watch.check([self.MAIN], 6.0))
+
+    def test_a_main_process_without_its_threads_yet_is_no_stuck_copy(self):
+        watch = q.StartWatch(wait=30, stuck_wait=3)
+        watch.started()
+        watch.check([(100, False, 1)], 0.0)
+        self.assertIsNone(watch.check([(100, False, 1)], 10.0))
+        self.assertEqual(q.stuck_copies([(100, False, 1)]), set())
+        self.assertEqual(q.stuck_copies([(100, False, 1), (101, True, 1)]), set())
+        self.assertEqual(q.stuck_copies([self.MAIN, self.STUCK, self.GPU]), {102})
+
+    def test_second_hang_in_a_row_gives_up(self):
+        watch = q.StartWatch(wait=30, attempts=2)
+        watch.started()
+        watch.check([self.MAIN], 0.0)
+        self.assertEqual(watch.check([self.MAIN], 30.0), "retry")
+        watch.started(hidden=True)
+        watch.check([self.MAIN], 40.0)
+        self.assertEqual(watch.check([self.MAIN], 70.0), "give-up")
+        self.assertTrue(watch.hidden)
+
+    def test_a_good_start_resets_the_count(self):
+        watch = q.StartWatch(wait=30, attempts=2)
+        watch.started()
+        watch.check([self.MAIN], 0.0)
+        self.assertEqual(watch.check([self.MAIN], 30.0), "retry")
+        watch.started()
+        self.assertEqual(watch.check([self.MAIN, self.GPU], 31.0), "up")
+        watch.started()
+        watch.check([self.MAIN], 100.0)
+        self.assertEqual(watch.check([self.MAIN], 130.0), "retry")
+
+    def test_not_watching_before_a_start(self):
+        self.assertIsNone(q.StartWatch(wait=0).check([self.MAIN], 1000.0))
+
+
+class QuestlogProcessStatesTest(unittest.TestCase):
+    def setUp(self):
+        self.saved = q.game_processes, q._read
+        files = {
+            "/proc/7/cmdline": "Z:\\Q\\Questlog.exe\0--no-sandbox\0",
+            "/proc/7/status": "Name:\tCrBrowserMain\nThreads:\t53\n",
+            "/proc/8/cmdline": "Z:\\Q\\Questlog.exe\0--type=gpu-process\0--no-sandbox\0",
+            "/proc/8/status": "Name:\tCrGpuMain\nThreads:\t24\n",
+            "/proc/9/cmdline": "Z:\\Q\\Questlog.exe\0--no-sandbox\0--note=--type=x\0",
+            "/proc/9/status": "Name:\tThreadPoolSingl\nThreads:\t1\n",
+        }
+        q.game_processes = lambda appid, names: {"questlog.exe": {7, 8, 9}}
+        q._read = lambda path, limit=262144: files.get(path, "")
+
+    def tearDown(self):
+        q.game_processes, q._read = self.saved
+
+    def test_helpers_by_type_argument_and_thread_counts(self):
+        self.assertEqual(sorted(q.questlog_process_states()), [(7, False, 53), (8, True, 24), (9, False, 1)])
+
+
 class QuestlogLaunchTest(unittest.TestCase):
     """Questlog's launch waits for the Wine session to end; the launcher still sees Questlog itself end."""
 

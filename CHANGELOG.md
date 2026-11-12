@@ -5,6 +5,12 @@ What changed for players, release by release. Technical details are in
 
 ## [Unreleased]
 
+### Fixed
+- A Questlog that gets stuck while starting (its window stays empty and it
+  counts no fights, because of a rare fault in Wine) is noticed within a
+  few seconds, ended and started again, without touching the game. Only if
+  the second start gets stuck too does A2Qlinux stop and say so.
+
 ### Changed
 - The menu entry, the desktop shortcut and the tray icon are called
   **A2Qlinux** instead of "Questlog (AION 2)", and their icon is Questlog's

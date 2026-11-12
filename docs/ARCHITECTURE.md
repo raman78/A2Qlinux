@@ -982,11 +982,93 @@ than the screen would stay unmanaged and fix this on every desktop; that is
 Questlog's code, so it is a request to Questlog, not something A2Qlinux can
 do.
 
+### 6.9 A Questlog that hangs at its start
+
+**Symptom** (seen once, 12 November 2026). Questlog's
+main process runs and even hides its tray icon on request, but its window
+stays empty or does not come, the status window never says "Questlog
+follows the game's connection", and there are no fights. Only two
+`Questlog.exe` processes exist instead of the usual ten or so, and neither
+is a GPU process, a renderer or a utility.
+
+**Cause** (a stack taken with `gdb` from the second process). That process
+is a copy of Questlog's main process that Wine had forked to start
+Questlog's first own process, the GPU process: one thread, the main
+process's memory and command line, stuck in `__lll_lock_wait_private` ←
+`unsetenv` ← `exec_wineloader` ← `NtCreateUserProcess` (Proton's
+`ntdll.so`). Wine changes the environment in the forked copy before it
+runs the new program. glibc's lock on the environment is not reset by
+`fork`, so when another of Questlog's threads held it at the moment of the
+fork, the copy waits for a lock that no thread in it will ever release.
+Questlog waits for its GPU process for ever. A race in Wine, not something
+A2Qlinux or another program can cause: the lock lives in Questlog's own
+memory.
+
+**What the launcher does.** `start_questlog` arms `StartWatch` on every
+start of Questlog (the first, after the game, after a quit called off,
+after an update). The main loop then reads Questlog's processes every
+0.5 s (`questlog_process_states`: PID; whether the command line carries
+Chromium's `--type=`; thread count) until the watch answers:
+
+- **`up`** — one of Questlog's own processes is there. Measured on a
+  healthy start: the GPU process 1 s after the main process, all ten
+  processes after 3 s. The count of hung starts goes back to 0.
+- **`retry`** — either the same stuck-looking copy has lasted `STUCK_WAIT`
+  (3 s), or none of Questlog's own processes came within `START_WAIT`
+  (30 s) of the main process appearing. A stuck-looking copy
+  (`stuck_copies`) is a Questlog process without `--type=` and with a
+  single thread, beside a main process that has threads of its own; so a
+  main process that has not started its threads yet is never taken for
+  one. A copy that Wine forks normally becomes the new program within a
+  fraction of a second, so 3 s of it are a certain hang: today's case
+  would be acted on about 4 s after Questlog started. The 30 s are for
+  every other way a start could hang, and are long because they cannot
+  tell a hang from a slow start (a cold disk after a reboot, heavy
+  swapping), whose length has not been measured; too short a wait would
+  end a healthy start twice and give up. Both waits count from the main
+  process, not from the start call, so bringing up the Wine session and
+  installing an update do not use them up. `end_hung_questlog` sends
+  SIGTERM to all of Questlog's processes, stuck copies included, and
+  SIGKILL to any left after `HUNG_END_WAIT` (5 s). Questlog has got no game
+  data yet, so nothing is waiting to be saved. The session end of §6.4 is
+  not used: sent to a Questlog still starting, it was ignored for the whole
+  `QUESTLOG_QUIT_WAIT` (20 s, measured). Questlog is then started again on
+  the same bridge, hidden if the hung start was. The game is not touched:
+  Questlog's launch holds the session (§5.1).
+- **`give-up`** — the same, `START_ATTEMPTS` (2) times in a row. The
+  launcher ends Questlog, logs and notifies, and ends with code 1, so the
+  status window stays open with the reason.
+
+Checked on 12 November 2026, with the game running: ending the stuck copy
+made Questlog exit by itself (code 0) within seconds, and the game ran on;
+Questlog started again from the menu came up normally. The retry and the
+give-up were run the same day with the game running, by setting
+`START_WAIT` to 0 for the test, so that every healthy start looked hung:
+both Questlog starts were ended within 0.1 s, the launcher ended with
+code 1 and its window stayed open, and the game ran on. Each start's
+launch waits in its scope until the session ends (§5.1), so after a
+retry two of them wait instead of one. A real stuck copy has not met the
+code yet.
+
+**Why not the capture as the sign.** The DLL talks to the bridge only once
+Questlog has found the game's connection (§4, step 5), so without the game
+a healthy and a hung Questlog look the same. The utility process with the
+combat worker (`node.mojom.NodeService`) is no sign either: Questlog starts
+it on demand and stops it 30 s after its last user (`hold()` in its
+`main.cjs`). The GPU process is started with the app, hidden or not, and is
+the one whose start hung.
+
+**Not covered.** A start of a later process (a renderer, the combat worker)
+could hang in the same way while Questlog runs; not observed. The watch
+answers once per start, and only `up` resets the count.
+
 ## 7. Failure modes
 
 | Symptom | Cause | Where to look |
 |---|---|---|
 | Questlog quits at once, "GPU process isn't usable" | Chromium's sandbox inside Steam's container (§7.1) | `questlog.log` |
+| "Questlog hung at its start: …. Ending it and starting it again." | Wine's start of Questlog's first process hung (§6.9) | none; "stuck process" names the copy that hung |
+| "Questlog hung at its start again …" (notification), launcher ends with code 1 | the start hung twice in a row (§6.9) | start again from the menu; `questlog.log`, a problem report |
 | Questlog shows "No capture bridge: start Questlog with A2Qlinux" | Questlog started without the launcher | start it from the menu entry |
 | "Capture bridge not reachable (is A2Qlinux running?)" | launcher not running (terminal closed) | status window |
 | "Capture bridge closed the connection …" | launcher stopped, or it dropped a connection | status window |
@@ -1127,6 +1209,7 @@ one** — §6.4.
 | who owns the game connection | `tools/tcp_owner_probe.exe` in the prefix |
 | KDE overlays (§6.8) | `tests/test_kde_overlays.py` runs against stand-ins for KDE's config tools and `dbus-send`, and, where `kwriteconfig6` is installed, checks with the real tools that removal gives the rule file back byte for byte; on the desktop, a one-off KWin script that prints the HUD's `layer` and `opacity` shows what KWin applied |
 | does the session survive a quit (§5.1) | without the game: a Windows program that only waits, started as `systemd-run --user --unit=<name> protontricks-launch --appid 3393110 <program>.exe`, plays the game; quit Questlog and check that the program, the `wineserver` and `explorer.exe /desktop` run on, and which unit holds them (`/proc/<pid>/cgroup`) |
+| a stuck process (§6.9) | `gdb -p <pid> -batch -ex bt` as root (`ptrace_scope` 1 allows a user to trace only their own children); A2Qlinux never does this itself |
 | Wine's view of windows and focus | run `WINEDEBUG=+event,+x11drv,+win a2qlinux-run`; the log grows about 40 KB/s, so only briefly |
 
 Logs: the launcher's messages in its status window (the terminal), and the

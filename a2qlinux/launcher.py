@@ -1093,6 +1093,125 @@ class QuestlogLaunch:
         return self.returncode
 
 
+START_WAIT = 30     # s for a started Questlog to start its first own process (1 s when measured)
+STUCK_WAIT = 3       # s a stuck copy of Questlog's main process must last to count as a hang
+START_ATTEMPTS = 2   # starts in a row that may hang before the launcher gives up
+
+
+def questlog_process_states():
+    """Questlog's processes in the game prefix, as (pid, helper, threads) each.
+
+    helper: Chromium's own processes (GPU, renderers, utilities) carry
+    `--type=` on their command line. Questlog's main process does not, nor
+    does a copy of it that Wine has forked to start a new process but that
+    has not yet become that program - which has a single thread.
+    """
+    states = []
+    for pid in game_processes(APPID, ["questlog.exe"])["questlog.exe"]:
+        helper = "\0--type=" in _read(f"/proc/{pid}/cmdline", 4096)
+        threads = next((int(line.split(":", 1)[1]) for line in _read(f"/proc/{pid}/status").splitlines()
+                        if line.startswith("Threads:")), 0)
+        states.append((pid, helper, threads))
+    return states
+
+
+def stuck_copies(states):
+    """PIDs that look like a forked copy of Questlog's main process: no `--type=`, one thread.
+
+    Only beside a main process with threads of its own, so that a main
+    process that has not started its threads yet is never taken for one.
+    """
+    if not any(not helper and threads > 1 for _, helper, threads in states):
+        return set()
+    return {pid for pid, helper, threads in states if not helper and threads == 1}
+
+
+class StartWatch:
+    """Whether a started Questlog came up, or hung at its start (§6.9).
+
+    A healthy Questlog starts its GPU process about a second after its main
+    process appears, and its other processes right after. Once Wine's start
+    of that first process hung - the forked copy stuck in libc's environment
+    lock before it could become the new program - and Questlog waited for it
+    for ever, with no window and no capture. check() answers once per start:
+    "up" when any of Questlog's own processes is there; "retry" when the same
+    stuck copy has lasted `stuck_wait` seconds (a copy lives for a fraction
+    of a second normally), or when none of Questlog's own processes came
+    within `wait` seconds of its main process (some other hang, or a very
+    slow start: hence the long wait); "give-up" instead of "retry" once that
+    has happened `attempts` times in a row.
+    """
+
+    def __init__(self, wait=START_WAIT, stuck_wait=STUCK_WAIT, attempts=START_ATTEMPTS):
+        self.wait = wait
+        self.stuck_wait = stuck_wait
+        self.attempts = attempts
+        self.hung = 0              # hung starts in a row
+        self.watching = False
+        self.main_since = None
+        self.stuck_since = {}      # PID of a stuck-looking copy -> when it was first seen
+        self.hidden = False        # how the watched start was made, for its retry
+
+    def started(self, hidden=False):
+        self.watching = True
+        self.main_since = None
+        self.stuck_since = {}
+        self.hidden = hidden
+
+    def check(self, processes, now):
+        if not self.watching:
+            return None
+        if any(helper for _, helper, _ in processes):
+            self.watching = False
+            self.hung = 0
+            return "up"
+        if not processes:          # not there yet (the Wine session coming up), or gone
+            self.main_since = None
+            self.stuck_since = {}
+            return None
+        if self.main_since is None:
+            self.main_since = now
+        stuck = stuck_copies(processes)
+        self.stuck_since = {pid: self.stuck_since.get(pid, now) for pid in stuck}
+        if now - self.main_since < self.wait \
+                and not any(now - since >= self.stuck_wait for since in self.stuck_since.values()):
+            return None
+        self.watching = False
+        self.hung += 1
+        return "retry" if self.hung < self.attempts else "give-up"
+
+
+HUNG_END_WAIT = 5    # s for a hung Questlog's processes to go after SIGTERM, before SIGKILL
+
+
+def end_hung_questlog():
+    """End a Questlog that hung at its start: SIGTERM to all its processes, SIGKILL after HUNG_END_WAIT.
+
+    It has not got to any game data yet, so nothing is waiting to be saved,
+    and the session end of §6.4 is no use here: sent to a Questlog still
+    starting, it was ignored for the whole QUESTLOG_QUIT_WAIT (measured).
+    Questlog only (I2): the game's session is held by Questlog's launch (§5.1).
+    """
+    def signal_all(signum):
+        pids = game_processes(APPID, ["questlog.exe"])["questlog.exe"]
+        for pid in pids:
+            try:
+                os.kill(pid, signum)
+            except ProcessLookupError:
+                pass
+        return pids
+
+    ended = signal_all(signal.SIGTERM)
+    deadline = time.monotonic() + HUNG_END_WAIT
+    while time.monotonic() < deadline:
+        if not game_processes(APPID, ["questlog.exe"])["questlog.exe"]:
+            log(f"Questlog's {len(ended)} process(es) ended.")
+            return
+        time.sleep(0.2)
+    left = signal_all(signal.SIGKILL)
+    log(f"{len(left)} of Questlog's processes were still there {HUNG_END_WAIT} s after SIGTERM; killed them.")
+
+
 def launch_questlog(executable, server, protontricks, log_path, hidden=False, hold_session=True):
     """Start Questlog in the game prefix; a QuestlogLaunch (hold_session) or the bare launch.
 
@@ -1211,6 +1330,7 @@ def main():
             quit_control = QuitControl()
 
             trial = {"until": 0.0}      # end of a just-installed update's trial run
+            start_watch = StartWatch()
 
             def start_questlog(hidden=False):
                 # A fresh Questlog shows its window (unless hidden); earlier "open" requests are answered by that.
@@ -1220,6 +1340,7 @@ def main():
                     trial["until"] = time.monotonic() + UPDATE_TRIAL
                 log(f"Starting Questlog {questlog_update.installed_version(executable.parent) or '(version unknown)'}.")
                 started = launch_questlog(executable, server, protontricks, log_path, hidden=hidden)
+                start_watch.started(hidden)
                 tray.start()
                 hide_questlog_tray_icon(protontricks, log_path)
                 return started
@@ -1249,6 +1370,33 @@ def main():
                             questlog = start_questlog()
                             continue
                     break
+                if not quit_control.quitting and start_watch.watching:
+                    states = questlog_process_states()
+                    verdict = start_watch.check(states, time.monotonic())
+                    if verdict in ("retry", "give-up"):
+                        stuck = sorted(stuck_copies(states))
+                        how = (f"Wine's start of its first own process hung (stuck process "
+                               f"{', '.join(map(str, stuck))})" if stuck else
+                               f"none of its own processes followed within {START_WAIT} s")
+                        if verdict == "retry":
+                            log(f"Questlog hung at its start: {how}. Ending it and starting it again.")
+                        else:
+                            log(f"Questlog hung at its start again ({START_ATTEMPTS} starts in a row): {how}. "
+                                "Ending it; start A2Qlinux again from the menu. If this keeps happening, "
+                                "file a problem report (a2qlinux --diagnose --report).")
+                        tray.stop()
+                        end_hung_questlog()
+                        try:
+                            questlog.wait(timeout=30)
+                        except subprocess.TimeoutExpired:
+                            log("The previous Questlog launcher did not end; continuing anyway.")
+                        if verdict == "give-up":
+                            notify(f"Questlog hung at its start {START_ATTEMPTS} times in a row and was ended. "
+                                   "Start A2Qlinux again from the menu; details in the A2Qlinux window.")
+                            return 1
+                        questlog = start_questlog(hidden=start_watch.hidden)
+                        told = False
+                        continue
                 for request in requests.take():
                     if request == "tray-died":
                         log("Showing Questlog's own tray icon again, so it can still be quit.")
