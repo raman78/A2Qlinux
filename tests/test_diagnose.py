@@ -227,7 +227,8 @@ class GpuLinesTest(unittest.TestCase):
         (self.root / "proc/driver/nvidia/version").write_text(
             "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  620.70.06  Release Build  (notroot@)\n")
         self.assertEqual(self.lines(), [(d.OK, "Graphics: NVIDIA Corporation GA104 [GeForce RTX 3060 Ti GDDR6X], "
-                                               "driver nvidia 620.70.06 (primary)")])
+                                               "driver nvidia 620.70.06 (primary)"),
+                                        (d.NOTE, "OpenGL: unknown (glxinfo is not installed)")])
 
     def test_amd_and_software_opengl_is_a_note(self):
         self.card("card0", "0x1002", "0x744c", "amdgpu")
@@ -291,12 +292,19 @@ class DisplayAndEnvironmentTest(unittest.TestCase):
         (self.root / ".config").mkdir()
         lines = d.display_lines(env={"XDG_CURRENT_DESKTOP": "GNOME"}, run=None, which=lambda name: None,
                                 home=self.root)
-        self.assertEqual(lines, [(d.OK, "Desktop scale: 1 (no monitors.xml: never changed)")])
+        self.assertEqual(lines, [(d.NOTE, "Monitors: unknown (no X11 display here; run this in the desktop session)"),
+                                 (d.OK, "Desktop scale: 1 (no monitors.xml: never changed)")])
         (self.root / ".config/monitors.xml").write_text("<monitors><configuration><logicalmonitor>"
                                                          "<scale>1.5</scale></logicalmonitor></configuration>")
         lines = d.display_lines(env={"XDG_CURRENT_DESKTOP": "ubuntu:GNOME"}, run=None, which=lambda name: None,
                                 home=self.root)
-        self.assertEqual(lines, [(d.OK, "Desktop scale: 1.5")])
+        self.assertEqual(lines[1:], [(d.OK, "Desktop scale: 1.5")])
+
+    def test_what_could_not_be_read_is_said(self):
+        lines = d.display_lines(env={"DISPLAY": ":0", "XDG_CURRENT_DESKTOP": "XFCE"}, run=None,
+                                which=lambda name: None)
+        self.assertEqual(lines, [(d.NOTE, "Monitors: unknown (xrandr is not installed)"),
+                                 (d.NOTE, "Desktop scale: unknown on this desktop (read on KDE and GNOME only)")])
 
     def test_wine_dpi_with_its_keys(self):
         (self.root / "user.reg").write_text('WINE REGISTRY Version 2\n\n[Control Panel\\\\Desktop] 1\n'

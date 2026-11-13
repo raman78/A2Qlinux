@@ -229,11 +229,15 @@ def gpu_lines(sys_root="/", run=subprocess.run, ids_files=PCI_IDS, which=shutil.
             found = dict(re.findall(r"^OpenGL (renderer|version) string: (.+)$", done.stdout, re.MULTILINE))
         except (OSError, subprocess.TimeoutExpired):
             found = {}
-        if found:
+        if not found:
+            lines.append((NOTE, "OpenGL: unknown (glxinfo -B gave no renderer; no desktop session here?)"))
+        else:
             renderer = found.get("renderer", "?")
             software = any(name in renderer.lower() for name in ("llvmpipe", "softpipe", "swrast"))
             lines.append((NOTE if software else OK, f"OpenGL: {renderer}, {found.get('version', '?')}"
                           + (" - software rendering: the graphics driver is not in use" if software else "")))
+    else:
+        lines.append((NOTE, "OpenGL: unknown (glxinfo is not installed)"))
     return lines
 
 
@@ -260,9 +264,13 @@ def display_lines(env=os.environ, run=subprocess.run, which=shutil.which, home=N
                                   re.MULTILINE)
         except (OSError, subprocess.TimeoutExpired):
             monitors = []
-        if monitors:
-            lines.append((OK, "Monitors (as Wine sees them): "
-                          + ", ".join(f"{name} {w}x{h} at {pos}" for name, w, h, pos in monitors)))
+        lines.append((OK, "Monitors (as Wine sees them): "
+                      + ", ".join(f"{name} {w}x{h} at {pos}" for name, w, h, pos in monitors)) if monitors else
+                     (NOTE, "Monitors: unknown (xrandr --listmonitors gave none)"))
+    elif not env.get("DISPLAY"):
+        lines.append((NOTE, "Monitors: unknown (no X11 display here; run this in the desktop session)"))
+    else:
+        lines.append((NOTE, "Monitors: unknown (xrandr is not installed)"))
     desktop = env.get("XDG_CURRENT_DESKTOP", "").upper().split(":")
     scales = []
     if "KDE" in desktop and which("kscreen-doctor"):
@@ -283,6 +291,10 @@ def display_lines(env=os.environ, run=subprocess.run, which=shutil.which, home=N
             scales = ["1 (no monitors.xml: never changed)"]
     if scales:
         lines.append((OK, "Desktop scale: " + ", ".join(scales)))
+    elif "KDE" in desktop:
+        lines.append((NOTE, "Desktop scale: unknown (kscreen-doctor is missing or gave no outputs)"))
+    elif "GNOME" not in desktop:
+        lines.append((NOTE, "Desktop scale: unknown on this desktop (read on KDE and GNOME only)"))
     return lines
 
 

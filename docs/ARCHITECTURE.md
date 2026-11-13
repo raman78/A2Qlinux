@@ -1222,7 +1222,13 @@ The previous run's `questlog.log`, with the orphan's output, is kept as
 `questlog.log.1` (§9). Checked on this desktop (13 November 2026): SIGHUP
 to a running launcher, `--diagnose` showed the `PROBLEM`, a second
 launcher closed the orphan after 10 s and started Questlog with its own
-bridge; quitting afterwards left nothing behind.
+bridge; quitting afterwards left nothing behind. The hung case, with a
+stand-in `Questlog.exe` whose window stops answering after 3 s, in a
+throwaway prefix under `xvfb-run`, through the shipped
+`end_orphaned_questlog` (only `protontricks-launch` and the process lookup
+pointed at that prefix): `end-session` failed with error 1460 (timeout),
+`wait_for_questlog_exit` stopped the process with SIGTERM after 20 s, and
+the function returned with nothing left running.
 
 **Not changed.** Closing the status window still ends the launcher.
 Keeping it alive instead would mean a launcher that runs on without its
@@ -1485,6 +1491,11 @@ first a question of card and driver.
 | `Wine DPI:` | `wine_dpi_line` | every `LogPixels` under `Control Panel\Desktop` and `Software\Wine\Fonts` (`user.reg`) and both `Hardware Profiles` keys (`system.reg`) | each with its key: which one Wine applies was not checked; 96 is 100 % |
 | `Steam's environment:` | `environment_lines`, `steam_environment` | `/proc/<pid>/environ` of `steam.sh` (what the session handed Steam), else of `steamrt64/steam` | what the game starts with besides its launch option |
 | `This session's environment (Questlog's):` | `environment_lines` | this process's environment | what Questlog's launch inherits |
+
+What cannot be read is a `note` with the reason, never a missing line:
+no X11 display (run outside the desktop session), `xrandr` or `glxinfo`
+not installed, `glxinfo` giving no renderer, `kscreen-doctor` giving no
+outputs, a desktop other than KDE and GNOME for the scale.
 
 Both environment lines list only variables named in `ENV_PREFIXES`
 (`PROTON_`, `DXVK_`, `VKD3D_`, `WINE…`, `__GL_`, `MESA_`, `RADV_`,
