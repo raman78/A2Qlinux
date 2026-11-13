@@ -5,6 +5,15 @@ What changed for players, release by release. Technical details are in
 
 ## [Unreleased]
 
+### Changed
+- `a2qlinux --diagnose` names the graphics card and its driver, what
+  OpenGL draws with, the screens with their scale, Wine's DPI setting, and
+  Proton, Wine, DXVK or driver settings made in the environment Steam
+  and Questlog start with. The problem report also carries Questlog's own
+  output from its last two starts.
+- Questlog's output from the previous start is kept (`questlog.log.1`), so
+  starting A2Qlinux again after a problem no longer erases what shows it.
+
 ### Fixed
 - Starting **A2Qlinux** again after its status window was closed no longer
   stops with "Questlog is already running and fed by another A2Qlinux".

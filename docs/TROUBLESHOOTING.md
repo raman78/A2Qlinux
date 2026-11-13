@@ -77,13 +77,18 @@ or `PROBLEM` with what to do. Often that line already says what is wrong;
 `a2qlinux --diagnose` alone gives just these lines.
 
 Its first lines name your system: the distribution, the kernel, the
-desktop with its version, and whether it runs on Wayland or X11. Further
+desktop with its version, whether it runs on Wayland or X11, the
+graphics card with its driver, and your screens with their scale. Further
 down it names the Proton the game last ran with. Many problems show up
 only on some of these, so a report from another system can then be
 compared with one where things work.
 
 With `--report` it also writes a report file in your home folder and shows
-it to you. Before writing it, it replaces what could identify you: your home
+it to you. Besides the lines above, it holds the end of A2Qlinux's own log
+and Questlog's output from its last two starts, which shows how it set up
+its graphics. A2Qlinux keeps only those two, so make the report soon
+after the problem, before starting A2Qlinux twice more.
+Before writing it, it replaces what could identify you: your home
 folder, user name, computer name, Steam account number and network
 addresses. Read it all the same. Then it asks whether to open a new issue on
 GitHub in your browser. If you say yes, the issue opens filled in; you log in

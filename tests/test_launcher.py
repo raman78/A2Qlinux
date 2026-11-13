@@ -881,3 +881,18 @@ class OrphanedQuestlogTest(unittest.TestCase):
         q.end_orphaned_questlog("protontricks-launch", self.log_path)
         self.assertTrue(exit_file.exists())
         self.assertGreaterEqual(time.monotonic() - started, 0.09)
+
+
+class QuestlogLogTest(unittest.TestCase):
+    def test_the_previous_run_is_kept_once(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "questlog.log"
+            q.start_questlog_log(path)                       # first run: nothing to keep
+            self.assertEqual(path.read_bytes(), b"")
+            self.assertFalse(path.with_name("questlog.log.1").exists())
+            path.write_text("run 1\n")
+            q.start_questlog_log(path)
+            self.assertEqual(path.read_bytes(), b"")
+            self.assertEqual(path.with_name("questlog.log.1").read_text(), "run 1\n")
+            q.start_questlog_log(path)                       # an empty run does not replace the kept one
+            self.assertEqual(path.with_name("questlog.log.1").read_text(), "run 1\n")

@@ -991,6 +991,22 @@ def end_game_steam_helper(why, pids=None):
     return len(orphans) - len(left)
 
 
+def start_questlog_log(path):
+    """Begin this launcher run's questlog.log; the previous run's becomes questlog.log.1.
+
+    One log per launcher run (relaunches within it append). The previous one
+    is kept because a player who restarts A2Qlinux after a problem would
+    otherwise empty the log that shows it, before making a report.
+    """
+    path = Path(path)
+    try:
+        if path.stat().st_size:
+            os.replace(path, path.with_name(path.name + ".1"))
+    except FileNotFoundError:
+        pass
+    path.write_bytes(b"")
+
+
 def running_questlog_state(pids):
     """None (no Questlog), "orphaned" (started with the bridge) or "outside" (started without A2Qlinux).
 
@@ -1365,7 +1381,7 @@ def main():
                 log("AION 2 is not running; starting Questlog now (saved fights, database, map). "
                     "Start the game any time - its traffic then flows to Questlog.")
             log_path = state_dir / "questlog.log"
-            log_path.write_bytes(b"")          # one log per launcher run; relaunches append
+            start_questlog_log(log_path)
             tray = Tray(requests)
             quit_control = QuitControl()
 

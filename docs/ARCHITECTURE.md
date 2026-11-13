@@ -1356,7 +1356,10 @@ A file that cannot be written is said once in the window. Not recorded: a
 launcher ended by closing its window (SIGHUP ends Python without a word) and
 Python tracebacks, which only the window shows. Questlog's and Wine's
 output, including the guard's lines, is in `proton-stream/questlog.log`,
-rewritten on each launcher start; Steam verb switches in
+begun anew on each launcher start (`start_questlog_log`), the previous
+run's kept as `questlog.log.1`, so that restarting A2Qlinux after a problem
+does not empty the log that shows it (an empty run does not replace it);
+Steam verb switches in
 `proton-stream/steam_launch.log`.
 
 The test programs use `xvfb-run` so that they take no focus on the desktop.
@@ -1384,7 +1387,25 @@ safe at any time, the game running or not. In order:
    when that desktop runs) and the session type (`XDG_SESSION_TYPE`). How
    windows, the tray and overlays behave depends on these (§6.8, §14), and
    reports from other distributions need them to be compared with this
-   one. Shown as `System: …` and `Desktop: …`. Then the settings file and
+   one. Shown as `System: …` and `Desktop: …`. Then the graphics
+   (`gpu_lines`), since Questlog draws its windows with Chromium on the GPU
+   (Direct3D 11 through DXVK under Proton) and a window that stays black
+   is first a question of card and driver: each card under
+   `/sys/class/drm` (connectors such as `card1-DP-1` skipped) with its
+   name from `pci.ids` (`pci_name`; the hex ids where the database has no
+   entry), its kernel driver (the `driver` link's name), NVIDIA's driver
+   version from `/proc/driver/nvidia/version`, and which card the firmware
+   started on (`boot_vga`, "primary"); and, where `glxinfo` is installed,
+   OpenGL's renderer and version (`glxinfo -B`), which names Mesa's
+   version on AMD and Intel and is a `note` when it is a software renderer
+   (`llvmpipe`, `softpipe`, `swrast`): then no graphics driver is in use.
+   Then the screens (`display_lines`), which decide where Questlog's
+   overlays land: the monitors as X11 programs see them
+   (`xrandr --listmonitors`; Wine draws through XWayland in a Wayland
+   session, so this is Questlog's view), and the desktop's own scale,
+   KDE's from `kscreen-doctor -j` (enabled outputs), GNOME's from
+   `~/.config/monitors.xml` (no file: never changed, 1). Then the settings
+   file and
    its problems, Questlog's folder and version.
 2. The checks `a2qlinux-setup` makes, by calling the same functions
    (`missing_packages`, `capture_problem`, `tray_problem`,
@@ -1404,7 +1425,18 @@ safe at any time, the game running or not. In order:
    A folder that is a link moved since to another build (`Proton-GE
    Latest`, kept by tools that install GE-Proton) names the build it
    points at now. Without a readable `version` file, the prefix version
-   is shown and called that.
+   is shown and called that. Next to it, the DPI set in the prefix's
+   registry (`wine_dpi_line`): every `LogPixels` found under
+   `Control Panel\Desktop` and `Software\Wine\Fonts` (`user.reg`) and the
+   two `Hardware Profiles` keys (`system.reg`), each with its key, since
+   which one Wine applies was not checked here; 96 is 100 %. Then the
+   environment variables that change how Proton, Wine, DXVK or the driver
+   behave (`ENV_PREFIXES`: `PROTON_`, `DXVK_`, `WINE…`, `__GL_`, `MESA_`,
+   `LD_PRELOAD`, …) in two places (`environment_lines`): the Steam client's
+   (`steam_environment`, read from `/proc`, `steam.sh` preferred since it
+   holds what the session handed Steam, else `steamrt64/steam`), which the
+   game starts with besides its launch option, and this session's, which
+   Questlog's launch inherits.
 4. AION 2's launch option, from every Steam account's
    `userdata/<id>/config/localconfig.vdf`, path
    `UserLocalConfigStore > Software > Valve > Steam > apps > 3393110 >
@@ -1442,13 +1474,18 @@ when there is a problem. A check that raises is reported as a problem
 itself instead of hiding the checks after it.
 
 **`--report`.** Writes `~/a2qlinux-report-<date>-<time>.txt`: the
-diagnosis, the last `REPORT_LOG_LINES` (400) lines of `launcher.log` and the
-last 10 of `steam_launch.log`, all passed through `Anonymiser`. That
-replaces the home folder with `~`, the user name as a path component with
-`<user>`, Steam account folders with `userdata/<steam-id-N>`, the host name
-with `<host>`, and IPv4/IPv6 addresses with `<private-N>` (RFC 1918,
-100.64.0.0/10, link-local), `<public-N>` or `<ipv6-N>`; loopback and
-`0.0.0.0` stay. The same value always gets the same name, so "the game uses
+diagnosis, the last `REPORT_LOG_LINES` (400) lines of `launcher.log`, the
+last 10 of `steam_launch.log`, `questlog.log` (`questlog_log_excerpt`:
+whole up to `QUESTLOG_LOG_HEAD` + `QUESTLOG_LOG_TAIL` lines, 400 + 800,
+else its start, where DXVK names its device and Chromium starts its GPU
+process, and its end, the gap marked) and `questlog.log.1`, the run
+before (200 + 400 lines), all passed through `Anonymiser`. That replaces
+the home folder with `~`, the user name as a path component with `<user>`
+(also between backslashes, as in Wine's `Z:\home\<user>\…`, which
+`questlog.log` is full of), Steam account folders with
+`userdata/<steam-id-N>`, the host name with `<host>`, and IPv4/IPv6
+addresses with `<private-N>` (RFC 1918, 100.64.0.0/10, link-local),
+`<public-N>` or `<ipv6-N>`; loopback and `0.0.0.0` stay. The same value always gets the same name, so "the game uses
 `<private-2>`" still matches the interface line that captured on
 `<private-2>`. The report is printed in full, and only then does it ask,
 default no, whether to open a new GitHub issue. On yes, `xdg-open` opens
