@@ -8,7 +8,7 @@ A2Qlinux, what causes them and what to do, followed by common questions.
 | Symptom | Likely cause | What to do |
 |---|---|---|
 | "No capture bridge: start Questlog with A2Qlinux" in Questlog | Questlog was started some other way | quit it, start "A2Qlinux" from the menu |
-| "Capture bridge not reachable" | the status window was closed | start "A2Qlinux" from the menu again; it closes that Questlog and starts it with the traffic |
+| "Capture bridge not reachable" | the status window was closed | start "A2Qlinux" from the menu again; after about 10 seconds it closes that Questlog and starts it with the traffic |
 | "Questlog is still running from an A2Qlinux that has ended …" in the status window | the status window of an earlier start was closed, which left Questlog without traffic and without a tray icon | nothing: after about 10 seconds, so that Questlog has saved, A2Qlinux closes it and starts it again |
 | "Capture bridge closed the connection" | A2Qlinux stopped | read the status window, start again |
 | "Aion 2's traffic can't be read" before you log in | harmless, it goes away on its own | log in to a server |
@@ -79,16 +79,19 @@ or `PROBLEM` with what to do. Often that line already says what is wrong;
 Its first lines name your system: the distribution, the kernel, the
 desktop with its version, whether it runs on Wayland or X11, the
 graphics card with its driver, and your screens with their scale. Further
-down it names the Proton the game last ran with. Many problems show up
+down it names the Proton the game last ran with, and any Proton, Wine or
+graphics settings made in the environment Steam and Questlog start with
+(rather than in the game's launch option). Many problems show up
 only on some of these, so a report from another system can then be
 compared with one where things work.
 
 With `--report` it also writes a report file in your home folder and shows
 it to you. Besides the lines above, it holds the end of A2Qlinux's own log
-and Questlog's output from its last two starts, which shows how it set up
-its graphics. A2Qlinux keeps only those two, so make the report soon
-after the problem, before starting A2Qlinux twice more.
-Before writing it, it replaces what could identify you: your home
+and Questlog's output from its last two starts, which shows how Questlog
+set up its graphics. A2Qlinux keeps only those two, so make the report
+soon after the problem, before you start A2Qlinux twice more.
+
+Before writing the file, it replaces what could identify you: your home
 folder, user name, computer name, Steam account number and network
 addresses. Read it all the same. Then it asks whether to open a new issue on
 GitHub in your browser. If you say yes, the issue opens filled in; you log in

@@ -84,19 +84,9 @@ open a status window (§12 "Shown version", §9.1).
   `<Questlog dir>/proton-stream/.lock` for the launcher's lifetime and writes
   its PID into the file. A second launcher would start a second bridge, while
   its Questlog launch would hand over to the running Questlog on the first
-  bridge. Holding the lock is also proof that no other launcher runs: a
-  Questlog found running with `QUESTLOG_PROTON_BRIDGE` in its environment
-  (`running_questlog_state`) was left by a launcher that has ended, usually
-  because its status window was closed (SIGHUP ends it without a word).
-  That Questlog gets no traffic, and its tray icon was hidden while ours
-  went with the launcher, so the player cannot quit it.
-  `end_orphaned_questlog` gives it `SAVE_WAIT` to save, ends it with
-  `end-session` (§6.4; the game is untouched) or, if its window does not
-  answer, lets `wait_for_questlog_exit` stop its processes, waits up to
-  `ORPHAN_EXIT_FILE_WAIT` for its launch to write `questlog.exit` (written
-  later, the file would read as the new Questlog's end, §5.1), and the
-  launcher then starts Questlog as usual. Until A2Qlinux 0.7.0 the launcher
-  refused instead, wrongly naming "another A2Qlinux" as the feeder.
+  bridge. Holding the lock is also proof that no other launcher runs, so
+  a Questlog found with the bridge in its environment was left by one that
+  has ended (§6.11).
 - **I2 — Questlog only.** Nothing A2Qlinux does acts on other programs in the
   prefix (the game, other meters such as NotMeter). Per-object Windows calls
   (one icon, one window) are used instead of prefix- or session-wide switches.
@@ -1184,6 +1174,61 @@ tied to how Chromium makes the call. Editing `system.reg` from Linux:
 a running `wineserver` holds the registry in memory and writes its own
 copy back, so the change could be lost.
 
+### 6.11 A Questlog left by an ended launcher
+
+**Symptom.** The status window was closed while Questlog ran. Questlog
+stays open but counts nothing, and neither tray icon is there to quit it.
+`a2qlinux --diagnose` says `PROBLEM  Now: Questlog runs with the bridge,
+but A2Qlinux has ended`. Until A2Qlinux 0.7.0, starting A2Qlinux again
+then ended at once with "Questlog is already running and fed by another
+A2Qlinux", which was false (reported in issue #2).
+
+**Cause.** Closing the terminal sends the launcher SIGHUP, which ends
+Python without a word (nothing reaches `launcher.log`). Questlog's launch
+is a scope of its own (§5.1) and runs on. Its bridge is gone, its own
+tray icon was hidden by `hide-tray` (§6.2), and ours ended with the
+launcher.
+
+**Behaviour.** A launcher that has taken the lock (I1) looks at the
+running Questlog's environment (`running_questlog_state`):
+
+| Found | Meaning | What the launcher does |
+|---|---|---|
+| no Questlog | — | starts it |
+| `QUESTLOG_PROTON_BRIDGE` set (`orphaned`) | started by a launcher that has ended, since none other can run | `end_orphaned_questlog`, then starts it |
+| not set (`outside`) | started without A2Qlinux | stops: "already running in the game prefix without the capture bridge" |
+
+`end_orphaned_questlog`, in order:
+
+1. Logs `Questlog is still running from an A2Qlinux that has ended (its
+   status window was closed?) … Closing it in 10 s, once it has saved,
+   and starting it again.`
+2. Waits `SAVE_WAIT` (10.5 s): Questlog saves every 10 s, so what it
+   received before its bridge went away is written.
+3. Sends `end-session` to Questlog's main window (§6.4); the game is not
+   touched. When that fails (a hung window does not answer
+   `SMTO_ABORTIFHUNG`), it logs `Questlog did not take the session end`
+   and goes on.
+4. `wait_for_questlog_exit` waits `QUESTLOG_QUIT_WAIT` (20 s) for
+   `Questlog closed.`, else stops the processes with SIGTERM.
+5. Waits up to `ORPHAN_EXIT_FILE_WAIT` (5 s) for the old launch to write
+   `questlog.exit`. `launch_questlog` deletes that file before its own
+   launch; written after that, it would read as the new Questlog's end.
+6. If a `Questlog.exe` still runs, stops with "could not be closed";
+   otherwise the start continues as usual (`Capturing on …`, `Starting
+   Questlog …`).
+
+The previous run's `questlog.log`, with the orphan's output, is kept as
+`questlog.log.1` (§9). Checked on this desktop (13 November 2026): SIGHUP
+to a running launcher, `--diagnose` showed the `PROBLEM`, a second
+launcher closed the orphan after 10 s and started Questlog with its own
+bridge; quitting afterwards left nothing behind.
+
+**Not changed.** Closing the status window still ends the launcher.
+Keeping it alive instead would mean a launcher that runs on without its
+terminal, which nothing in it is built for; that is a separate change,
+not made here.
+
 ## 7. Failure modes
 
 | Symptom | Cause | Where to look |
@@ -1193,8 +1238,8 @@ copy back, so the change could be lost.
 | "Questlog hung at its start again …" (notification), launcher ends with code 1 | the start hung twice in a row (§6.9) | start again from the menu; `questlog.log`, a problem report |
 | Questlog shows "No capture bridge: start Questlog with A2Qlinux" | Questlog started without the launcher | start it from the menu entry |
 | "Capture bridge not reachable (is A2Qlinux running?)" | launcher not running (terminal closed) | status window |
-| "Questlog is still running from an A2Qlinux that has ended …" | the status window of the launcher that started it was closed (I1) | none: it is closed after `SAVE_WAIT` and started again |
-| "Questlog keeps running from an A2Qlinux that has ended and could not be closed" | the orphan survived `end-session` and the stop of its processes (I1) | `questlog.log`; its `Questlog.exe` processes |
+| "Questlog is still running from an A2Qlinux that has ended …" | the status window of the launcher that started it was closed (§6.11) | none: it is closed after `SAVE_WAIT` and started again |
+| "Questlog keeps running from an A2Qlinux that has ended and could not be closed" | the orphan survived `end-session` and the stop of its processes (§6.11) | `questlog.log`; its `Questlog.exe` processes |
 | "Capture bridge closed the connection …" | launcher stopped, or it dropped a connection | status window |
 | Questlog: "Npcap lists no adapter with this address" | the game's connection uses an address no capture covers | status window: "AION 2's connection … uses …, which A2Qlinux does not capture on" (§4.3, step 8) |
 | "AION 2's connection … still uses …, which no network interface has any more" | the VPN was switched off under a running game; its connection is dead until the game reconnects | none on our side; the game has to reconnect (§4.3, step 8) |
@@ -1379,64 +1424,16 @@ which no part of A2Qlinux checked.
 like `--version`, without opening a status window). It only reads, so it is
 safe at any time, the game running or not. In order:
 
-1. A2Qlinux's version (`shown_version`, §12); the system
-   (`system_lines`): the distribution (`PRETTY_NAME` of `/etc/os-release`,
-   else `NAME` and `VERSION_ID`), the kernel, the desktop
-   (`XDG_CURRENT_DESKTOP`, with its version from the command in
-   `DESKTOP_VERSION`, `plasmashell --version` or `gnome-shell --version`,
-   when that desktop runs) and the session type (`XDG_SESSION_TYPE`). How
-   windows, the tray and overlays behave depends on these (§6.8, §14), and
-   reports from other distributions need them to be compared with this
-   one. Shown as `System: …` and `Desktop: …`. Then the graphics
-   (`gpu_lines`), since Questlog draws its windows with Chromium on the GPU
-   (Direct3D 11 through DXVK under Proton) and a window that stays black
-   is first a question of card and driver: each card under
-   `/sys/class/drm` (connectors such as `card1-DP-1` skipped) with its
-   name from `pci.ids` (`pci_name`; the hex ids where the database has no
-   entry), its kernel driver (the `driver` link's name), NVIDIA's driver
-   version from `/proc/driver/nvidia/version`, and which card the firmware
-   started on (`boot_vga`, "primary"); and, where `glxinfo` is installed,
-   OpenGL's renderer and version (`glxinfo -B`), which names Mesa's
-   version on AMD and Intel and is a `note` when it is a software renderer
-   (`llvmpipe`, `softpipe`, `swrast`): then no graphics driver is in use.
-   Then the screens (`display_lines`), which decide where Questlog's
-   overlays land: the monitors as X11 programs see them
-   (`xrandr --listmonitors`; Wine draws through XWayland in a Wayland
-   session, so this is Questlog's view), and the desktop's own scale,
-   KDE's from `kscreen-doctor -j` (enabled outputs), GNOME's from
-   `~/.config/monitors.xml` (no file: never changed, 1). Then the settings
-   file and
-   its problems, Questlog's folder and version.
+1. A2Qlinux's version (`shown_version`, §12); the system, graphics and
+   screens (table below); the settings file and its problems, Questlog's
+   folder and version.
 2. The checks `a2qlinux-setup` makes, by calling the same functions
    (`missing_packages`, `capture_problem`, `tray_problem`,
    `windows_parts_problem`): there is one implementation of each.
 3. Steam (`steam_roots`, the Flatpak case of §14), the game's prefix
-   (`game_prefix`), the Proton that last ran it, and whether the
-   `wpcap.dll` there carries `BRIDGE_SIGNATURE`. `proton_line` reads
-   `config_info` beside the prefix. The `proton` script compares that
-   file with what it would write on every start and rewrites it when they
-   differ, so it belongs to the Proton that last ran the prefix. Its first
-   line is only the prefix's format version (`CURRENT_PREFIX_VERSION`,
-   such as `11.0-100`), which several builds share; the lines below are
-   paths inside the tool's folder as the runtime container sees them
-   (`/run/host/…` is the host's `/…`). The build's name comes from that
-   folder's `version` file (`<time> <name>`), and is shown with the
-   folder's name: `cachyos-11.0-20261015-slr (folder proton-cachyos-slr)`.
-   A folder that is a link moved since to another build (`Proton-GE
-   Latest`, kept by tools that install GE-Proton) names the build it
-   points at now. Without a readable `version` file, the prefix version
-   is shown and called that. Next to it, the DPI set in the prefix's
-   registry (`wine_dpi_line`): every `LogPixels` found under
-   `Control Panel\Desktop` and `Software\Wine\Fonts` (`user.reg`) and the
-   two `Hardware Profiles` keys (`system.reg`), each with its key, since
-   which one Wine applies was not checked here; 96 is 100 %. Then the
-   environment variables that change how Proton, Wine, DXVK or the driver
-   behave (`ENV_PREFIXES`: `PROTON_`, `DXVK_`, `WINE…`, `__GL_`, `MESA_`,
-   `LD_PRELOAD`, …) in two places (`environment_lines`): the Steam client's
-   (`steam_environment`, read from `/proc`, `steam.sh` preferred since it
-   holds what the session handed Steam, else `steamrt64/steam`), which the
-   game starts with besides its launch option, and this session's, which
-   Questlog's launch inherits.
+   (`game_prefix`), the Proton that last ran it, Wine's DPI and the
+   environment (table below), and whether the `wpcap.dll` there carries
+   `BRIDGE_SIGNATURE`.
 4. AION 2's launch option, from every Steam account's
    `userdata/<id>/config/localconfig.vdf`, path
    `UserLocalConfigStore > Software > Valve > Steam > apps > 3393110 >
@@ -1468,6 +1465,44 @@ safe at any time, the game running or not. In order:
    change to the file some 30 s later (26 s measured, 13 November 2026,
    with a session running), so a change made just now may not show yet;
    the `absent` note says so.
+
+The lines that describe the machine rather than A2Qlinux. They exist so
+that a report from another system can be compared with one where things
+work: how windows, the tray and overlays behave depends on the desktop
+(§6.8, §14), and Questlog draws its windows with Chromium on the GPU
+(Direct3D 11 through DXVK under Proton), so a window that stays black is
+first a question of card and driver.
+
+| Line | Function | Read from | Notes |
+|---|---|---|---|
+| `System:` | `system_lines` | `PRETTY_NAME` of `/etc/os-release` (else `NAME` `VERSION_ID`); `platform.release()` | |
+| `Desktop:` | `system_lines` | `XDG_CURRENT_DESKTOP`, `XDG_SESSION_TYPE`; version from the command in `DESKTOP_VERSION` (`plasmashell --version`, `gnome-shell --version`) when that desktop runs | |
+| `Graphics:` | `gpu_lines`, `pci_name` | each `card<N>` under `/sys/class/drm` (connectors such as `card1-DP-1` skipped): `vendor`/`device` ids named from `pci.ids`, the kernel driver (the `driver` link), "primary" from `boot_vga`; NVIDIA's version from `/proc/driver/nvidia/version` | hex ids when `pci.ids` has no entry |
+| `OpenGL:` | `gpu_lines` | `glxinfo -B`, where installed: renderer and version (Mesa's version on AMD and Intel) | `note` for `llvmpipe`, `softpipe`, `swrast`: no graphics driver in use |
+| `Monitors (as Wine sees them):` | `display_lines` | `xrandr --listmonitors` | Wine draws through X11 (XWayland under Wayland), so this is where Questlog places its overlays |
+| `Desktop scale:` | `display_lines` | KDE: `kscreen-doctor -j` (enabled outputs); GNOME: `<scale>` in `~/.config/monitors.xml` | GNOME without that file: never changed, 1 |
+| `Proton (last run):` | `proton_line` | `config_info` beside the prefix, and the `version` file of the tool folder its paths lie in | see below |
+| `Wine DPI:` | `wine_dpi_line` | every `LogPixels` under `Control Panel\Desktop` and `Software\Wine\Fonts` (`user.reg`) and both `Hardware Profiles` keys (`system.reg`) | each with its key: which one Wine applies was not checked; 96 is 100 % |
+| `Steam's environment:` | `environment_lines`, `steam_environment` | `/proc/<pid>/environ` of `steam.sh` (what the session handed Steam), else of `steamrt64/steam` | what the game starts with besides its launch option |
+| `This session's environment (Questlog's):` | `environment_lines` | this process's environment | what Questlog's launch inherits |
+
+Both environment lines list only variables named in `ENV_PREFIXES`
+(`PROTON_`, `DXVK_`, `VKD3D_`, `WINE…`, `__GL_`, `MESA_`, `RADV_`,
+`LD_PRELOAD`, …): those that change how Proton, Wine, DXVK or the driver
+behave.
+
+**Which Proton.** The `proton` script compares `config_info` with what it
+would write on every start and rewrites it when they differ, so the file
+belongs to the Proton that last ran the prefix. Its first line is only
+the prefix's format version (`CURRENT_PREFIX_VERSION`, such as `11.0-100`,
+which GE-Proton 11's builds share); the lines below are paths inside the
+tool's folder as Steam's runtime container sees them (`/run/host/…` is the
+host's `/…`). The build's name comes from that folder's `version` file
+(`<time> <name>`): `cachyos-11.0-20261015-slr (folder proton-cachyos-slr)`.
+A folder that is a link moved since to another build (`Proton-GE Latest`,
+kept by tools that install GE-Proton) names the build it points at now.
+Without a readable `version` file, the prefix version is shown and called
+that.
 
 Each check gives lines of `ok`, `note` or `PROBLEM`; the exit code is 1
 when there is a problem. A check that raises is reported as a problem

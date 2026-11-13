@@ -42,14 +42,19 @@ environment.
 Keep the status window open while you use Questlog. It carries the traffic
 to Questlog, and it shows what A2Qlinux is doing. The line
 `Game traffic is flowing to Questlog.` means everything is connected. The
-window closes by itself when Questlog quits. If you close it yourself,
-Questlog stays open but gets no more traffic, and its tray icon is gone;
-start "A2Qlinux" from the menu again, and it closes that Questlog (after
-about 10 seconds, so that it has saved) and starts it again. If something fails, it stays
+window closes by itself when Questlog quits. If something fails, it stays
 open with the message until you press Enter. Everything it shows is also
 kept, with the time, in a file (`launcher.log`), so nothing is lost when it
 closes; [TROUBLESHOOTING.md](TROUBLESHOOTING.md#reporting-a-problem) says
 where it is and how to send it with a problem report.
+
+If you close the status window yourself, A2Qlinux stops, but Questlog
+stays open: it gets no more traffic, so it counts no fights, and the tray
+icon is gone with A2Qlinux, so there is nothing to quit it from. Start
+"A2Qlinux" from the menu again. The new status window says `Questlog is
+still running from an A2Qlinux that has ended`, waits about 10 seconds
+so that Questlog has saved, closes it, and starts it again with the
+traffic. The game keeps running meanwhile.
 
 **If Questlog gets stuck while starting.** Very rarely, Questlog's start
 gets stuck inside Wine (the layer that runs Windows programs on Linux): its
