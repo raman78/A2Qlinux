@@ -42,7 +42,10 @@ environment.
 Keep the status window open while you use Questlog. It carries the traffic
 to Questlog, and it shows what A2Qlinux is doing. The line
 `Game traffic is flowing to Questlog.` means everything is connected. The
-window closes by itself when Questlog quits. If something fails, it stays
+window closes by itself when Questlog quits. If you close it yourself,
+Questlog stays open but gets no more traffic, and its tray icon is gone;
+start "A2Qlinux" from the menu again, and it closes that Questlog (after
+about 10 seconds, so that it has saved) and starts it again. If something fails, it stays
 open with the message until you press Enter. Everything it shows is also
 kept, with the time, in a file (`launcher.log`), so nothing is lost when it
 closes; [TROUBLESHOOTING.md](TROUBLESHOOTING.md#reporting-a-problem) says

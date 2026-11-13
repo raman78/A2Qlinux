@@ -35,6 +35,22 @@ class LauncherPidTest(unittest.TestCase):
             launcher.kill()
             launcher.wait()
 
+    def test_pid_of_a_launcher_started_as_a2qlinux_run(self):
+        script = Path(self.tmp.name) / "bin" / "a2qlinux-run"
+        script.parent.mkdir()
+        script.write_text("import time\ntime.sleep(30)\n")
+        launcher = subprocess.Popen([sys.executable, str(script)])
+        try:
+            deadline = time.monotonic() + 2
+            while (b"a2qlinux-run" not in Path(f"/proc/{launcher.pid}/cmdline").read_bytes()
+                   and time.monotonic() < deadline):
+                time.sleep(0.01)
+            d.LOCK.write_text(f"{launcher.pid}\n")
+            self.assertEqual(d.launcher_pid(), launcher.pid)
+        finally:
+            launcher.kill()
+            launcher.wait()
+
     def test_pid_of_another_program_is_refused(self):
         d.LOCK.write_text(f"{os.getpid()}\n")       # this test runner, not the launcher
         self.assertIsNone(d.launcher_pid())

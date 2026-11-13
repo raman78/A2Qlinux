@@ -143,22 +143,35 @@ class SystemLinesTest(unittest.TestCase):
 
 
 class ProtonLineTest(unittest.TestCase):
-    def line(self, text):
+    """config_info as Proton writes it: the prefix version, then paths in the tool's folder."""
+
+    def line(self, config_info, tool=None, version=None):
         import tempfile
         from pathlib import Path
-        with tempfile.TemporaryDirectory() as folder:
-            (Path(folder) / "pfx").mkdir()
-            if text is not None:
-                (Path(folder) / "config_info").write_text(text)
-            return d.proton_line(Path(folder) / "pfx")
+        with tempfile.TemporaryDirectory() as root:
+            compat = Path(root) / "compatdata" / "3393110"
+            (compat / "pfx").mkdir(parents=True)
+            if config_info is not None:
+                (compat / "config_info").write_text(config_info)
+            if tool and version is not None:
+                (Path(root) / tool).mkdir(parents=True)
+                (Path(root) / tool / "version").write_text(version)
+            return d.proton_line(compat / "pfx", host_root=root)
 
-    def test_proton_ge(self):
-        self.assertEqual(self.line("GE-Proton10-25\n/home/u/.steam/root/compatibilitytools.d/GE-Proton10-25/files/share/fonts/\n"),
-                         (d.OK, "Proton (last run): GE-Proton10-25 (GE-Proton10-25)"))
+    def test_proton_ge_through_a_latest_link_folder(self):
+        tool = "steam/compatibilitytools.d/Proton-GE Latest"
+        self.assertEqual(self.line(f"11.0-100\n/{tool}/files/share/fonts/\n", tool, "1762156778 GE-Proton11-12\n"),
+                         (d.OK, "Proton (last run): GE-Proton11-12 (folder Proton-GE Latest)"))
 
-    def test_valve_proton(self):
-        self.assertEqual(self.line("10.0-102\n/home/u/.steam/steam/steamapps/common/Proton 10.0/files/share/fonts/\n"),
-                         (d.OK, "Proton (last run): 10.0-102 (Proton 10.0)"))
+    def test_a_tool_seen_from_inside_the_runtime_container(self):
+        tool = "usr/share/steam/compatibilitytools.d/proton-cachyos-slr"
+        self.assertEqual(self.line(f"CachyOS-11.0-100\n/run/host/{tool}/files/lib/\n", tool,
+                                   "1792530497 cachyos-11.0-20261015-slr\n"),
+                         (d.OK, "Proton (last run): cachyos-11.0-20261015-slr (folder proton-cachyos-slr)"))
+
+    def test_without_a_version_file_the_prefix_version_is_named_as_such(self):
+        self.assertEqual(self.line("10.0-102\n/home/u/steamapps/common/Proton 10.0/files/share/fonts/\n"),
+                         (d.OK, "Proton (last run): build unknown, prefix version 10.0-102 (folder Proton 10.0)"))
 
     def test_not_started_yet(self):
         self.assertEqual(self.line(None)[0], d.NOTE)

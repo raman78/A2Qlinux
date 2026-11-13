@@ -807,3 +807,77 @@ class LogFileTest(unittest.TestCase):
         logs.write("two")
         self.assertEqual(len(self.said), 1)
         self.assertIn("only in this window", self.said[0])
+
+
+class OrphanedQuestlogTest(unittest.TestCase):
+    """A Questlog left by a launcher that ended (status window closed) is ended and started again."""
+
+    def setUp(self):
+        from unittest import mock
+        self.tmp = tempfile.TemporaryDirectory()
+        self.log_path = Path(self.tmp.name) / "questlog.log"
+        self.calls, self.logged, self.alive = [], [], {101, 102}
+        self.ctl_result = 0
+        self.wait_stops = False                  # wait_for_questlog_exit's own stop of what is left
+        self.patches = [
+            mock.patch.object(q, "log", self.logged.append),
+            mock.patch.object(q.time, "sleep", lambda s: None),
+            mock.patch.object(q, "run_ctl", self.run_ctl),
+            mock.patch.object(q, "wait_for_questlog_exit", self.wait_exit),
+            mock.patch.object(q, "game_processes", lambda appid, names: {"questlog.exe": set(self.alive)}),
+            mock.patch.object(q, "ORPHAN_EXIT_FILE_WAIT", 0.3),
+        ]
+        for patch in self.patches:
+            patch.start()
+
+    def tearDown(self):
+        for patch in self.patches:
+            patch.stop()
+        self.tmp.cleanup()
+
+    def run_ctl(self, protontricks, command, log_path):
+        self.calls.append(command)
+        if self.ctl_result == 0:
+            self.alive.clear()
+        return self.ctl_result
+
+    def wait_exit(self, note):
+        self.calls.append("wait")
+        if self.wait_stops:
+            self.alive.clear()
+
+    def test_state_from_the_environment(self):
+        from unittest import mock
+        environ = {101: "PATH=/usr/bin\0QUESTLOG_PROTON_BRIDGE=127.0.0.1:1:t\0", 102: "PATH=/usr/bin\0"}
+        with mock.patch.object(q, "_read", lambda path: environ[int(path.split("/")[2])]):
+            self.assertEqual(q.running_questlog_state({101, 102}), "orphaned")
+            self.assertEqual(q.running_questlog_state({102}), "outside")
+        self.assertIsNone(q.running_questlog_state(set()))
+
+    def test_ended_like_a_quit_after_it_had_time_to_save(self):
+        (self.log_path.with_name("questlog.exit")).write_text("0\n")
+        q.end_orphaned_questlog("protontricks-launch", self.log_path)
+        self.assertEqual(self.calls, ["end-session", "wait"])
+        self.assertIn("starting it again", self.logged[0])
+
+    def test_a_hung_orphan_is_stopped_not_left(self):
+        self.ctl_result = 1                      # its window did not answer
+        self.wait_stops = True
+        q.end_orphaned_questlog("protontricks-launch", self.log_path)
+        self.assertEqual(self.calls, ["end-session", "wait"])
+        self.assertTrue(any("did not take the session end" in line for line in self.logged))
+
+    def test_one_that_survives_is_reported(self):
+        self.ctl_result = 1
+        with self.assertRaises(RuntimeError) as caught:
+            q.end_orphaned_questlog("protontricks-launch", self.log_path)
+        self.assertIn("could not be closed", str(caught.exception))
+
+    def test_waits_for_the_orphans_exit_file(self):
+        import threading
+        exit_file = self.log_path.with_name("questlog.exit")
+        threading.Timer(0.1, lambda: exit_file.write_text("0\n")).start()
+        started = time.monotonic()
+        q.end_orphaned_questlog("protontricks-launch", self.log_path)
+        self.assertTrue(exit_file.exists())
+        self.assertGreaterEqual(time.monotonic() - started, 0.09)

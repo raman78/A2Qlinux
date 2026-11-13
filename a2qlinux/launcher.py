@@ -575,6 +575,7 @@ def session_lock(directory):
 # ----------------------------------------------------------- tray and quit
 
 CTL = BIN / "questlog_ctl.exe"
+ORPHAN_EXIT_FILE_WAIT = 5   # s for an ended orphan's launch to write questlog.exit (end_orphaned_questlog)
 SAVE_WAIT = 10.5   # s after the last game data before Questlog may be ended: it saves pending data within 10 s
 
 
@@ -990,6 +991,47 @@ def end_game_steam_helper(why, pids=None):
     return len(orphans) - len(left)
 
 
+def running_questlog_state(pids):
+    """None (no Questlog), "orphaned" (started with the bridge) or "outside" (started without A2Qlinux).
+
+    Asked by a launcher that holds the session lock (I1), so no other launcher
+    runs: a Questlog carrying QUESTLOG_PROTON_BRIDGE was started by a launcher
+    that has ended since (its status window closed), and gets no traffic.
+    """
+    if not pids:
+        return None
+    fed = any("QUESTLOG_PROTON_BRIDGE=" in _read(f"/proc/{pid}/environ") for pid in pids)
+    return "orphaned" if fed else "outside"
+
+
+def end_orphaned_questlog(protontricks, log_path, wait=SAVE_WAIT):
+    """End a Questlog whose launcher has gone, so that this launcher can start it with its own bridge.
+
+    Its tray icon was hidden by that launcher and ours went with it, so the
+    player cannot quit it. It is ended like a quit (end-session: Questlog's
+    window only, the game is not touched), after `wait` seconds in which
+    Questlog saves what it received before its bridge went away. A Questlog
+    that does not answer (its window hung) is stopped by wait_for_questlog_exit.
+
+    Its launch (launch_questlog) writes questlog.exit once Questlog has gone;
+    that is waited for too, since a file written after this launcher's own
+    launch would read as the new Questlog's end.
+    """
+    log("Questlog is still running from an A2Qlinux that has ended (its status window was closed?), so it "
+        f"gets no game traffic. Closing it in {wait:.0f} s, once it has saved, and starting it again.")
+    time.sleep(wait)
+    if run_ctl(protontricks, "end-session", log_path) != 0:
+        log(f"Questlog did not take the session end; its processes are stopped within {QUESTLOG_QUIT_WAIT} s.")
+    wait_for_questlog_exit(f"it had {wait:.0f} s to save")
+    exit_file = Path(log_path).with_name("questlog.exit")
+    deadline = time.monotonic() + ORPHAN_EXIT_FILE_WAIT
+    while not exit_file.exists() and time.monotonic() < deadline:
+        time.sleep(0.2)
+    if game_processes(APPID, ["questlog.exe"])["questlog.exe"]:
+        raise RuntimeError("Questlog keeps running from an A2Qlinux that has ended and could not be closed. "
+                           "End its Questlog.exe processes (System Monitor), then start A2Qlinux again.")
+
+
 def move_to_fresh_session(prefix, protontricks, log_path):
     """End Questlog and wait until the game's Wine session is gone. Returns True if it went.
 
@@ -1302,12 +1344,10 @@ def main():
         # Only the launcher holding the lock writes the file; earlier lines are kept until now.
         LOG_FILE.open(state_dir / "launcher.log")
         dumpcap = system_dumpcap()
-        running = game_processes(APPID, ["questlog.exe"])["questlog.exe"]
-        if running:
-            fed = any("QUESTLOG_PROTON_BRIDGE=" in _read(f"/proc/{pid}/environ") for pid in running)
-            if fed:
-                raise RuntimeError("Questlog is already running and fed by another A2Qlinux "
-                                   "(another terminal window). Nothing to do here.")
+        running = running_questlog_state(game_processes(APPID, ["questlog.exe"])["questlog.exe"])
+        if running == "orphaned":
+            end_orphaned_questlog(protontricks, state_dir / "questlog.log")
+        elif running == "outside":
             raise RuntimeError("Questlog is already running in the game prefix without the capture bridge. "
                                "Quit it (tray icon > Quit) and run this again.")
         server = BridgeServer(log)

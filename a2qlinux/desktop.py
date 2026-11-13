@@ -74,14 +74,16 @@ def launcher_pid():
     """PID of the running the launcher (a2qlinux.launcher), from its lock file; None if it cannot be told.
 
     Checked against the process's command line, so a stale or reused PID is
-    never signalled.
+    never signalled. The launcher runs as `python -m a2qlinux.launcher` from
+    the menu entry and as `python …/a2qlinux-run` when started in a terminal.
     """
     try:
         pid = int(LOCK.read_text().strip())
         command = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
     except (OSError, ValueError):
         return None
-    return pid if b"a2qlinux.launcher" in command else None
+    ours = b"a2qlinux.launcher" in command or any(os.path.basename(arg) == b"a2qlinux-run" for arg in command)
+    return pid if ours else None
 
 
 def ask_running_launcher(game_starting):

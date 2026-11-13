@@ -8,7 +8,8 @@ A2Qlinux, what causes them and what to do, followed by common questions.
 | Symptom | Likely cause | What to do |
 |---|---|---|
 | "No capture bridge: start Questlog with A2Qlinux" in Questlog | Questlog was started some other way | quit it, start "A2Qlinux" from the menu |
-| "Capture bridge not reachable" | the status window was closed | quit Questlog, start it again from the menu |
+| "Capture bridge not reachable" | the status window was closed | start "A2Qlinux" from the menu again; it closes that Questlog and starts it with the traffic |
+| "Questlog is still running from an A2Qlinux that has ended …" in the status window | the status window of an earlier start was closed, which left Questlog without traffic and without a tray icon | nothing: after about 10 seconds, so that Questlog has saved, A2Qlinux closes it and starts it again |
 | "Capture bridge closed the connection" | A2Qlinux stopped | read the status window, start again |
 | "Aion 2's traffic can't be read" before you log in | harmless, it goes away on its own | log in to a server |
 | "Questlog is already running in the game prefix without the capture bridge" | a Questlog started outside A2Qlinux is open | quit it from its own tray icon, start again from the menu |
@@ -59,7 +60,8 @@ run and prints what stands in the way:
 Without a working tray icon, A2Qlinux shows Questlog's own Windows tray
 icon instead, which needs a system tray too, and whose menu opens only once
 under Proton. Closing the status window does not quit Questlog either; it
-only stops the live traffic. So get the tray icon working before you play.
+only stops the live traffic, until you start "A2Qlinux" from the menu again.
+So get the tray icon working before you play.
 
 ## Reporting a problem
 

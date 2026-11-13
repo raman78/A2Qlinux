@@ -84,7 +84,19 @@ open a status window (§12 "Shown version", §9.1).
   `<Questlog dir>/proton-stream/.lock` for the launcher's lifetime and writes
   its PID into the file. A second launcher would start a second bridge, while
   its Questlog launch would hand over to the running Questlog on the first
-  bridge.
+  bridge. Holding the lock is also proof that no other launcher runs: a
+  Questlog found running with `QUESTLOG_PROTON_BRIDGE` in its environment
+  (`running_questlog_state`) was left by a launcher that has ended, usually
+  because its status window was closed (SIGHUP ends it without a word).
+  That Questlog gets no traffic, and its tray icon was hidden while ours
+  went with the launcher, so the player cannot quit it.
+  `end_orphaned_questlog` gives it `SAVE_WAIT` to save, ends it with
+  `end-session` (§6.4; the game is untouched) or, if its window does not
+  answer, lets `wait_for_questlog_exit` stop its processes, waits up to
+  `ORPHAN_EXIT_FILE_WAIT` for its launch to write `questlog.exit` (written
+  later, the file would read as the new Questlog's end, §5.1), and the
+  launcher then starts Questlog as usual. Until A2Qlinux 0.7.0 the launcher
+  refused instead, wrongly naming "another A2Qlinux" as the feeder.
 - **I2 — Questlog only.** Nothing A2Qlinux does acts on other programs in the
   prefix (the game, other meters such as NotMeter). Per-object Windows calls
   (one icon, one window) are used instead of prefix- or session-wide switches.
@@ -697,8 +709,12 @@ switched off (§6.6), and the session end would skip it anyway.
 `a2qlinux-steam` run. If no launcher holds the lock, it opens
 `a2qlinux/launcher.py` in a terminal window, the status window
 (`terminal_command`, §14). Otherwise it signals the PID read from the lock file
-(`launcher_pid`), after checking that the process's command line contains
-`a2qlinux.launcher`, so a stale or reused PID is never signalled:
+(`launcher_pid`), after checking that the process's command line is the
+launcher's, so a stale or reused PID is never signalled: it contains
+`a2qlinux.launcher` (`python -m a2qlinux.launcher`, as the menu entry starts
+it) or an argument named `a2qlinux-run` (the command run in a terminal; until
+A2Qlinux 0.7.0 such a launcher was not recognised, so a click on the menu
+entry did not reach it and `--diagnose` showed its PID as `None`):
 
 | Caller | Signal | Launcher's response |
 |---|---|---|
@@ -1177,6 +1193,8 @@ copy back, so the change could be lost.
 | "Questlog hung at its start again …" (notification), launcher ends with code 1 | the start hung twice in a row (§6.9) | start again from the menu; `questlog.log`, a problem report |
 | Questlog shows "No capture bridge: start Questlog with A2Qlinux" | Questlog started without the launcher | start it from the menu entry |
 | "Capture bridge not reachable (is A2Qlinux running?)" | launcher not running (terminal closed) | status window |
+| "Questlog is still running from an A2Qlinux that has ended …" | the status window of the launcher that started it was closed (I1) | none: it is closed after `SAVE_WAIT` and started again |
+| "Questlog keeps running from an A2Qlinux that has ended and could not be closed" | the orphan survived `end-session` and the stop of its processes (I1) | `questlog.log`; its `Questlog.exe` processes |
 | "Capture bridge closed the connection …" | launcher stopped, or it dropped a connection | status window |
 | Questlog: "Npcap lists no adapter with this address" | the game's connection uses an address no capture covers | status window: "AION 2's connection … uses …, which A2Qlinux does not capture on" (§4.3, step 8) |
 | "AION 2's connection … still uses …, which no network interface has any more" | the VPN was switched off under a running game; its connection is dead until the game reconnects | none on our side; the game has to reconnect (§4.3, step 8) |
@@ -1374,12 +1392,19 @@ safe at any time, the game running or not. In order:
 3. Steam (`steam_roots`, the Flatpak case of §14), the game's prefix
    (`game_prefix`), the Proton that last ran it, and whether the
    `wpcap.dll` there carries `BRIDGE_SIGNATURE`. `proton_line` reads
-   `config_info` beside the prefix: its first line is Proton's version,
-   and the paths below it lie in the tool's folder, whose name is given
-   too (`proton-cachyos-slr`, `GE-Proton10-25`, `Proton 10.0`). The
-   `proton` script compares the file with what it would write on every
-   start and rewrites it when they differ, so it names the Proton that
-   last ran the prefix.
+   `config_info` beside the prefix. The `proton` script compares that
+   file with what it would write on every start and rewrites it when they
+   differ, so it belongs to the Proton that last ran the prefix. Its first
+   line is only the prefix's format version (`CURRENT_PREFIX_VERSION`,
+   such as `11.0-100`), which several builds share; the lines below are
+   paths inside the tool's folder as the runtime container sees them
+   (`/run/host/…` is the host's `/…`). The build's name comes from that
+   folder's `version` file (`<time> <name>`), and is shown with the
+   folder's name: `cachyos-11.0-20261015-slr (folder proton-cachyos-slr)`.
+   A folder that is a link moved since to another build (`Proton-GE
+   Latest`, kept by tools that install GE-Proton) names the build it
+   points at now. Without a readable `version` file, the prefix version
+   is shown and called that.
 4. AION 2's launch option, from every Steam account's
    `userdata/<id>/config/localconfig.vdf`, path
    `UserLocalConfigStore > Software > Valve > Steam > apps > 3393110 >

@@ -3,6 +3,20 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
+## [Unreleased]
+
+### Fixed
+- Starting **A2Qlinux** again after its status window was closed no longer
+  stops with "Questlog is already running and fed by another A2Qlinux".
+  The Questlog left behind, which got no game traffic and had no tray icon
+  to quit it from, is closed once it has saved and started again.
+- A launcher started with `a2qlinux-run` in a terminal is recognised: the
+  menu entry's **Open Questlog** reaches it, as it does a launcher started
+  from the menu.
+- The problem report names the exact Proton build the game last ran with
+  (for example GE-Proton11-12), not only the prefix version that several
+  builds share.
+
 ## [0.7.0] — 2026-11-13
 
 ### Changed

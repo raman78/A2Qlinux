@@ -151,18 +151,36 @@ def system_lines(env=os.environ, os_info=None, kernel=None, run=subprocess.run):
             (OK, f"Desktop: {desktop}{f' ({version})' if version else ''}, {session}")]
 
 
-def proton_line(prefix):
-    """(level, text): the Proton that last ran the prefix, from its config_info (Proton writes it on each start)."""
+def proton_line(prefix, host_root="/"):
+    """(level, text): the Proton that last ran the prefix.
+
+    Proton rewrites config_info beside the prefix on a start whenever it
+    differs. Its first line is the prefix's format version
+    (CURRENT_PREFIX_VERSION, e.g. "11.0-100"), which many builds share; the
+    lines below are paths inside the Proton tool's folder, as the Steam
+    runtime container sees them (/run/host/... is the host's /...). The
+    build's own name is in that folder's `version` file ("<time> <name>").
+    """
     try:
         lines = (Path(prefix).parent / "config_info").read_text(errors="replace").splitlines()
     except OSError:
         return NOTE, "Proton: unknown (no config_info next to the prefix; the game not started yet?)"
-    version = lines[0].strip() if lines else ""
-    tool = next((part for line in lines[1:] for part in [line.split("/files/", 1)[0].rsplit("/", 1)[-1]]
-                 if "/files/" in line), "")
-    if not version:
+    prefix_version = lines[0].strip() if lines else ""
+    folder = next((line.split("/files/", 1)[0] for line in lines[1:] if "/files/" in line), "")
+    if folder.startswith("/run/host/"):
+        folder = folder[len("/run/host"):]
+    build = ""
+    if folder:
+        try:
+            build = (Path(host_root) / folder.lstrip("/") / "version").read_text(errors="replace").split()[-1]
+        except (OSError, IndexError):
+            build = ""
+    if not (build or prefix_version):
         return NOTE, "Proton: unknown (config_info is empty)"
-    return OK, f"Proton (last run): {version}" + (f" ({tool})" if tool else "")
+    tool = Path(folder).name if folder else ""
+    shown = build or f"build unknown, prefix version {prefix_version}"
+    return OK, f"Proton (last run): {shown}" + (f" (folder {tool})" if tool else "")
+
 
 def check_setup(results):
     from . import setup_desktop as setup
@@ -248,7 +266,8 @@ def check_running(results, appid):
                                      "icon and start 'A2Qlinux' from the menu"))
         elif not running:
             results.append((PROBLEM, "Now: Questlog runs with the bridge, but A2Qlinux has ended (status "
-                                     "window closed?): it gets no game traffic. Quit it and start it again"))
+                                     "window closed?): it gets no game traffic. Start 'A2Qlinux' from the menu: "
+                                     "it closes this Questlog and starts it again"))
         else:
             results.append((OK, "Now: Questlog runs under A2Qlinux"))
     else:
