@@ -5,6 +5,12 @@ What changed for players, release by release. Technical details are in
 
 ## [Unreleased]
 
+### Changed
+- `a2qlinux --diagnose` (and so the problem report) also names your
+  distribution, kernel, desktop with its version, Wayland or X11, and the
+  Proton the game last ran with, so a report says on what system the
+  problem happened.
+
 ### Fixed
 - Questlog's **Open Folder** buttons (for example the recordings in the
   Combat Meter) open the folder in your file manager instead of showing

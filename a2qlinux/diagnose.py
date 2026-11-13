@@ -3,10 +3,12 @@
 Read only: it changes nothing, so it is safe at any time, the game running or
 not. Each check gives one line: fine, a note, or a problem with what to do.
 
-    1. A2Qlinux's version, the settings file, Questlog's folder and version.
+    1. A2Qlinux's version, the system (distribution, kernel, desktop and its
+       session type), the settings file, Questlog's folder and version.
     2. The checks a2qlinux-setup makes: programs, capture permission, the tray
        icon, the Windows parts (the same functions, a2qlinux.setup_desktop).
-    3. Steam: a native installation, the game's prefix, our wpcap.dll in it.
+    3. Steam: a native installation, the game's prefix, the Proton that last
+       ran it, our wpcap.dll in it.
     4. AION 2's Steam launch option, read from each Steam account's
        localconfig.vdf, and whether it ever ran (steam_launch.log).
     5. What runs now: the launcher, Questlog (fed by the bridge or not), the game.
@@ -25,6 +27,7 @@ sent by this program.
 import ipaddress
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import socket
@@ -123,6 +126,44 @@ def judge_launch_option(option, ours):
 
 # ---------------------------------------------------------------- checks
 
+DESKTOP_VERSION = {"KDE": ["plasmashell", "--version"], "GNOME": ["gnome-shell", "--version"]}
+VERSION_WAIT = 5    # s for a desktop's --version
+
+
+def system_lines(env=os.environ, os_info=None, kernel=None, run=subprocess.run):
+    """[(OK, text)]: the distribution, the kernel, the desktop with its version where it says, the session type."""
+    from .setup_desktop import os_release
+    info = os_release() if os_info is None else os_info
+    distro = info.get("PRETTY_NAME") or " ".join(filter(None, (info.get("NAME"), info.get("VERSION_ID"))))
+    desktop = env.get("XDG_CURRENT_DESKTOP") or env.get("DESKTOP_SESSION") or "unknown (no XDG_CURRENT_DESKTOP)"
+    version = ""
+    for name, command in DESKTOP_VERSION.items():
+        if name in desktop.upper().split(":") and shutil.which(command[0]):
+            try:
+                done = run(command, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=VERSION_WAIT)
+                version = done.stdout.strip().splitlines()[0] if done.stdout.strip() else ""
+            except (OSError, subprocess.TimeoutExpired):
+                version = ""
+            break
+    session = env.get("XDG_SESSION_TYPE") or "unknown session type"
+    return [(OK, f"System: {distro or 'unknown distribution (no /etc/os-release)'}, "
+                 f"kernel {kernel or platform.release()}"),
+            (OK, f"Desktop: {desktop}{f' ({version})' if version else ''}, {session}")]
+
+
+def proton_line(prefix):
+    """(level, text): the Proton that last ran the prefix, from its config_info (Proton writes it on each start)."""
+    try:
+        lines = (Path(prefix).parent / "config_info").read_text(errors="replace").splitlines()
+    except OSError:
+        return NOTE, "Proton: unknown (no config_info next to the prefix; the game not started yet?)"
+    version = lines[0].strip() if lines else ""
+    tool = next((part for line in lines[1:] for part in [line.split("/files/", 1)[0].rsplit("/", 1)[-1]]
+                 if "/files/" in line), "")
+    if not version:
+        return NOTE, "Proton: unknown (config_info is empty)"
+    return OK, f"Proton (last run): {version}" + (f" ({tool})" if tool else "")
+
 def check_setup(results):
     from . import setup_desktop as setup
     info = setup.os_release()
@@ -155,6 +196,7 @@ def check_steam(results, appid, qdir):
     try:
         prefix = launcher.game_prefix(appid, roots)
         results.append((OK, f"Game prefix: {prefix}"))
+        results.append(proton_line(prefix))
         dll = prefix / "drive_c" / "windows" / "system32" / "Npcap" / "wpcap.dll"
         try:
             ours = launcher.BRIDGE_SIGNATURE in dll.read_bytes()
@@ -247,7 +289,12 @@ def diagnose(appid=3393110):
     """[(level, text)], in the order of the module docstring."""
     settings, problems = config.load()
     qdir = settings.questlog_dir.expanduser()
-    results = [(OK, f"A2Qlinux {shown_version()}"), (OK, f"Settings: {config.CONFIG_PATH}")]
+    results = [(OK, f"A2Qlinux {shown_version()}")]
+    try:
+        results += system_lines()
+    except Exception as error:         # as below: reported, never hiding the rest
+        results.append((PROBLEM, f"This check failed: {error!r} (please report it)"))
+    results.append((OK, f"Settings: {config.CONFIG_PATH}"))
     results += [(PROBLEM, f"Settings: {p}") for p in problems]
     if (qdir / "Questlog.exe").is_file():
         from .update import installed_version

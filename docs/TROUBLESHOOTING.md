@@ -69,10 +69,16 @@ The quickest way is one command in a terminal:
 a2qlinux --diagnose --report
 ```
 
-It checks what A2Qlinux needs and how the game is started from Steam
-(without changing anything), and prints one line per check: `ok`, `note`,
+It checks what A2Qlinux needs and how the game is started from Steam,
+without changing anything, and prints one line per check: `ok`, `note`,
 or `PROBLEM` with what to do. Often that line already says what is wrong;
 `a2qlinux --diagnose` alone gives just these lines.
+
+Its first lines name your system: the distribution, the kernel, the
+desktop with its version, and whether it runs on Wayland or X11. Further
+down it names the Proton the game last ran with. Many problems show up
+only on some of these, so a report from another system can then be
+compared with one where things work.
 
 With `--report` it also writes a report file in your home folder and shows
 it to you. Before writing it, it replaces what could identify you: your home

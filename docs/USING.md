@@ -308,22 +308,44 @@ settings as they were.
 ### Questlog's Open Folder buttons
 
 Some Questlog pages have an **Open Folder** button, for example the list of
-recordings in the Combat Meter. Questlog asks Windows to open the folder,
-and the Windows environment the game runs in (Wine) knows no program for
-that. So instead of a folder you get the message "There is no Windows
-program configured to open this type of file".
+recordings in the Combat Meter. Questlog asks Windows to open the folder in
+its file browser. The Windows environment the game runs in (Wine, inside
+the game's Proton environment) has no program registered for that, so
+instead of a folder you get the message "There is no Windows program
+configured to open this type of file".
 
-`a2qlinux-setup` offers to add that missing piece: one entry that passes
-such folders to your Linux desktop, so they open in your usual file
-manager (Dolphin, Files, …). Answer the question with Enter (yes). If you
-said no earlier, this sets it up without asking:
+A2Qlinux can add the missing piece: one entry in the game's Proton
+environment that passes such folders on to your Linux desktop. The folder
+then opens in your usual file manager (Dolphin, Files, …), as a normal
+window of your desktop. It is offered during `a2qlinux-setup`, which
+explains it and asks before changing anything.
+
+To set it up:
+
+1. Start the game from Steam once, if you never have: the game's Proton
+   environment is made at its first start, and the entry goes in there.
+2. In a terminal, run `a2qlinux-setup`.
+3. When it explains the Open Folder fix and asks `Set this up now? [Y/n]`,
+   press Enter. It answers `Open Folder: set: folders now open through
+   winebrowser.exe …`.
+4. In Questlog, click **Open Folder**. The folder opens in your file
+   manager. Questlog does not need to be restarted.
+
+If you said no earlier, this sets it up without asking:
 ```
 a2qlinux-setup --open-folders
 ```
-It takes effect at once, even with Questlog open.
 
-The entry is in the game's Proton environment, so another Windows program
-there that opens a folder the same way gets your file manager too, instead
-of the same error. If something else has already put a program there,
-A2Qlinux leaves it as it is and says so. `a2qlinux-setup --no-open-folders`
-removes the entry again, and only the one A2Qlinux added.
+Running `a2qlinux-setup` again later does not ask again: it only says
+`Open Folder: Questlog's folders open in the file manager.` The same
+shows as `Open Folder: set up` in `a2qlinux --diagnose` (see "Reporting a
+problem" in [TROUBLESHOOTING.md](TROUBLESHOOTING.md)). A change made in
+the last half minute may not show there yet.
+
+The entry holds for the whole Proton environment, not only for Questlog:
+another Windows program in it that opens a folder the same way also gets
+your file manager instead of the same error. If another program has
+already registered one, A2Qlinux leaves it alone and says so
+(`the prefix already has a command for opening folders`). To take the
+entry out again, run `a2qlinux-setup --no-open-folders`; it removes only
+the entry A2Qlinux added.

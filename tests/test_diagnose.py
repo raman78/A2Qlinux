@@ -109,3 +109,57 @@ class IssueUrlTest(unittest.TestCase):
         body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
         self.assertIn("problem 0 ", body)
         self.assertIn("cut here", body)
+
+
+class SystemLinesTest(unittest.TestCase):
+    def test_nobara_on_gnome(self):
+        import subprocess
+        calls = []
+
+        def run(command, **kwargs):
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0, stdout="GNOME Shell 49.1\n", stderr="")
+        from unittest import mock
+        with mock.patch.object(d.shutil, "which", return_value="/usr/bin/gnome-shell"):
+            lines = d.system_lines(env={"XDG_CURRENT_DESKTOP": "GNOME", "XDG_SESSION_TYPE": "wayland"},
+                                   os_info={"PRETTY_NAME": "Nobara Linux 44 (KDE Plasma Desktop Edition)"},
+                                   kernel="6.17.1-201.nobara.fc44.x86_64", run=run)
+        self.assertEqual(calls, [["gnome-shell", "--version"]])
+        self.assertEqual(lines, [(d.OK, "System: Nobara Linux 44 (KDE Plasma Desktop Edition), "
+                                        "kernel 6.17.1-201.nobara.fc44.x86_64"),
+                                 (d.OK, "Desktop: GNOME (GNOME Shell 49.1), wayland")])
+
+    def test_nothing_known(self):
+        def run(command, **kwargs):
+            raise AssertionError("no desktop to ask")
+        lines = d.system_lines(env={}, os_info={}, kernel="6.1", run=run)
+        self.assertIn("unknown distribution", lines[0][1])
+        self.assertEqual(lines[1][1], "Desktop: unknown (no XDG_CURRENT_DESKTOP), unknown session type")
+
+    def test_name_and_version_without_pretty_name(self):
+        lines = d.system_lines(env={"XDG_CURRENT_DESKTOP": "XFCE"}, os_info={"NAME": "Fedora", "VERSION_ID": "43"},
+                               kernel="6.1", run=None)
+        self.assertEqual(lines[0][1], "System: Fedora 43, kernel 6.1")
+
+
+class ProtonLineTest(unittest.TestCase):
+    def line(self, text):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as folder:
+            (Path(folder) / "pfx").mkdir()
+            if text is not None:
+                (Path(folder) / "config_info").write_text(text)
+            return d.proton_line(Path(folder) / "pfx")
+
+    def test_proton_ge(self):
+        self.assertEqual(self.line("GE-Proton10-25\n/home/u/.steam/root/compatibilitytools.d/GE-Proton10-25/files/share/fonts/\n"),
+                         (d.OK, "Proton (last run): GE-Proton10-25 (GE-Proton10-25)"))
+
+    def test_valve_proton(self):
+        self.assertEqual(self.line("10.0-102\n/home/u/.steam/steam/steamapps/common/Proton 10.0/files/share/fonts/\n"),
+                         (d.OK, "Proton (last run): 10.0-102 (Proton 10.0)"))
+
+    def test_not_started_yet(self):
+        self.assertEqual(self.line(None)[0], d.NOTE)
+        self.assertEqual(self.line("")[0], d.NOTE)

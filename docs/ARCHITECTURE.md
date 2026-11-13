@@ -1121,10 +1121,10 @@ the folder opens in the desktop's file manager (checked on this desktop,
 13 November 2026: Dolphin).
 
 The registry is read and written by `questlog_ctl.exe` inside the prefix
-(`protontricks-launch`, like its other commands), so the live registry is
-what is checked, also while the game runs. A Wine session running at the
-time keeps no stale copy, and the registry files are not edited behind
-the `wineserver`'s back. The command does one of three things:
+(`protontricks-launch`, like its other commands). That way the check sees
+the registry the `wineserver` holds in memory, the one Questlog's call
+reads, also while the game runs, and nothing writes the registry files
+behind the `wineserver`'s back. The command does one of three things:
 
 - `status` prints `absent`, `ours` (exactly the value above) or `other`
   (anything else there, a key without a default value included);
@@ -1133,21 +1133,33 @@ the `wineserver`'s back. The command does one of three things:
   `explore` if nothing else is left in it.
 
 The first word printed is the outcome; `open_folders.outcome` reads it.
-`a2qlinux --diagnose` reports the same state without starting Wine, from
-`system.reg` (§9.1).
-`a2qlinux-setup` asks once with yes as the default (`--open-folders` without
-asking, `--no-open-folders` removes; without a terminal it only names the
-option). When the prefix already answers with our value, or with another
-command, it just says so. Failing (no prefix yet, protontricks missing,
-no answer within `CTL_WAIT`) is a note, not a problem: only the button
-depends on it.
+
+`a2qlinux-setup` (`open_folders.setup_step`) runs `status` first. On
+`absent` it shows `EXPLANATION` and asks once, yes being the default;
+`--open-folders` sets up without asking, `--no-open-folders` runs
+`remove`, and without a terminal it only names the option. What it prints:
+
+| State before | Setup prints |
+|---|---|
+| `absent`, answered yes | `Open Folder: set: folders now open through winebrowser.exe (…)` |
+| `absent`, answered no | `Not set up; run a2qlinux-setup --open-folders to do it later.` |
+| `ours` | `Open Folder: Questlog's folders open in the file manager.` |
+| `other` | `Open Folder: the prefix already has a command for opening folders; A2Qlinux leaves it (…)` |
+| any, `--no-open-folders` | `Open Folder: removed: …`, `absent: nothing to remove.` or `other: … left as it is.` |
+
+Failing (no prefix yet, `protontricks-launch` missing, no answer within
+`CTL_WAIT`) is printed as `Note: Open Folder: …` and is not a problem:
+only the button depends on it. The change takes effect at once, with
+Questlog open: `shell32` looks the verb up at each call. `a2qlinux
+--diagnose` reports the same three states without starting Wine (§9.1).
 
 **Reach.** The key is prefix-wide (I2's exception): any program in the
 prefix that opens a folder with `explore` and the class `folder` now gets
 the file manager instead of the error. Neither the game nor NotMeter is
 known to make that call. Proton keeps the key when it updates the prefix:
-`wine.inf` adds keys and does not delete this one, and the keys Proton's
-script deletes are named there, `ddeexec` ones and a service.
+its `wine.inf` has no `DelReg` section, and the `proton` script deletes only
+the keys it lists in `delete_dde_keys` (`ddeexec` of web links and
+document types) and `delete_keys` (one service).
 
 **Rejected.** Redirecting the call inside Questlog alone, by patching
 `ShellExecuteExW` in `Questlog.exe`'s import table from our `wpcap.dll`:
@@ -1346,14 +1358,28 @@ which no part of A2Qlinux checked.
 like `--version`, without opening a status window). It only reads, so it is
 safe at any time, the game running or not. In order:
 
-1. A2Qlinux's version (`shown_version`, §12), the settings file and its
-   problems, Questlog's folder and version.
+1. A2Qlinux's version (`shown_version`, §12); the system
+   (`system_lines`): the distribution (`PRETTY_NAME` of `/etc/os-release`,
+   else `NAME` and `VERSION_ID`), the kernel, the desktop
+   (`XDG_CURRENT_DESKTOP`, with its version from the command in
+   `DESKTOP_VERSION`, `plasmashell --version` or `gnome-shell --version`,
+   when that desktop runs) and the session type (`XDG_SESSION_TYPE`). How
+   windows, the tray and overlays behave depends on these (§6.8, §14), and
+   reports from other distributions need them to be compared with this
+   one. Shown as `System: …` and `Desktop: …`. Then the settings file and
+   its problems, Questlog's folder and version.
 2. The checks `a2qlinux-setup` makes, by calling the same functions
    (`missing_packages`, `capture_problem`, `tray_problem`,
    `windows_parts_problem`): there is one implementation of each.
 3. Steam (`steam_roots`, the Flatpak case of §14), the game's prefix
-   (`game_prefix`), and whether the `wpcap.dll` there carries
-   `BRIDGE_SIGNATURE`.
+   (`game_prefix`), the Proton that last ran it, and whether the
+   `wpcap.dll` there carries `BRIDGE_SIGNATURE`. `proton_line` reads
+   `config_info` beside the prefix: its first line is Proton's version,
+   and the paths below it lie in the tool's folder, whose name is given
+   too (`proton-cachyos-slr`, `GE-Proton10-25`, `Proton 10.0`). The
+   `proton` script compares the file with what it would write on every
+   start and rewrites it when they differ, so it names the Proton that
+   last ran the prefix.
 4. AION 2's launch option, from every Steam account's
    `userdata/<id>/config/localconfig.vdf`, path
    `UserLocalConfigStore > Software > Valve > Steam > apps > 3393110 >
@@ -1379,11 +1405,12 @@ safe at any time, the game running or not. In order:
 7. Whether the prefix has the command for Questlog's Open Folder buttons
    (§6.10): `open_folders.registry_state` reads it from the prefix's
    `system.reg` as text, with the same three answers as
-   `questlog_ctl.exe folder-handler status`. No Wine is started, which
-   would be no longer only reading (a new session in the game's prefix). The cost
-   is lag: the `wineserver` saves a registry change to the file about 30 s
-   later (26 s measured, 13 November 2026, with a session running), so a
-   change made just now may not show yet; the note says so.
+   `questlog_ctl.exe folder-handler status`. Starting Wine instead would
+   no longer be only reading: with no session running, it starts one in
+   the game's prefix. The cost is lag: the `wineserver` saves a registry
+   change to the file some 30 s later (26 s measured, 13 November 2026,
+   with a session running), so a change made just now may not show yet;
+   the `absent` note says so.
 
 Each check gives lines of `ok`, `note` or `PROBLEM`; the exit code is 1
 when there is a problem. A check that raises is reported as a problem
