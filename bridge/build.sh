@@ -6,7 +6,7 @@
 #   bridge/tests/*.exe            test programs for the two above
 #   tools/tcp_owner_probe.exe     diagnostic: does Wine report TCP connection owners
 # No rebuild is needed after a Wine update: the parts import only documented
-# Win32 functions by name (kernel32, user32, ws2_32, ucrtbase), and the build
+# Win32 functions by name (kernel32, user32, shell32, advapi32, ws2_32, ucrtbase), and the build
 # here (system Wine 11.21) runs daily under Proton's Wine 11.0; rebuild after
 # changing the C sources.
 #
@@ -74,7 +74,7 @@ CF=(--target=x86_64-w64-windows-gnu -fuse-ld=lld -nostdinc -isystem "$W/msvcrt" 
 clang "${CF[@]}" -shared -o ../a2qlinux/bin/wpcap.dll wpcap_bridge.c -nostdlib -L"$L" -lucrtbase -lkernel32 -luser32 -lws2_32 \
     -Wl,--entry=DllMain
 clang "${CF[@]}" -o ../a2qlinux/bin/questlog_ctl.exe questlog_ctl.c -nostdlib -L"$L" -lucrtbase -lkernel32 -luser32 \
-    -lshell32 -Wl,--entry=start
+    -lshell32 -ladvapi32 -Wl,--entry=start
 clang "${CF[@]}" -o tests/bridge_client_test.exe tests/bridge_client_test.c -nostdlib -L"$L" -lucrtbase -lkernel32 \
     -Wl,--entry=main
 clang "${CF[@]}" -o tests/zorder_guard_test.exe tests/zorder_guard_test.c -nostdlib -L"$L" -lucrtbase -lkernel32 \

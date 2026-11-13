@@ -3,6 +3,16 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
+## [Unreleased]
+
+### Fixed
+- Questlog's **Open Folder** buttons (for example the recordings in the
+  Combat Meter) open the folder in your file manager instead of showing
+  "There is no Windows program configured to open this type of file".
+  `a2qlinux-setup` explains the fix and asks first; it adds one entry to
+  the game's Proton environment, and `a2qlinux-setup --no-open-folders`
+  takes it back out.
+
 ## [0.6.0] — 2026-11-12
 
 ### Changed

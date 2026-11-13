@@ -5,6 +5,8 @@
  *   questlog_ctl.exe show-tray     show it again (when our icon is gone)
  *   questlog_ctl.exe close-window  close Questlog's main window (what follows is Questlog's closeAction setting)
  *   questlog_ctl.exe end-session   tell Questlog the Windows session is ending
+ *   questlog_ctl.exe folder-handler status|set|remove
+ *                                  the prefix's handler for opening a folder (a2qlinux/open_folders.py)
  *
  * Questlog's tray icon is replaced by a2qlinux/tray.py: under Wine its menu
  * opens only once, because Electron gives up on the menu when it cannot bring
@@ -23,6 +25,16 @@
  * close-window posts WM_CLOSE, which Questlog treats as a click on the
  * window's X: its closeAction setting decides - "tray" hides the window,
  * "quit" quits Questlog normally, "ask" (the default) asks which.
+ *
+ * folder-handler: Questlog's "Open Folder" buttons call Electron's
+ * shell.openPath, which asks ShellExecuteEx for the verb "explore" of the
+ * class "folder". Wine's prefix has no command for that verb, so the call
+ * fails with "There is no Windows program configured to open this type of
+ * file". `set` writes the command Wine uses for web links (winebrowser.exe,
+ * which hands the folder to xdg-open) as HKLM\Software\Classes\folder\shell\
+ * explore\command - only if that command is absent; `remove` deletes it only
+ * if it still holds exactly what `set` wrote (docs/ARCHITECTURE.md §6.10).
+ * The first word printed is the outcome: absent, ours, other, set, removed.
  *
  * Questlog's windows are found by program: owned by a process whose image is
  * Questlog.exe. Every outcome is printed; the exit code is 0 on success. */
@@ -167,6 +179,110 @@ static int end_session(void)
     return 0;
 }
 
+#define HANDLER_KEY L"Software\\Classes\\folder\\shell\\explore\\command"
+#define HANDLER_PARENT L"Software\\Classes\\folder\\shell"
+#define HANDLER_VERB L"explore"
+#define HANDLER_VALUE L"\"C:\\windows\\system32\\winebrowser.exe\" \"%1\""
+
+/* The handler's default value: 0 absent, 1 ours, 2 something else (in `value`), -1 error. */
+static int read_handler(WCHAR *value, DWORD size)
+{
+    HKEY key;
+    DWORD type = 0, bytes = size * sizeof(WCHAR);
+    LONG status = RegOpenKeyExW(HKEY_LOCAL_MACHINE, HANDLER_KEY, 0, KEY_QUERY_VALUE, &key);
+
+    value[0] = 0;
+    if (status == ERROR_FILE_NOT_FOUND)
+        return 0;
+    if (status != ERROR_SUCCESS) {
+        printf("error: HKLM\\%ls could not be opened (error %ld).\n", HANDLER_KEY, status);
+        return -1;
+    }
+    status = RegQueryValueExW(key, NULL, NULL, &type, (BYTE *)value, &bytes);
+    RegCloseKey(key);
+    if (status == ERROR_FILE_NOT_FOUND)
+        return 2;                       /* a key without a default value is someone else's too */
+    if (status != ERROR_SUCCESS) {
+        printf("error: HKLM\\%ls could not be read (error %ld).\n", HANDLER_KEY, status);
+        return -1;
+    }
+    value[size - 1] = 0;
+    return (type == REG_SZ || type == REG_EXPAND_SZ) && !wcscmp(value, HANDLER_VALUE) ? 1 : 2;
+}
+
+static int folder_handler(const WCHAR *action)
+{
+    WCHAR value[512];
+    int state = read_handler(value, 512);
+    HKEY key;
+    LONG status;
+
+    if (state < 0)
+        return 1;
+    if (!wcscmp(action, L"status")) {
+        if (state == 0)
+            printf("absent: no command opens folders for \"explore\".\n");
+        else if (state == 1)
+            printf("ours: folders open through winebrowser.exe (%ls).\n", HANDLER_VALUE);
+        else
+            printf("other: HKLM\\%ls holds %ls; left as it is.\n", HANDLER_KEY, value[0] ? value : L"no command");
+        return 0;
+    }
+    if (!wcscmp(action, L"set")) {
+        if (state == 1) {
+            printf("ours: folders already open through winebrowser.exe.\n");
+            return 0;
+        }
+        if (state == 2) {
+            printf("other: HKLM\\%ls holds %ls; left as it is.\n", HANDLER_KEY, value[0] ? value : L"no command");
+            return 0;
+        }
+        status = RegCreateKeyExW(HKEY_LOCAL_MACHINE, HANDLER_KEY, 0, NULL, 0, KEY_SET_VALUE, NULL, &key, NULL);
+        if (status == ERROR_SUCCESS) {
+            status = RegSetValueExW(key, NULL, 0, REG_SZ, (const BYTE *)HANDLER_VALUE, sizeof(HANDLER_VALUE));
+            RegCloseKey(key);
+        }
+        if (status != ERROR_SUCCESS) {
+            printf("error: HKLM\\%ls could not be written (error %ld).\n", HANDLER_KEY, status);
+            return 1;
+        }
+        printf("set: folders now open through winebrowser.exe (%ls).\n", HANDLER_VALUE);
+        return 0;
+    }
+    /* remove */
+    if (state != 1) {
+        if (state == 0)
+            printf("absent: nothing to remove.\n");
+        else
+            printf("other: HKLM\\%ls holds %ls, not what set wrote; left as it is.\n", HANDLER_KEY,
+                   value[0] ? value : L"no command");
+        return 0;
+    }
+    /* `command`, then the verb's key `explore` if nothing else is left in it
+     * (set made both; anything added there since is someone else's). */
+    status = RegOpenKeyExW(HKEY_LOCAL_MACHINE, HANDLER_PARENT L"\\" HANDLER_VERB, 0, KEY_ALL_ACCESS, &key);
+    if (status == ERROR_SUCCESS) {
+        DWORD subkeys = 1, values = 1;
+        status = RegDeleteKeyW(key, L"command");
+        if (status == ERROR_SUCCESS && RegQueryInfoKeyW(key, NULL, NULL, NULL, &subkeys, NULL, NULL, &values,
+                                                        NULL, NULL, NULL, NULL) == ERROR_SUCCESS
+            && !subkeys && !values) {
+            HKEY parent;
+            if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, HANDLER_PARENT, 0, KEY_ALL_ACCESS, &parent) == ERROR_SUCCESS) {
+                RegDeleteKeyW(parent, HANDLER_VERB);
+                RegCloseKey(parent);
+            }
+        }
+        RegCloseKey(key);
+    }
+    if (status != ERROR_SUCCESS) {
+        printf("error: HKLM\\%ls could not be removed (error %ld).\n", HANDLER_KEY, status);
+        return 1;
+    }
+    printf("removed: HKLM\\%ls.\n", HANDLER_KEY);
+    return 0;
+}
+
 static int run(int argc, WCHAR **argv)
 {
     if (argc == 2 && !wcscmp(argv[1], L"hide-tray"))
@@ -177,7 +293,11 @@ static int run(int argc, WCHAR **argv)
         return close_window();
     if (argc == 2 && !wcscmp(argv[1], L"end-session"))
         return end_session();
-    printf("usage: questlog_ctl.exe hide-tray | show-tray | close-window | end-session\n");
+    if (argc == 3 && !wcscmp(argv[1], L"folder-handler")
+        && (!wcscmp(argv[2], L"status") || !wcscmp(argv[2], L"set") || !wcscmp(argv[2], L"remove")))
+        return folder_handler(argv[2]);
+    printf("usage: questlog_ctl.exe hide-tray | show-tray | close-window | end-session"
+           " | folder-handler status|set|remove\n");
     return 2;
 }
 

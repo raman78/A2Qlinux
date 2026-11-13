@@ -245,6 +245,8 @@ Questlog starts.
   not work under Proton.
 - **Black Market Cards**, and moving overlays with Alt+E, need a step of
   their own; see the next section.
+- Questlog's **Open Folder** buttons need a small fix too; see "Questlog's
+  Open Folder buttons" below.
 
 ### Black Market Cards and moving overlays (Alt+E)
 
@@ -302,3 +304,26 @@ To use the cards:
 To remove the KDE overlays again, run `a2qlinux-setup --no-kde-overlays`.
 It takes out exactly what was added and leaves the rest of your KDE
 settings as they were.
+
+### Questlog's Open Folder buttons
+
+Some Questlog pages have an **Open Folder** button, for example the list of
+recordings in the Combat Meter. Questlog asks Windows to open the folder,
+and the Windows environment the game runs in (Wine) knows no program for
+that. So instead of a folder you get the message "There is no Windows
+program configured to open this type of file".
+
+`a2qlinux-setup` offers to add that missing piece: one entry that passes
+such folders to your Linux desktop, so they open in your usual file
+manager (Dolphin, Files, …). Answer the question with Enter (yes). If you
+said no earlier, this sets it up without asking:
+```
+a2qlinux-setup --open-folders
+```
+It takes effect at once, even with Questlog open.
+
+The entry is in the game's Proton environment, so another Windows program
+there that opens a folder the same way gets your file manager too, instead
+of the same error. If something else has already put a program there,
+A2Qlinux leaves it as it is and says so. `a2qlinux-setup --no-open-folders`
+removes the entry again, and only the one A2Qlinux added.

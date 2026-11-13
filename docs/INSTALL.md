@@ -184,10 +184,13 @@ What the setup does, in order:
 | takes Questlog's icon from it and colours the white Q red, so that A2Qlinux's icon is told apart from Questlog's own (A2Qlinux does not ship Questlog's logo) | `Icon: …` |
 | creates the "A2Qlinux" entry in your applications menu (searching the menu for "Questlog" finds it too) | `Menu entry: …` |
 | on KDE Plasma 6 only: explains the KDE overlays, which let Questlog's Black Market Cards show above the game, and asks whether to set them up (Enter means yes) | the explanation, `Set this up now? [Y/n]`, then `KDE: window rule … are in place.` |
+| explains the fix for Questlog's **Open Folder** buttons, which otherwise show a Wine error, and asks whether to set it up (Enter means yes); it adds one entry to the game's Proton environment, and the folder then opens in your file manager | the explanation, `Set this up now? [Y/n]`, then `Open Folder: set: folders now open through winebrowser.exe …` |
 | checks Steam's launch option for AION 2, used in the optional last section: says when it is set, otherwise prints the line to paste | `Steam launch option: set (…)`, or `Steam > AION 2 > …` and the line |
 
 It runs nothing with `sudo` and changes nothing in the game; the commands
-that need administrator rights are printed for you to run.
+that need administrator rights are printed for you to run. In the game's
+Proton environment it changes one thing, and only if you say yes: the
+entry for Questlog's Open Folder buttons.
 
 **Questlog in another folder.** A2Qlinux keeps Questlog in `~/Games/Questlog`
 unless you tell it otherwise. To use another folder, run the setup once
@@ -335,8 +338,10 @@ Next: [USING.md](USING.md).
 
 ## Removing A2Qlinux
 
-1. Quit Questlog from the tray icon. On KDE, if you set up the KDE overlays,
-   remove them first with `a2qlinux-setup --no-kde-overlays`.
+1. Quit Questlog from the tray icon. If you set up the fix for Questlog's
+   Open Folder buttons, remove it with `a2qlinux-setup --no-open-folders`.
+   On KDE, if you set up the KDE overlays, remove them with
+   `a2qlinux-setup --no-kde-overlays`.
 2. Clear AION 2's launch options in Steam.
 3. Uninstall A2Qlinux:
    ```

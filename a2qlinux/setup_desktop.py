@@ -1,6 +1,7 @@
 """a2qlinux-setup: the menu entry "A2Qlinux" for Questlog, and a check of what A2Qlinux needs.
 
     a2qlinux-setup [--questlog-dir DIR] [--desktop-shortcut] [--kde-overlays | --no-kde-overlays]
+                   [--open-folders | --no-open-folders]
 
 What it does, in order:
   1. Checks the programs A2Qlinux uses. For the missing ones it prints the
@@ -25,7 +26,13 @@ What it does, in order:
      (Black Market Cards) above the game. It explains them and asks, with
      yes as the default; --kde-overlays sets them up without asking,
      --no-kde-overlays removes them. Once set up, a later run refreshes them.
-  9. Checks AION 2's Steam launch option (launch_option_step, judged as
+  9. Offers the folder handler for Questlog's Open Folder buttons
+     (a2qlinux.open_folders): one registry entry in the game's prefix that
+     opens folders in the desktop's file manager, where Wine has none. It
+     explains it and asks, with yes as the default; --open-folders sets it up
+     without asking, --no-open-folders removes it. A command for opening
+     folders that is already there is left as it is.
+ 10. Checks AION 2's Steam launch option (launch_option_step, judged as
      a2qlinux --diagnose does): says when it is set, prints the line to set
      by hand when it is not, and lists it as a problem when it is set so
      that the game cannot start.
@@ -42,7 +49,7 @@ import subprocess
 import sys
 
 from . import APP_NAME, ICON, config, shown_version
-from . import kde_overlays
+from . import kde_overlays, open_folders
 from .desktop import TERMINALS, terminal_command
 from .update import install_fresh, read_asar_file
 
@@ -450,6 +457,12 @@ def main():
                           "game, without asking")
     kde.add_argument("--no-kde-overlays", dest="kde_overlays", action="store_const", const=False,
                      help="remove what --kde-overlays set up")
+    folders = parser.add_mutually_exclusive_group()
+    folders.add_argument("--open-folders", dest="open_folders", action="store_const", const=True, default=None,
+                         help="let Questlog's Open Folder buttons open the folder in the file manager, without "
+                              "asking (one registry entry in the game's prefix)")
+    folders.add_argument("--no-open-folders", dest="open_folders", action="store_const", const=False,
+                         help="remove what --open-folders set up")
     parser.add_argument("--version", action="version", version=f"A2Qlinux {shown_version()}")
     args = parser.parse_args()
     created = not config.CONFIG_PATH.exists()
@@ -526,6 +539,10 @@ def main():
     kde_problem = kde_overlays.setup_step(args.kde_overlays, input, sys.stdin.isatty())
     if kde_problem:
         print(f"Note: {kde_problem}.", file=sys.stderr)
+    # A note too: only the Open Folder buttons depend on it.
+    folders_problem = open_folders.setup_step(args.open_folders, input, sys.stdin.isatty())
+    if folders_problem:
+        print(f"Note: {folders_problem}.", file=sys.stderr)
 
     problems += launch_option_step(command("a2qlinux-steam"))
 

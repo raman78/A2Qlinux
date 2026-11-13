@@ -92,7 +92,10 @@ open a status window (§12 "Shown version", §9.1).
   game has been gone for `GAME_EXIT_GRACE` seconds (see §6.4). After the game,
   the game's own `steam.exe` is ended (§6.7), as Steam's Stop would; only once
   `AION2.exe` is gone and only the `steam.exe` below Steam's reaper for the
-  game.
+  game. With the user's consent, `a2qlinux-setup` adds one registry entry
+  to the prefix: a command for the verb "explore" of folders, which Wine
+  lacks (§6.10). It only fills a gap: it is never written over a command
+  that is already there, and in its absence every such call fails.
 - **I3 — nothing dropped silently.** Each failure of the bridge, the guard,
   `questlog_ctl.exe` or the tray is reported: to Questlog's interface (DLL
   errors through `pcap_geterr`), to the launcher's terminal, or to
@@ -1083,6 +1086,76 @@ whose start hung.
 could hang in the same way while Questlog runs; not observed. The watch
 answers once per start, and only `up` resets the count.
 
+### 6.10 Questlog's "Open Folder" buttons
+
+**Symptom.** Questlog's **Open Folder** button (Combat Meter, the list of
+recordings) shows Wine's message "There is no Windows program configured
+to open this type of file", and no folder opens.
+
+**Cause.** The button runs Questlog's `openRecordings`, which creates
+`recordings` under Questlog's data folder (`C:\users\steamuser\AppData\
+Roaming\Questlog`) and passes it to Electron's `shell.openPath`. For a
+folder, Electron calls Chromium's `ui::win::OpenFolderViaShell`, which is
+`ShellExecuteExW` with the verb `explore`, the class `folder`
+(`SEE_MASK_CLASSNAME`), the folder as an item id list (`SEE_MASK_IDLIST`)
+and `SEE_MASK_NOASYNC`. With an explicit class, Wine's `shell32` looks the
+verb up under `HKCR\folder\shell\explore\command`. Proton's `wine.inf`,
+like Wine's, registers only `folder\shell\open\ddeexec`, so the lookup
+fails and `shell32` shows the message. Without a class, the same folder
+opens: Wine then falls back to its own `explorer.exe`. Measured with a test
+program making Chromium 152's call (Questlog 0.1.51 ships Electron 44.5.1)
+under `xvfb-run` with Proton's Wine (13 November 2026): it failed in a
+fresh prefix and in one holding a copy of the game prefix's registry, and
+succeeded once the key existed. The same call without class and verb
+succeeded in both. It is Wine's gap, not something A2Qlinux causes.
+
+**Remedy** (`a2qlinux/open_folders.py`, `questlog_ctl.exe folder-handler`),
+set up by `a2qlinux-setup` with the user's consent: the one missing command,
+`HKLM\Software\Classes\folder\shell\explore\command` =
+`"C:\windows\system32\winebrowser.exe" "%1"`, the command the prefix already
+has for web links (`http`, `https`, `ftp`). `winebrowser` turns the
+Windows path into a `file://` URL of the Linux path and runs `xdg-open`.
+Questlog runs inside Steam's runtime container, where `xdg-open` is
+`steam-runtime-urlopen`; that hands the URL to the desktop outside, and
+the folder opens in the desktop's file manager (checked on this desktop,
+13 November 2026: Dolphin).
+
+The registry is read and written by `questlog_ctl.exe` inside the prefix
+(`protontricks-launch`, like its other commands), so the live registry is
+what is checked, also while the game runs. A Wine session running at the
+time keeps no stale copy, and the registry files are not edited behind
+the `wineserver`'s back. The command does one of three things:
+
+- `status` prints `absent`, `ours` (exactly the value above) or `other`
+  (anything else there, a key without a default value included);
+- `set` writes the value only when it is `absent`;
+- `remove` deletes `command` only when it is `ours`, then the verb's key
+  `explore` if nothing else is left in it.
+
+The first word printed is the outcome; `open_folders.outcome` reads it.
+`a2qlinux --diagnose` reports the same state without starting Wine, from
+`system.reg` (§9.1).
+`a2qlinux-setup` asks once with yes as the default (`--open-folders` without
+asking, `--no-open-folders` removes; without a terminal it only names the
+option). When the prefix already answers with our value, or with another
+command, it just says so. Failing (no prefix yet, protontricks missing,
+no answer within `CTL_WAIT`) is a note, not a problem: only the button
+depends on it.
+
+**Reach.** The key is prefix-wide (I2's exception): any program in the
+prefix that opens a folder with `explore` and the class `folder` now gets
+the file manager instead of the error. Neither the game nor NotMeter is
+known to make that call. Proton keeps the key when it updates the prefix:
+`wine.inf` adds keys and does not delete this one, and the keys Proton's
+script deletes are named there, `ddeexec` ones and a service.
+
+**Rejected.** Redirecting the call inside Questlog alone, by patching
+`ShellExecuteExW` in `Questlog.exe`'s import table from our `wpcap.dll`:
+it touches no prefix setting, but it is an API hook in a closed program,
+tied to how Chromium makes the call. Editing `system.reg` from Linux:
+a running `wineserver` holds the registry in memory and writes its own
+copy back, so the change could be lost.
+
 ## 7. Failure modes
 
 | Symptom | Cause | Where to look |
@@ -1108,6 +1181,8 @@ answers once per start, and only `up` resets the count.
 | Tracker Map overlay blank, and no fights in the meter ("Detecting character…"), after restarting Questlog mid-game | Questlog learns the character (`self`) and its zone only from the login (`Login_RS`) and map-enter (`PrepareEnterMap_NT`) packets; it flags the gap itself once positions or damage arrive for 5 s without a known character. The same on Windows | change zone, or log back in. Replaying earlier traffic from the launcher was rejected: without decoding it, only the whole stream since the connection began could be replayed, and Questlog would count old fights again and upload them again |
 | Black Market Cards (and the overlay controls icon) never show over the full-screen game; Alt+E only flashes | KDE keeps the game above Questlog's full-screen HUD (§6.8) | `a2qlinux-setup --kde-overlays` on Plasma 6; elsewhere none |
 | `a2qlinux-setup`: "Note: KDE overlays: …" | a tool or KWin refused (§6.8); nothing else is affected | the reason in the note |
+| Questlog's Open Folder: "There is no Windows program configured to open this type of file" | the prefix has no command for opening folders (§6.10) | `a2qlinux-setup --open-folders` |
+| `a2qlinux-setup`: "Note: Open Folder: …" | `questlog_ctl.exe folder-handler` could not run or failed (§6.10); nothing else is affected | the reason in the note |
 | game froze after **Quit Questlog** during play (A2Qlinux 0.3.0 and earlier) | Questlog's launch ended and protontricks took the game's session down with its container (§5.1, "The launch holds the session") | update A2Qlinux |
 | "Questlog update check failed (…)" | no network, CDN change | none; retried at the next check |
 | "Questlog X does not fit this A2Qlinux yet …" (notification) | a check of §10 failed | A2Qlinux needs a change for that version; the installed one stays |
@@ -1185,7 +1260,7 @@ privileges a Wine process should not have. `dumpcap` gets them through the
 needs only `clang`, `lld` and the installed Wine's development files
 (`bridge/build.sh`, §14). The result is not tied to that Wine: the two
 parts import only documented Win32 functions by name (`kernel32`, `user32`,
-`ws2_32`, `ucrtbase`, `shell32`; `llvm-objdump -p`), so a Wine update needs
+`ws2_32`, `ucrtbase`, `shell32`, `advapi32`; `llvm-objdump -p`), so a Wine update needs
 no rebuild. Observed: the build here against system Wine 11.21 runs daily
 under Proton's Wine 11.0, and the PyPI package's parts are built against
 whatever Wine the CI container has.
@@ -1225,10 +1300,11 @@ one** — §6.4.
 | launcher, bridge, quit logic, updates, Steam verb switch | `python3 -m unittest` in the repository root (no built Windows parts needed; CI runs `bash bridge/build.sh` and the tests on every push, §12); the update tests build a fake installer with `7z` and run feed → download (`file://`) → checks → swap → rollback, and the first installation (`install_fresh`), offline |
 | DLL against a live bridge | `bridge/tests/bridge_client_test.exe [<local address>]` in a throwaway prefix, with a running `BridgeServer` (with `Captures`, for real traffic), `WINEDLLOVERRIDES=wpcap=n` and `QUESTLOG_PROTON_BRIDGE` from `environment_value()`; it opens the device with that address, as Questlog does, or the first one; report in `C:\bridge_client_test.txt` (devices, link type, packets, delay) |
 | window-order guard | copy `bridge/tests/zorder_guard_test.exe` and `a2qlinux/bin/wpcap.dll` to an empty folder, then `WINEPREFIX=<throwaway> xvfb-run -a wine zorder_guard_test.exe 'Z:\<folder>\wpcap.dll'`; prints the order before and after, `PASS`/`FAIL` |
-| `questlog_ctl.exe` by hand | `protontricks-launch --appid 3393110 <package>/a2qlinux/bin/questlog_ctl.exe hide-tray` (or `show-tray`, `close-window`, `end-session`); `<package>` is printed by `python -c 'import a2qlinux; print(a2qlinux.__path__[0])'` in A2Qlinux's environment |
+| `questlog_ctl.exe` by hand | `protontricks-launch --appid 3393110 <package>/a2qlinux/bin/questlog_ctl.exe hide-tray` (or `show-tray`, `close-window`, `end-session`, `folder-handler status`); `<package>` is printed by `python -c 'import a2qlinux; print(a2qlinux.__path__[0])'` in A2Qlinux's environment |
 | `questlog_ctl.exe` without the game prefix | Questlog in a throwaway prefix: `wine Questlog.exe --no-sandbox --disable-gpu` under `xvfb-run`, then the commands through `wine` |
 | who owns the game connection | `tools/tcp_owner_probe.exe` in the prefix |
 | KDE overlays (§6.8) | `tests/test_kde_overlays.py` runs against stand-ins for KDE's config tools and `dbus-send`, and, where `kwriteconfig6` is installed, checks with the real tools that removal gives the rule file back byte for byte; on the desktop, a one-off KWin script that prints the HUD's `layer` and `opacity` shows what KWin applied |
+| folder handler (§6.10) | `tests/test_open_folders.py` (the setup step against a stand-in for `questlog_ctl.exe`; `registry_state` on `system.reg` text as Wine saves it; the value in Python equal to the one in `questlog_ctl.c`); the command itself in a throwaway prefix: `WINEPREFIX=<throwaway> wine questlog_ctl.exe folder-handler status` (then `set`, `remove`), and a test program making Chromium's call (`ShellExecuteExW`, verb `explore`, class `folder`, `SEE_MASK_IDLIST`) with a stand-in `xdg-open` first in `PATH` that records its argument |
 | does the session survive a quit (§5.1) | without the game: a Windows program that only waits, started as `systemd-run --user --unit=<name> protontricks-launch --appid 3393110 <program>.exe`, plays the game; quit Questlog and check that the program, the `wineserver` and `explorer.exe /desktop` run on, and which unit holds them (`/proc/<pid>/cgroup`) |
 | a stuck process (§6.9) | `gdb -p <pid> -batch -ex bt` as root (`ptrace_scope` 1 allows a user to trace only their own children); A2Qlinux never does this itself |
 | Wine's view of windows and focus | run `WINEDEBUG=+event,+x11drv,+win a2qlinux-run`; the log grows about 40 KB/s, so only briefly |
@@ -1300,6 +1376,14 @@ safe at any time, the game running or not. In order:
    not was started outside A2Qlinux: it gets no traffic, and the game waits
    for it, §5.1), and the game.
 6. On Plasma 6, whether the KDE overlays are installed (§6.8).
+7. Whether the prefix has the command for Questlog's Open Folder buttons
+   (§6.10): `open_folders.registry_state` reads it from the prefix's
+   `system.reg` as text, with the same three answers as
+   `questlog_ctl.exe folder-handler status`. No Wine is started, which
+   would be no longer only reading (a new session in the game's prefix). The cost
+   is lag: the `wineserver` saves a registry change to the file about 30 s
+   later (26 s measured, 13 November 2026, with a session running), so a
+   change made just now may not show yet; the note says so.
 
 Each check gives lines of `ok`, `note` or `PROBLEM`; the exit code is 1
 when there is a problem. A check that raises is reported as a problem

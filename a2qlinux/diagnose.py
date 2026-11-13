@@ -11,6 +11,8 @@ not. Each check gives one line: fine, a note, or a problem with what to do.
        localconfig.vdf, and whether it ever ran (steam_launch.log).
     5. What runs now: the launcher, Questlog (fed by the bridge or not), the game.
     6. On KDE Plasma 6, whether the KDE overlays are set up.
+    7. Whether the game's prefix has a command for Questlog's Open Folder
+       buttons, read from its system.reg (no Wine is started).
 
 With --report it also writes a report file: the diagnosis and the end of
 launcher.log, with the home folder, user name, Steam account numbers and
@@ -223,6 +225,24 @@ def check_kde(results):
                               "(a2qlinux-setup --kde-overlays)"))
 
 
+def check_open_folders(results, appid, prefix=None):
+    from . import launcher, open_folders
+    try:
+        prefix = prefix or launcher.game_prefix(appid)
+    except RuntimeError:
+        return                          # reported by check_steam
+    state, value = open_folders.registry_state(prefix / "system.reg")
+    if state == "ours":
+        results.append((OK, "Open Folder: set up; Questlog's folders open in the file manager"))
+    elif state == "other":
+        results.append((NOTE, f"Open Folder: the prefix has another command for opening folders "
+                              f"({value or 'a key without a command'}); A2Qlinux leaves it as it is"))
+    else:
+        results.append((NOTE, "Open Folder: not set up; Questlog's Open Folder buttons show Wine's \"no Windows "
+                              "program configured\" (a2qlinux-setup --open-folders; a change made in the last "
+                              "30 s may not be saved to the prefix yet)"))
+
+
 def diagnose(appid=3393110):
     """[(level, text)], in the order of the module docstring."""
     settings, problems = config.load()
@@ -234,7 +254,8 @@ def diagnose(appid=3393110):
         results.append((OK, f"Questlog: {installed_version(qdir) or 'version unreadable'} in {qdir}"))
     else:
         results.append((PROBLEM, f"Questlog: no Questlog.exe in {qdir}; run a2qlinux-setup"))
-    for check in (check_setup, lambda r: check_steam(r, appid, qdir), lambda r: check_running(r, appid), check_kde):
+    for check in (check_setup, lambda r: check_steam(r, appid, qdir), lambda r: check_running(r, appid), check_kde,
+                  lambda r: check_open_folders(r, appid)):
         try:
             check(results)
         except Exception as error:     # one broken check must not hide the others; it is reported
