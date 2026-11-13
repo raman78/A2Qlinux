@@ -3,7 +3,7 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
-## [Unreleased]
+## [0.7.2] — 2026-11-13
 
 ### Changed
 - `a2qlinux --diagnose --report` also records what each part of Questlog
