@@ -3,28 +3,28 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
-## [Unreleased]
-
-### Changed
-- `a2qlinux --diagnose` names the graphics card and its driver, what
-  OpenGL draws with, the screens with their scale, Wine's DPI setting, and
-  Proton, Wine, DXVK or driver settings made in the environment Steam
-  and Questlog start with. The problem report also carries Questlog's own
-  output from its last two starts.
-- Questlog's output from the previous start is kept (`questlog.log.1`), so
-  starting A2Qlinux again after a problem no longer erases what shows it.
+## [0.7.1] — 2026-11-13
 
 ### Fixed
 - Starting **A2Qlinux** again after its status window was closed no longer
   stops with "Questlog is already running and fed by another A2Qlinux".
   The Questlog left behind, which got no game traffic and had no tray icon
-  to quit it from, is closed once it has saved and started again.
-- A launcher started with `a2qlinux-run` in a terminal is recognised: the
-  menu entry's **Open Questlog** reaches it, as it does a launcher started
-  from the menu.
+  to quit it from, is closed once it has saved, and started again; the
+  game keeps running.
+- Clicking the **A2Qlinux** menu entry while A2Qlinux runs from a
+  terminal (`a2qlinux-run`) opens Questlog's window, as it does when
+  A2Qlinux was started from the menu.
 - The problem report names the exact Proton build the game last ran with
-  (for example GE-Proton11-12), not only the prefix version that several
-  builds share.
+  (for example GE-Proton11-12), not only a version number several builds
+  share.
+
+### Changed
+- `a2qlinux --diagnose` also names the graphics card and its driver, the
+  screens and their scale, and Proton, Wine or graphics settings made
+  outside the game's launch option. The problem report also carries
+  Questlog's own output from its last two starts.
+- Questlog's output from the start before the last one is kept, so
+  starting A2Qlinux again after a problem no longer erases what shows it.
 
 ## [0.7.0] — 2026-11-13
 
