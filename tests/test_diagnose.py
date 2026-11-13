@@ -330,3 +330,50 @@ class DisplayAndEnvironmentTest(unittest.TestCase):
         self.assertEqual(lines, [(d.OK, "Steam's environment: PROTON_ENABLE_WAYLAND=1"),
                                  (d.OK, "This session's environment (Questlog's): DXVK_HUD=fps, WINEDLLOVERRIDES=x=n")])
         self.assertIn("Steam is not running", d.environment_lines(env={}, steam_environ=None)[0][1])
+
+
+class ProcessSnapshotTest(unittest.TestCase):
+    """process_snapshot on a fake /proc: two readings of each thread's CPU time, one `wait` apart."""
+
+    def write_thread(self, proc, pid, tid, name, state, wchan, ticks):
+        task = Path(proc, str(pid), "task", str(tid))
+        task.mkdir(parents=True, exist_ok=True)
+        # Fields after the name: state, then 10 others, then utime and stime (stat(5) fields 14, 15).
+        (task / "stat").write_text(f"{tid} ({name}) {state} " + "0 " * 10 + f"{ticks} 0 0 0\n")
+        (task / "comm").write_text(name + "\n")
+        (task / "wchan").write_text(wchan)
+
+    def test_busy_main_thread_and_grouped_idle_ones(self):
+        with tempfile.TemporaryDirectory() as proc:
+            main, gpu = 100, 200
+            Path(proc, str(main)).mkdir()
+            Path(proc, str(main), "cmdline").write_bytes(b"C:\\Questlog\\Questlog.exe\0--no-sandbox\0")
+            Path(proc, str(gpu)).mkdir()
+            Path(proc, str(gpu), "cmdline").write_bytes(b"C:\\Questlog\\Questlog.exe\0--type=gpu-process\0")
+            self.write_thread(proc, main, 100, "CrBrowserMain", "R", "0", 50)
+            for tid in (101, 102, 103):
+                self.write_thread(proc, main, tid, "ThreadPoolForeg", "S", "ntsync_schedule", 7)
+            self.write_thread(proc, gpu, 200, "CrGpuMain", "D", "dma_fence_default_wait", 3)
+
+            def sleep(_):   # between the readings: the main thread runs for 90 of 100 ticks
+                self.write_thread(proc, main, 100, "CrBrowserMain", "R", "0", 140)
+            lines = d.process_snapshot({main, gpu}, proc=proc, wait=1, sleep=sleep, ticks=100)
+        self.assertEqual(lines[0], "PID 100 main: 4 threads, 900 ms CPU in 1 s")
+        self.assertRegex(lines[1], r"^\s+100 CrBrowserMain\s+R -\s+900 ms$")
+        self.assertRegex(lines[2], r"^\s+x3 ThreadPoolForeg\s+S ntsync_schedule\s+0 ms$")
+        self.assertEqual(lines[3], "PID 200 gpu-process: 1 threads, 0 ms CPU in 1 s")
+        self.assertRegex(lines[4], r"^\s+200 CrGpuMain\s+D dma_fence_default_wait\s+0 ms$")
+
+    def test_process_gone_between_readings(self):
+        with tempfile.TemporaryDirectory() as proc:
+            self.write_thread(proc, 300, 300, "CrBrowserMain", "S", "ntsync_schedule", 1)
+            lines = d.process_snapshot({300}, proc=proc, wait=1,
+                                       sleep=lambda _: __import__("shutil").rmtree(Path(proc, "300")), ticks=100)
+        self.assertEqual(lines, ["PID 300: gone during the snapshot"])
+
+    def test_roles(self):
+        self.assertEqual(d.process_role(["Q.exe"]), "main")
+        self.assertEqual(d.process_role(["Q.exe", "--type=renderer"]), "renderer")
+        self.assertEqual(d.process_role(["Q.exe", "--type=utility", "--utility-sub-type=network.mojom.NetworkService"]),
+                         "utility (network)")
+        self.assertEqual(d.process_role(["/x/bin/wineserver"]), "wineserver")

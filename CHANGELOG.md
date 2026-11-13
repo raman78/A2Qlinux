@@ -3,6 +3,13 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
+## [Unreleased]
+
+### Changed
+- `a2qlinux --diagnose --report` also records what each part of Questlog
+  is doing at that moment. When a Questlog window turns black or is "not
+  responding", a report made while it is on screen shows what it waits for.
+
 ## [0.7.1] — 2026-11-13
 
 ### Fixed

@@ -91,6 +91,11 @@ and Questlog's output from its last two starts, which shows how Questlog
 set up its graphics. A2Qlinux keeps only those two, so make the report
 soon after the problem, before you start A2Qlinux twice more.
 
+It also records what each part of Questlog is doing at that moment. If
+Questlog misbehaves while it runs (a window that turns black, freezes or
+is "not responding"), make the report while the problem is on screen,
+before you close anything: that snapshot is then the most useful part.
+
 Before writing the file, it replaces what could identify you: your home
 folder, user name, computer name, Steam account number and network
 addresses. Read it all the same. Then it asks whether to open a new issue on

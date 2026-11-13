@@ -19,9 +19,10 @@ not. Each check gives one line: fine, a note, or a problem with what to do.
     7. Whether the game's prefix has a command for Questlog's Open Folder
        buttons, read from its system.reg (no Wine is started).
 
-With --report it also writes a report file: the diagnosis and the end of
-launcher.log and of questlog.log and questlog.log.1 (Questlog's and Wine's
-output, this run and the one before), with the home folder, user name, Steam account numbers and
+With --report it also writes a report file: the diagnosis, a snapshot of
+what each of Questlog's processes and threads is doing (process_snapshot),
+and the end of launcher.log and of questlog.log and questlog.log.1
+(Questlog's and Wine's output, this run and the one before), with the home folder, user name, Steam account numbers and
 network addresses replaced (anonymise). It shows the report and, if the
 user agrees, opens a new GitHub issue in the browser with the report filled
 in; the user reviews it and submits it with their own account. Nothing is
@@ -632,12 +633,97 @@ def questlog_log_excerpt(path, head=QUESTLOG_LOG_HEAD, tail=QUESTLOG_LOG_TAIL):
     return lines[:head] + [f"(... {len(lines) - head - tail} lines left out ...)"] + lines[-tail:]
 
 
-def build_report(results, qdir, anonymise):
+PROCESS_SAMPLE = 1.0   # s between the two readings of the threads' CPU time in the report's snapshot
+
+
+def process_role(argv):
+    """What a process of Questlog is, from its command line: main, gpu-process, renderer, utility (…)."""
+    kind = next((a.split("=", 1)[1] for a in argv if a.startswith("--type=")), None)
+    if kind is None:
+        return "wineserver" if argv and argv[0].endswith("wineserver") else "main"
+    sub = next((a.split("=", 1)[1] for a in argv if a.startswith("--utility-sub-type=")), "")
+    return f"{kind} ({sub.split('.')[0]})" if sub else kind
+
+
+def _thread_readings(pid, proc):
+    """{tid: (name, state, kernel wait, CPU ticks)} of one process's threads; {} once it has gone."""
+    readings = {}
+    try:
+        tids = os.listdir(f"{proc}/{pid}/task")
+    except OSError:
+        return readings
+    for tid in tids:
+        base = f"{proc}/{pid}/task/{tid}"
+        try:
+            stat = Path(base, "stat").read_text()
+            fields = stat[stat.rindex(")") + 2:].split()
+            name = Path(base, "comm").read_text().strip()
+            wchan = Path(base, "wchan").read_text().strip()
+        except (OSError, ValueError):
+            continue
+        readings[int(tid)] = (name, fields[0], wchan if wchan not in ("", "0") else "-",
+                              int(fields[11]) + int(fields[12]))
+    return readings
+
+
+def process_snapshot(pids, proc="/proc", wait=PROCESS_SAMPLE, sleep=time.sleep, ticks=None):
+    """The report's lines on what each of Questlog's processes and threads does right now.
+
+    Each thread: its name (Chromium names them: CrBrowserMain is the main
+    process's window thread), its state (R running, S/D waiting), where it
+    waits in the kernel, and the CPU time it used between two readings
+    `wait` s apart. A thread that answers no window shows either as busy
+    (CPU time near the whole interval) or as waiting with none. Idle threads
+    that look alike are counted on one line.
+    """
+    from .launcher import _read
+    ticks = ticks or os.sysconf("SC_CLK_TCK")
+    first = {pid: _thread_readings(pid, proc) for pid in pids}
+    sleep(wait)
+    lines = []
+    for pid in sorted(pids):
+        argv = [a for a in _read(f"{proc}/{pid}/cmdline", 4096).split("\0") if a]
+        second = _thread_readings(pid, proc)
+        if not second:
+            lines.append(f"PID {pid}: gone during the snapshot")
+            continue
+        used = {tid: max(0, second[tid][3] - first[pid].get(tid, second[tid])[3]) * 1000 // ticks
+                for tid in second}
+        lines.append(f"PID {pid} {process_role(argv)}: {len(second)} threads, "
+                     f"{sum(used.values())} ms CPU in {wait:g} s")
+        grouped = {}
+        for tid in sorted(second):
+            name, state, wchan, _ = second[tid]
+            if tid == pid or used[tid] or state not in ("S", "I"):
+                lines.append(f"  {tid:>8} {name:<16} {state} {wchan:<32} {used[tid]:>5} ms")
+            else:
+                grouped[(name, state, wchan)] = grouped.get((name, state, wchan), 0) + 1
+        for (name, state, wchan), count in sorted(grouped.items()):
+            lines.append(f"  {'x' + str(count):>8} {name:<16} {state} {wchan:<32} {0:>5} ms")
+    return lines
+
+
+def questlog_snapshot(appid=3393110):
+    """process_snapshot of Questlog's processes and the Wine session's wineserver; lines."""
+    from . import launcher
+    found = launcher.game_processes(appid, ["questlog.exe", "wineserver"])
+    servers = {pid for pid in found["wineserver"]
+               if "-w" not in launcher._read(f"/proc/{pid}/cmdline", 4096).split("\0")[1:]}
+    pids = found["questlog.exe"] | servers
+    if not found["questlog.exe"]:
+        return ["(Questlog is not running)"]
+    return process_snapshot(pids)
+
+
+def build_report(results, qdir, anonymise, snapshot=questlog_snapshot):
     logs = qdir / "proton-stream"
     launcher_lines = log_tail(logs / "launcher.log", REPORT_LOG_LINES)
     parts = [f"A2Qlinux report, {time.strftime('%Y-%m-%d %H:%M %Z')}", "", "## Diagnosis", "",
              format_results(results), "", f"## launcher.log (last {REPORT_LOG_LINES} lines)", ""]
     parts += launcher_lines or ["(no launcher.log yet)"]
+    parts += ["", f"## Questlog's processes now (threads: state, kernel wait, CPU time in {PROCESS_SAMPLE:g} s)",
+              ""]
+    parts += snapshot()
     parts += ["", "## steam_launch.log (last 10 lines)", ""]
     parts += log_tail(logs / "steam_launch.log", 10) or ["(none)"]
     parts += ["", "## questlog.log (Questlog's and Wine's output since A2Qlinux last started it)", ""]

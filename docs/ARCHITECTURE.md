@@ -1523,8 +1523,8 @@ when there is a problem. A check that raises is reported as a problem
 itself instead of hiding the checks after it.
 
 **`--report`.** Writes `~/a2qlinux-report-<date>-<time>.txt`: the
-diagnosis, the last `REPORT_LOG_LINES` (400) lines of `launcher.log`, the
-last 10 of `steam_launch.log`, `questlog.log` (`questlog_log_excerpt`:
+diagnosis, the last `REPORT_LOG_LINES` (400) lines of `launcher.log`, a
+snapshot of Questlog's processes (below), the last 10 of `steam_launch.log`, `questlog.log` (`questlog_log_excerpt`:
 whole up to `QUESTLOG_LOG_HEAD` + `QUESTLOG_LOG_TAIL` lines, 400 + 800,
 else its start, where DXVK names its device and Chromium starts its GPU
 process, and its end, the gap marked) and `questlog.log.1`, the run
@@ -1545,6 +1545,34 @@ account, can change everything, and submits. A2Qlinux holds no token and
 sends nothing itself; the issue is public, which is why the anonymising
 happens before the file is written. Without a terminal to ask in, it only
 says where the file is and where to file it.
+
+**The process snapshot** (`questlog_snapshot`, `process_snapshot`) is for a
+Questlog that misbehaves while it runs, such as a main window that turns
+black and that the desktop calls "not responding" (issue #2): the logs
+show how Questlog started, not what it is doing now. It lists Questlog's
+processes in the game prefix and the Wine session's `wineserver` (the one
+without `-w`; `wineserver -w` processes only wait for the session to
+end). Each process gets its role from the command line (`process_role`:
+`main` without `--type=`, else the `--type=` value, with the utility's
+sub-type) and each thread four values from `/proc/<pid>/task/<tid>`:
+the name from `comm` (Chromium names its threads; `CrBrowserMain` in the
+main process is the thread that answers Questlog's windows), the state
+from `stat`, where it waits in the kernel from `wchan`, and the CPU time
+(`utime` + `stime`) used between two readings `PROCESS_SAMPLE` (1 s)
+apart. The process's first thread and every thread that used CPU time or
+is not sleeping get a line each; the idle rest are counted per name,
+state and wait. All of it is readable for the user's own processes; the
+thread's system call (`/proc/…/syscall`) would say more but needs ptrace
+rights, which Yama's default (`ptrace_scope` 1) refuses.
+
+What it can and cannot tell: a window thread that is busy shows CPU
+time near the whole interval; one stuck in the graphics driver waits in
+a kernel function of its own (a DMA fence, an `amdgpu` wait); but a
+thread waiting for its next window message and one blocked on a Windows
+lock look the same, both in `ntsync_schedule` (or `__futex_wait` without
+ntsync) with no CPU time. Read against a snapshot from a healthy Questlog
+(the main process's `CrBrowserMain` waits in `ntsync_schedule` with a few
+ms of CPU time per second).
 
 The body is limited by the length of the URL: measured on 10 November 2026
 without being logged in, GitHub took 6500 characters (redirecting to its
