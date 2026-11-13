@@ -1222,7 +1222,10 @@ The previous run's `questlog.log`, with the orphan's output, is kept as
 `questlog.log.1` (§9). Checked on this desktop (13 November 2026): SIGHUP
 to a running launcher, `--diagnose` showed the `PROBLEM`, a second
 launcher closed the orphan after 10 s and started Questlog with its own
-bridge; quitting afterwards left nothing behind. The hung case, with a
+bridge; quitting afterwards left nothing behind. The same with the game
+running (13 November 2026): `AION2.exe` kept its PID throughout, and the
+new Questlog logged "follows the game's connection" and "Game traffic is
+flowing to Questlog", so it joined the game's session. The hung case, with a
 stand-in `Questlog.exe` whose window stops answering after 3 s, in a
 throwaway prefix under `xvfb-run`, through the shipped
 `end_orphaned_questlog` (only `protontricks-launch` and the process lookup
