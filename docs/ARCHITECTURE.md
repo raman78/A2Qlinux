@@ -1389,6 +1389,7 @@ one** — §6.4.
 | who owns the game connection | `tools/tcp_owner_probe.exe` in the prefix |
 | KDE overlays (§6.8) | `tests/test_kde_overlays.py` runs against stand-ins for KDE's config tools and `dbus-send`, and, where `kwriteconfig6` is installed, checks with the real tools that removal gives the rule file back byte for byte; on the desktop, a one-off KWin script that prints the HUD's `layer` and `opacity` shows what KWin applied |
 | folder handler (§6.10) | `tests/test_open_folders.py` (the setup step against a stand-in for `questlog_ctl.exe`; `registry_state` on `system.reg` text as Wine saves it; the value in Python equal to the one in `questlog_ctl.c`); the command itself in a throwaway prefix: `WINEPREFIX=<throwaway> wine questlog_ctl.exe folder-handler status` (then `set`, `remove`), and a test program making Chromium's call (`ShellExecuteExW`, verb `explore`, class `folder`, `SEE_MASK_IDLIST`) with a stand-in `xdg-open` first in `PATH` that records its argument |
+| process snapshot (§9.1) | `ProcessSnapshotTest` in `tests/test_diagnose.py` against a fake `/proc` tree (CPU time from the difference of the two readings, idle threads counted together, a process that ends between the readings); on a running Questlog, `python3 -c "from a2qlinux import diagnose; print('\n'.join(diagnose.questlog_snapshot()))"` |
 | does the session survive a quit (§5.1) | without the game: a Windows program that only waits, started as `systemd-run --user --unit=<name> protontricks-launch --appid 3393110 <program>.exe`, plays the game; quit Questlog and check that the program, the `wineserver` and `explorer.exe /desktop` run on, and which unit holds them (`/proc/<pid>/cgroup`) |
 | a stuck process (§6.9) | `gdb -p <pid> -batch -ex bt` as root (`ptrace_scope` 1 allows a user to trace only their own children); A2Qlinux never does this itself |
 | Wine's view of windows and focus | run `WINEDEBUG=+event,+x11drv,+win a2qlinux-run`; the log grows about 40 KB/s, so only briefly |
@@ -1546,39 +1547,54 @@ sends nothing itself; the issue is public, which is why the anonymising
 happens before the file is written. Without a terminal to ask in, it only
 says where the file is and where to file it.
 
-**The process snapshot** (`questlog_snapshot`, `process_snapshot`) is for a
-Questlog that misbehaves while it runs, such as a main window that turns
-black and that the desktop calls "not responding" (issue #2): the logs
-show how Questlog started, not what it is doing now. It lists Questlog's
-processes in the game prefix and the Wine session's `wineserver` (the one
-without `-w`; `wineserver -w` processes only wait for the session to
-end). Each process gets its role from the command line (`process_role`:
-`main` without `--type=`, else the `--type=` value, with the utility's
-sub-type) and each thread four values from `/proc/<pid>/task/<tid>`:
-the name from `comm` (Chromium names its threads; `CrBrowserMain` in the
-main process is the thread that answers Questlog's windows), the state
-from `stat`, where it waits in the kernel from `wchan`, and the CPU time
-(`utime` + `stime`) used between two readings `PROCESS_SAMPLE` (1 s)
-apart. The process's first thread and every thread that used CPU time or
-is not sleeping get a line each; the idle rest are counted per name,
-state and wait. All of it is readable for the user's own processes; the
-thread's system call (`/proc/…/syscall`) would say more but needs ptrace
-rights, which Yama's default (`ptrace_scope` 1) refuses.
-
-What it can and cannot tell: a window thread that is busy shows CPU
-time near the whole interval; one stuck in the graphics driver waits in
-a kernel function of its own (a DMA fence, an `amdgpu` wait); but a
-thread waiting for its next window message and one blocked on a Windows
-lock look the same, both in `ntsync_schedule` (or `__futex_wait` without
-ntsync) with no CPU time. Read against a snapshot from a healthy Questlog
-(the main process's `CrBrowserMain` waits in `ntsync_schedule` with a few
-ms of CPU time per second).
-
 The body is limited by the length of the URL: measured on 10 November 2026
 without being logged in, GitHub took 6500 characters (redirecting to its
 login page, which carries the whole URL along) and answered 7000 with an
 error 500. `ISSUE_URL_LIMIT` is 6000; the full log is in the attached file.
 If even the diagnosis does not fit, it is cut with a line saying so.
+
+**The process snapshot** (`questlog_snapshot`, `process_snapshot`, the
+report's section "Questlog's processes now"). The logs show how Questlog
+started, not what it is doing now; a Questlog that misbehaves while it
+runs, such as a main window that turns black during play and that GNOME
+calls "not responding" while the overlays keep drawing (issue #2), needs
+the second. The snapshot lists Questlog's processes in the game prefix
+and the Wine session's `wineserver`: the one without `-w`, since
+`wineserver -w` processes only wait for the session to end (§5.1).
+
+Each process gets a role from its command line (`process_role`): `main`
+without `--type=`, else the `--type=` value, with the utility's sub-type
+(`utility (network)`). Each thread gets four values from
+`/proc/<pid>/task/<tid>`:
+
+| Value | From | Meaning |
+|---|---|---|
+| name | `comm` | Chromium names its threads; the main process's first thread (thread id = PID) is `CrBrowserMain`, Chromium's UI thread, which runs Questlog's windows |
+| state | `stat` | `R` running, `S` sleeping, `D` waiting uninterruptibly (usually in a driver) |
+| kernel wait | `wchan` | the kernel function a sleeping thread waits in; `-` when running |
+| CPU time | `stat` (`utime` + `stime`) | used between two readings `PROCESS_SAMPLE` (1 s) apart, in ms |
+
+The first thread of each process, and every thread that used CPU time or
+is not sleeping, get a line each; the remaining idle threads are counted
+per name, state and wait (`x16 ThreadPoolForeg S ntsync_schedule…`), which
+keeps about 300 threads readable. Everything read is open to the user's
+own processes. The thread's current system call (`/proc/…/syscall`)
+would tell more but needs ptrace rights, which Yama's default
+(`ptrace_scope` 1) refuses for processes that are not one's children.
+
+What it can tell: a window thread that is busy shows CPU time near the
+whole second; one blocked inside the graphics driver shows a wait
+function of that driver. What it cannot tell: a thread
+waiting for its next window message and one blocked on a Windows lock
+look the same. Both wait in `ntsync_schedule` (ntsync is the kernel
+driver through which Wine implements Windows synchronisation objects;
+without it, `__futex_wait`) and use no CPU time. Telling those two apart
+needs a question asked inside Wine (whether Windows considers the window
+hung), which the report does not ask, since `--diagnose` starts no Wine.
+For comparison, a healthy Questlog with the game running (13 November
+2026, proton-cachyos-slr, KDE): the main process's `CrBrowserMain` in
+`ntsync_schedule`, 10 to 60 ms of CPU time per second; the GPU process's
+`CrGpuMain` in `ntsync_schedule` with none.
 
 ## 10. What Questlog updates can break
 
