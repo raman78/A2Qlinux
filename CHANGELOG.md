@@ -3,21 +3,24 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
-## [Unreleased]
+## [0.7.0] — 2026-11-13
 
 ### Changed
-- `a2qlinux --diagnose` (and so the problem report) also names your
-  distribution, kernel, desktop with its version, Wayland or X11, and the
-  Proton the game last ran with, so a report says on what system the
-  problem happened.
+- After updating, run `a2qlinux-setup` once and answer yes to its
+  question about Questlog's Open Folder buttons; without that step they
+  keep showing Wine's error (see Fixed below).
+- `a2qlinux --diagnose` (and so the problem report) also names the
+  distribution, the kernel, the desktop with its version, Wayland or X11,
+  and the Proton the game last ran with, so a report shows on which
+  system a problem happened.
 
 ### Fixed
 - Questlog's **Open Folder** buttons (for example the recordings in the
-  Combat Meter) open the folder in your file manager instead of showing
-  "There is no Windows program configured to open this type of file".
-  `a2qlinux-setup` explains the fix and asks first; it adds one entry to
-  the game's Proton environment, and `a2qlinux-setup --no-open-folders`
-  takes it back out.
+  Combat Meter) open the folder in the desktop's file manager instead of
+  showing "There is no Windows program configured to open this type of
+  file". `a2qlinux-setup` explains the fix and asks first; it adds one
+  entry to the game's Proton environment, and
+  `a2qlinux-setup --no-open-folders` takes it back out.
 
 ## [0.6.0] — 2026-11-12
 
