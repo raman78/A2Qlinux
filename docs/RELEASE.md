@@ -127,7 +127,7 @@ is not touched, and check that the Windows parts came with it:
 
 ```bash
 mkdir -p /tmp/a2q-check
-PIPX_HOME=/tmp/a2q-check/home PIPX_BIN_DIR=/tmp/a2q-check/bin pipx install a2qlinux==X.Y.Z
+PIPX_HOME=/tmp/a2q-check/home PIPX_BIN_DIR=/tmp/a2q-check/bin pipx install --pip-args="--no-cache-dir" a2qlinux==X.Y.Z
 /tmp/a2q-check/home/venvs/a2qlinux/bin/python -I -c "import a2qlinux, pathlib; print(a2qlinux.__file__, a2qlinux.__version__, sorted(p.name for p in (pathlib.Path(a2qlinux.__path__[0]) / 'bin').iterdir()))"
 #   /tmp/a2q-check/home/venvs/…/site-packages/a2qlinux/__init__.py X.Y.Z ['questlog_ctl.exe', 'wpcap.dll']
 rm -rf /tmp/a2q-check
@@ -138,6 +138,10 @@ directory: run from the repository root without it, the check reads the
 checkout's stale `_version.py` instead of the installed package (seen at
 the 0.6.0 release, which showed `0.4.1.dev2`). The path printed first
 must lie under `/tmp/a2q-check`.
+`--no-cache-dir`: pip keeps the list of a project's versions for some
+minutes, so right after an earlier install it answered "No matching
+distribution found for a2qlinux==0.7.1" while PyPI already listed it
+(0.7.1 release); without the cache it installed at once.
 
 If the `pypi` job failed while `build` passed, the release and its files
 are fine; fix the cause (usually the Trusted Publisher settings on pypi.org)
