@@ -238,7 +238,11 @@ Questlog starts.
 ## Using Questlog while you play
 
 - Overlays (the meter, alerts, the tracker map) appear over the game and let
-  clicks pass through to it, as on Windows.
+  clicks pass through to it, as on Windows. When you switch to another
+  program, a browser or a terminal, they hide, and they come back when you
+  return to the game. Questlog decides that from which window is in front,
+  and A2Qlinux tells it when a Linux program is, since the game's Proton
+  environment does not notice that by itself.
 - With Questlog's full window open behind the game, clicks in the game stay
   in the game. To work in Questlog's window, switch to it with Alt+Tab, the
   taskbar or the tray icon.

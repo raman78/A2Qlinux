@@ -129,7 +129,7 @@ is not touched, and check that the Windows parts came with it:
 mkdir -p /tmp/a2q-check
 PIPX_HOME=/tmp/a2q-check/home PIPX_BIN_DIR=/tmp/a2q-check/bin pipx install --pip-args="--no-cache-dir" a2qlinux==X.Y.Z
 /tmp/a2q-check/home/venvs/a2qlinux/bin/python -I -c "import a2qlinux, pathlib; print(a2qlinux.__file__, a2qlinux.__version__, sorted(p.name for p in (pathlib.Path(a2qlinux.__path__[0]) / 'bin').iterdir()))"
-#   /tmp/a2q-check/home/venvs/…/site-packages/a2qlinux/__init__.py X.Y.Z ['questlog_ctl.exe', 'wpcap.dll']
+#   /tmp/a2q-check/home/venvs/…/site-packages/a2qlinux/__init__.py X.Y.Z ['questlog_ctl.exe', 'version.dll', 'wpcap.dll']
 rm -rf /tmp/a2q-check
 ```
 

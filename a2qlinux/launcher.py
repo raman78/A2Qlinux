@@ -41,6 +41,7 @@ import time
 
 from . import APP_NAME, ICON, config, shown_version
 from . import update as questlog_update
+from .focus import FocusFollower
 from .pcap_bridge import BridgeServer, read_records
 
 APPID = 3393110
@@ -51,6 +52,8 @@ BRIDGE_DLL = BIN / "wpcap.dll"
 # Marks our DLL in the prefix (kept from the project's first name: changing it
 # would make install_bridge_dll take an installed build for a foreign file).
 BRIDGE_SIGNATURE = b"questlog-proton bridge"
+FOCUS_DLL = BIN / "version.dll"          # bridge/foreground_hook.c (§6.12)
+FOCUS_SIGNATURE = b"a2qlinux foreground hook"
 
 
 LAUNCHER_LOG_LIMIT = 1_000_000   # bytes per file; one older file is kept, so at most twice this on disk
@@ -245,6 +248,47 @@ def install_bridge_dll(prefix):
     temporary.write_bytes(ours)
     temporary.replace(target)
     log(f"Installed the capture bridge DLL at {target}.")
+
+
+def install_focus_dll(questlog_dir):
+    """Put our version.dll beside Questlog.exe (§6.12); True when ours is there.
+
+    Questlog's folder is replaced by every Questlog update, so this runs
+    before every start. A version.dll that is not ours (recognised by its
+    signature string) is left alone and reported; Questlog then loads Wine's
+    own, since the override is only set when ours is there.
+    """
+    target = Path(questlog_dir) / "version.dll"
+    if not FOCUS_DLL.is_file():
+        log(f"{FOCUS_DLL} is missing; Questlog's overlays stay over other programs when the game is not "
+            "in front (in a source checkout build it with: bash bridge/build.sh).")
+        return False
+    try:
+        ours = FOCUS_DLL.read_bytes()
+        if target.exists():
+            current = target.read_bytes()
+            if current == ours:
+                return True
+            if FOCUS_SIGNATURE not in current:
+                log(f"{target} is not A2Qlinux's; leaving it. Questlog's overlays stay over other programs "
+                    "when the game is not in front.")
+                return False
+        temporary = target.with_suffix(".tmp")
+        temporary.write_bytes(ours)
+        temporary.replace(target)
+    except OSError as error:
+        log(f"Could not put version.dll beside Questlog ({error}); Questlog's overlays stay over other "
+            "programs when the game is not in front.")
+        return False
+    return True
+
+
+def focus_dll_ours(questlog_dir):
+    """Whether the version.dll beside Questlog.exe is ours, so Wine may load it (version=n,b)."""
+    try:
+        return FOCUS_SIGNATURE in (Path(questlog_dir) / "version.dll").read_bytes()
+    except OSError:
+        return False
 
 
 def steam_launch_pending(appid):
@@ -1302,8 +1346,11 @@ def launch_questlog(executable, server, protontricks, log_path, hidden=False, ho
     env["QUESTLOG_PROTON_BRIDGE"] = server.environment_value()
     # Wine ships a builtin wpcap.dll and loads it instead of ours even when
     # Questlog names our file by full path; "n" makes it take the native file.
-    overrides = [o for o in env.get("WINEDLLOVERRIDES", "").split(";") if o and not o.startswith("wpcap=")]
-    env["WINEDLLOVERRIDES"] = ";".join(overrides + ["wpcap=n"])
+    # version=n,b: our version.dll beside Questlog.exe instead of Wine's (§6.12); only when it is ours.
+    overrides = [o for o in env.get("WINEDLLOVERRIDES", "").split(";")
+                 if o and not o.startswith(("wpcap=", "version="))]
+    focus = ["version=n,b"] if focus_dll_ours(executable.parent) else []
+    env["WINEDLLOVERRIDES"] = ";".join(overrides + ["wpcap=n"] + focus)
     env["PWD"] = str(executable.parent)
     # Inside Steam's container (pressure-vessel) Chromium cannot set up its
     # Windows sandbox: the GPU process fails with error 39 and the renderers
@@ -1388,6 +1435,8 @@ def main():
             raise RuntimeError("Questlog is already running in the game prefix without the capture bridge. "
                                "Quit it (tray icon > Quit) and run this again.")
         server = BridgeServer(log)
+        focus_follower = FocusFollower(server.set_focus, log)
+        focus_follower.start()
         status = {"packets": 0}
         captures = Captures(dumpcap, server, args.interface or settings.interface, status, notify=notify)
         captures.scan()
@@ -1415,6 +1464,7 @@ def main():
                 questlog_update.disable_builtin_updater(executable.parent, log)
                 if auto_update and questlog_update.install_staged(executable.parent, state_dir, log):
                     trial["until"] = time.monotonic() + UPDATE_TRIAL
+                install_focus_dll(executable.parent)
                 log(f"Starting Questlog {questlog_update.installed_version(executable.parent) or '(version unknown)'}.")
                 started = launch_questlog(executable, server, protontricks, log_path, hidden=hidden)
                 start_watch.started(hidden)
@@ -1610,6 +1660,7 @@ def main():
                     run_ctl(protontricks, "show-tray", log_path)
             captures.stop()
             server.stop()
+            focus_follower.stop()
     except (OSError, RuntimeError) as error:
         print(f"a2qlinux: {error}", file=sys.stderr)
         LOG_FILE.write(f"Ended with an error: {error}")

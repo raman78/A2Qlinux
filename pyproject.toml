@@ -50,7 +50,7 @@ local_scheme = "no-local-version"
 # they are listed as artifacts to get into both the sdist and the wheel (the
 # wheel is built from the sdist). Hatchling does not complain when they are
 # missing; the release workflow checks the wheel instead.
-artifacts = ["a2qlinux/bin/wpcap.dll", "a2qlinux/bin/questlog_ctl.exe"]
+artifacts = ["a2qlinux/bin/wpcap.dll", "a2qlinux/bin/version.dll", "a2qlinux/bin/questlog_ctl.exe"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["a2qlinux"]

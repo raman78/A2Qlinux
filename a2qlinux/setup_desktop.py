@@ -245,7 +245,7 @@ def tray_problem():
 
 
 def windows_parts_problem():
-    missing = [name for name in ("wpcap.dll", "questlog_ctl.exe") if not (BIN / name).is_file()]
+    missing = [name for name in ("wpcap.dll", "version.dll", "questlog_ctl.exe") if not (BIN / name).is_file()]
     if missing:
         return (f"{', '.join(missing)} missing from {BIN}; in a source checkout run: bash bridge/build.sh "
                 "(needs clang, lld and wine)")

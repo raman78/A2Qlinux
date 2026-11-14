@@ -46,6 +46,44 @@ class InstallBridgeDllTest(unittest.TestCase):
         self.assertEqual(self.target.read_bytes(), b"MZ real npcap")
 
 
+class InstallFocusDllTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.questlog = Path(self.tmp.name) / "Questlog"
+        self.questlog.mkdir()
+        self.target = self.questlog / "version.dll"
+        self.ours = b"MZ current build " + q.FOCUS_SIGNATURE + b" ..."
+        self.saved = q.FOCUS_DLL, q.log
+        self.logged = []
+        q.log = self.logged.append
+        q.FOCUS_DLL = Path(self.tmp.name) / "built-version.dll"
+        q.FOCUS_DLL.write_bytes(self.ours)
+
+    def tearDown(self):
+        q.FOCUS_DLL, q.log = self.saved
+        self.tmp.cleanup()
+
+    def test_installs_and_replaces_an_older_build(self):
+        self.assertTrue(q.install_focus_dll(self.questlog))
+        self.assertEqual(self.target.read_bytes(), self.ours)
+        self.target.write_bytes(b"MZ old " + q.FOCUS_SIGNATURE)
+        self.assertTrue(q.install_focus_dll(self.questlog))
+        self.assertEqual(self.target.read_bytes(), self.ours)
+        self.assertEqual(self.logged, [])
+
+    def test_leaves_a_foreign_version_dll_alone_and_says_so(self):
+        self.target.write_bytes(b"MZ someone else's")
+        self.assertFalse(q.install_focus_dll(self.questlog))
+        self.assertEqual(self.target.read_bytes(), b"MZ someone else's")
+        self.assertIn("not A2Qlinux's", self.logged[-1])
+
+    def test_a_missing_build_is_reported(self):
+        q.FOCUS_DLL.unlink()
+        self.assertFalse(q.install_focus_dll(self.questlog))
+        self.assertFalse(self.target.exists())
+        self.assertIn("bridge/build.sh", self.logged[-1])
+
+
 class QuitControlTest(unittest.TestCase):
     def setUp(self):
         self.control = q.QuitControl(save_wait=10.5)
@@ -404,8 +442,23 @@ class QuestlogLaunchTest(unittest.TestCase):
         self.assertEqual(tool[4], str(q.APPID))
         self.assertEqual(kwargs["env"]["QUESTLOG_PROTON_BRIDGE"], "127.0.0.1:1:token")
         self.assertIn("wpcap=n", kwargs["env"]["WINEDLLOVERRIDES"])
+        self.assertNotIn("version=", kwargs["env"]["WINEDLLOVERRIDES"])      # no version.dll of ours beside it
         self.assertEqual(handover[0][0], str(self.dir / "bin" / "protontricks-launch"))
         self.assertNotIn("wineserver -w", " ".join(handover[0]))
+
+    def test_our_version_dll_is_loaded_only_when_it_is_ours(self):
+        calls = []
+        saved_popen = q.subprocess.Popen
+        q.subprocess.Popen = lambda command, **kwargs: calls.append(kwargs["env"]) or saved_popen(["true"])
+        try:
+            for content in (b"MZ " + q.FOCUS_SIGNATURE, b"MZ someone else's version.dll"):
+                (self.dir / "version.dll").write_bytes(content)
+                q.launch_questlog(self.exe, self.server, str(self.dir / "bin" / "protontricks-launch"),
+                                  self.dir / "questlog.log", hold_session=False)
+        finally:
+            q.subprocess.Popen = saved_popen
+        self.assertIn("version=n,b", calls[0]["WINEDLLOVERRIDES"].split(";"))
+        self.assertNotIn("version=n,b", calls[1]["WINEDLLOVERRIDES"].split(";"))
 
 
 class ReleaseSteamAfterQuestlogTest(unittest.TestCase):

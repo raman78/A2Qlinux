@@ -6,6 +6,10 @@ What changed for players, release by release. Technical details are in
 ## [Unreleased]
 
 ### Fixed
+- Questlog's overlays (meter, timers, tracker, map) hide when another
+  program, such as a browser, is brought in front of the game, and come
+  back with the game, as on Windows. Until now they stayed drawn over the
+  other program.
 - Questlog 0.1.54 is installed again. A2Qlinux had refused it ("its capture
   worker calls no libpcap functions any more; a second start no longer
   simply shows its window"), but nothing it relies on changed: Questlog

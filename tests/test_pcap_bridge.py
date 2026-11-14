@@ -126,6 +126,32 @@ class BridgeServerTest(unittest.TestCase):
         self.assertEqual(recv_exact(vpn, len(record(9))), record(9))
         self.assertEqual(recv_exact(eth, len(record(1))), record(1))
 
+    def test_focus_client_gets_the_state_now_and_every_change(self):
+        s = request(self.server, "focus")
+        self.assertEqual(recv_line(s), b"in")
+        self.assertTrue(wait_for(lambda: len(self.server.focus_clients) == 1))
+        self.server.set_focus("out")
+        self.assertEqual(recv_line(s), b"out")
+        self.server.set_focus("out")                    # no change, nothing sent
+        self.server.set_focus("in")
+        self.assertEqual(recv_line(s), b"in")
+        late = request(self.server, "focus")
+        self.assertEqual(recv_line(late), b"in")
+
+    def test_focus_needs_the_token(self):
+        s = socket.create_connection((self.server.host, self.server.port))
+        s.sendall(b"QLPB2 wrong focus\n")
+        self.assertEqual(s.recv(10), b"")
+        self.assertEqual(self.server.focus_clients, [])
+
+    def test_a_gone_focus_client_is_dropped(self):
+        s = request(self.server, "focus")
+        recv_line(s)
+        s.close()
+        for state in ("out", "in", "out"):              # the first send after the close may still succeed
+            self.server.set_focus(state)
+        self.assertTrue(wait_for(lambda: self.server.focus_clients == []))
+
     def test_unknown_interface_gets_a_reason_and_is_logged(self):
         s = request(self.server, "open wlan0")
         reply = recv_line(s)

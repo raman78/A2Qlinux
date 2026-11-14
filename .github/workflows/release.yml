@@ -41,7 +41,7 @@ jobs:
       - name: Check the wheel
         run: |
           WHEEL=$(ls dist/*.whl)
-          for part in a2qlinux/bin/wpcap.dll a2qlinux/bin/questlog_ctl.exe; do
+          for part in a2qlinux/bin/wpcap.dll a2qlinux/bin/version.dll a2qlinux/bin/questlog_ctl.exe; do
             python -m zipfile -l "$WHEEL" | grep -q "^$part " || { echo "::error::$part missing from $WHEEL"; exit 1; }
           done
           if [ "$GITHUB_EVENT_NAME" = "release" ]; then

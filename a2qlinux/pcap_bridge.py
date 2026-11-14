@@ -11,6 +11,11 @@ connects to this server on 127.0.0.1 and sends one request line:
                                       followed by packet records (16-byte
                                       record header + frame); or
                                       "ERR <reason>\\n" and the server closes
+    "QLPB2 <token> focus\\n"       -> "in\\n" or "out\\n" now, and again on every
+                                      change, for as long as the connection
+                                      lives (version.dll in Questlog's main
+                                      process: is the desktop's active window
+                                      one of Wine's; a2qlinux/focus.py)
 
 The list is what pcap_findalldevs reports, so Questlog picks the interface
 whose address its game connection uses, as it picks an adapter on Windows.
@@ -154,6 +159,9 @@ class BridgeServer:
         self.lock = threading.Lock()
         self.connections = 0
         self.followed = None        # (interface, address) of the last device Questlog opened
+        self.focus = "in"           # set_focus; "in" until told otherwise: Wine's own answer
+        self.focus_clients = []
+        self.focus_lock = threading.Lock()   # state, clients and sends, so every client sees the changes in order
         self.stopped = threading.Event()
         threading.Thread(target=self._accept_loop, daemon=True).start()
 
@@ -173,6 +181,23 @@ class BridgeServer:
         if channel:
             for client in channel.clients:
                 client.close()
+
+    def set_focus(self, state):
+        """Tell every focus client whether a Wine window ("in") or another one ("out") is active."""
+        with self.focus_lock:
+            if state == self.focus:
+                return
+            self.focus = state
+            for sock in list(self.focus_clients):
+                self._send_focus(sock, state)
+
+    def _send_focus(self, sock, state):
+        """Send one state line; a client that is gone is dropped. Called with focus_lock held."""
+        try:
+            sock.sendall(f"{state}\n".encode())
+        except OSError:
+            self.focus_clients.remove(sock)
+            sock.close()
 
     def _accept_loop(self):
         while not self.stopped.is_set():
@@ -211,6 +236,12 @@ class BridgeServer:
                     listing = "".join(f"{name} {c.address}\n" for name, c in self.channels.items())
                 sock.sendall(listing.encode() + b"\n")
                 sock.close()
+                return
+            if words == ["focus"]:
+                sock.settimeout(5)          # a send to a client that stopped reading must not hold the lock
+                with self.focus_lock:
+                    self.focus_clients.append(sock)
+                    self._send_focus(sock, self.focus)
                 return
             if len(words) != 2 or words[0] != "open":
                 self.log(f"Refused an unknown request from the capture DLL: {' '.join(words)!r}.")
@@ -280,6 +311,10 @@ class BridgeServer:
             pass
         with self.lock:
             channels, self.channels = self.channels, {}
+        with self.focus_lock:
+            focus_clients, self.focus_clients = self.focus_clients, []
+        for sock in focus_clients:
+            sock.close()
         for channel in channels.values():
             for c in channel.clients:
                 c.close()
