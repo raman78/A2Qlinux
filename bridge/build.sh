@@ -2,7 +2,7 @@
 # Build the Windows parts for x64 with clang and Wine's headers and import
 # libraries; no MinGW toolchain is needed:
 #   a2qlinux/bin/wpcap.dll        stand-in for Npcap's wpcap.dll, fed by the Linux side
-#   a2qlinux/bin/version.dll     loaded by Questlog.exe: its GetForegroundWindow follows the desktop
+#   a2qlinux/bin/version.dll     loaded by Questlog.exe: hides its overlays while a Linux window is active
 #   a2qlinux/bin/questlog_ctl.exe acts on a running Questlog from inside its Wine session
 #   bridge/tests/*.exe            test programs for the two above
 #   tools/tcp_owner_probe.exe     diagnostic: does Wine report TCP connection owners
@@ -75,7 +75,7 @@ CF=(--target=x86_64-w64-windows-gnu -fuse-ld=lld -nostdinc -isystem "$W/msvcrt" 
     -isystem "$(clang -print-resource-dir)/include" -O2 -Wall -Wextra)
 clang "${CF[@]}" -shared -o ../a2qlinux/bin/wpcap.dll wpcap_bridge.c -nostdlib -L"$L" -lucrtbase -lkernel32 -luser32 -lws2_32 \
     -Wl,--entry=DllMain
-clang "${CF[@]}" -shared -o ../a2qlinux/bin/version.dll foreground_hook.c foreground_hook.def -nostdlib -L"$L" \
+clang "${CF[@]}" -shared -o ../a2qlinux/bin/version.dll focus_hook.c focus_hook.def -nostdlib -L"$L" \
     -lucrtbase -lkernel32 -luser32 -lws2_32 -Wl,--entry=DllMain
 clang "${CF[@]}" -o ../a2qlinux/bin/questlog_ctl.exe questlog_ctl.c -nostdlib -L"$L" -lucrtbase -lkernel32 -luser32 \
     -lshell32 -ladvapi32 -Wl,--entry=start

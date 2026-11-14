@@ -1,10 +1,9 @@
 """Whether the desktop's active window is one of Wine's, for Questlog's overlays (docs/ARCHITECTURE.md §6.12).
 
-Questlog shows its overlays while the game is Windows' foreground window
-and hides them otherwise. Under Wine that answer goes stale on a Linux
-desktop: when a Linux program becomes active, Wine keeps the game as its
-foreground window, and Questlog's overlays stay above the Linux program.
-X11 itself does know: the window manager - KWin, Mutter or any other, also
+Questlog's overlays are unmanaged X windows under Wine, which the
+compositor draws above every Linux program, and Wine does not notice when
+a Linux program becomes active: so they stay above a browser or terminal
+after Alt+Tab. X11 itself does know: the window manager - KWin, Mutter or any other, also
 for Xwayland - moves _NET_ACTIVE_WINDOW on the root window (EWMH) to a
 window of its own when a Wayland or other non-Wine window becomes active.
 
@@ -16,8 +15,9 @@ whole process when its display connection is lost - as when Xwayland goes
 down with the desktop session - and the launcher must outlive that. The
 launcher passes the state to
 version.dll in Questlog's main process over the capture bridge
-(BridgeServer.set_focus), which then answers Questlog's GetForegroundWindow
-with the desktop window while it is "out". Nothing is changed on the X side:
+(BridgeServer.set_focus), which while it is "out" tells Questlog that the
+game's window is minimized, the case in which Questlog hides its overlays
+by its own logic. Nothing is changed on the X side:
 the watch only reads.
 """
 
@@ -70,7 +70,7 @@ class ActiveWindowWatch:
 
     start() returns None when it runs, else the reason it cannot (no DISPLAY,
     no libX11, no display connection); the caller logs that once, and
-    Questlog's overlays then follow Wine's foreground window as before.
+    Questlog's overlays then stay over other programs as before.
     """
 
     def __init__(self, on_change, display=None):
@@ -169,7 +169,7 @@ class FocusFollower:
 
     When the child cannot start watching, or ends (the X display went away),
     the reason is logged, on_change gets "in" - Questlog's overlays then
-    follow Wine's foreground window as before - and the child is started
+    stay over other programs as before - and the child is started
     again after RESTART_WAIT seconds, in case the display comes back.
     """
 

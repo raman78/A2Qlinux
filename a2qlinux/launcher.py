@@ -52,8 +52,8 @@ BRIDGE_DLL = BIN / "wpcap.dll"
 # Marks our DLL in the prefix (kept from the project's first name: changing it
 # would make install_bridge_dll take an installed build for a foreign file).
 BRIDGE_SIGNATURE = b"questlog-proton bridge"
-FOCUS_DLL = BIN / "version.dll"          # bridge/foreground_hook.c (§6.12)
-FOCUS_SIGNATURE = b"a2qlinux foreground hook"
+FOCUS_DLL = BIN / "version.dll"          # bridge/focus_hook.c (§6.12)
+FOCUS_SIGNATURE = b"a2qlinux focus hook"
 
 
 LAUNCHER_LOG_LIMIT = 1_000_000   # bytes per file; one older file is kept, so at most twice this on disk
@@ -255,8 +255,9 @@ def install_focus_dll(questlog_dir):
 
     Questlog's folder is replaced by every Questlog update, so this runs
     before every start. A version.dll that is not ours (recognised by its
-    signature string) is left alone and reported; Questlog then loads Wine's
-    own, since the override is only set when ours is there.
+    signature string) is left alone and reported, and the override is not
+    set; Wine may still load that file, as it loads a version.dll beside the
+    program by default (§6.12).
     """
     target = Path(questlog_dir) / "version.dll"
     if not FOCUS_DLL.is_file():

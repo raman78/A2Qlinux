@@ -77,7 +77,7 @@ open a status window (§12 "Shown version", §9.1).
 | `a2qlinux/setup_desktop.py` (`a2qlinux-setup`) | Linux, by hand; `refresh_entries` on every `a2qlinux` start | dependency, capture and tray checks with the commands that fix them (§14); first Questlog installation (§6.6); menu entry, icon (§12, "Name and icon"); keeps the menu entry (and an existing desktop shortcut) running this installation's `a2qlinux`, with the current name and icon |
 | `a2qlinux/diagnose.py` | Linux, `a2qlinux --diagnose [--report]` by hand | read-only diagnosis, and a problem report the user can file as a GitHub issue (§9.1) |
 | `a2qlinux/bin/wpcap.dll` (from `bridge/wpcap_bridge.c`) | prefix, in Questlog's NodeService process | libpcap stand-in; window-order guard |
-| `a2qlinux/bin/version.dll` (from `bridge/foreground_hook.c`), copied beside `Questlog.exe` | prefix, in Questlog's processes; acts in its main process only | passes `version.dll`'s functions to Wine's; answers Questlog's `GetForegroundWindow` with the desktop window while a non-Wine window is active (§6.12) |
+| `a2qlinux/bin/version.dll` (from `bridge/focus_hook.c`), copied beside `Questlog.exe` | prefix, in Questlog's processes; acts in its main process only | passes `version.dll`'s functions to Wine's; answers Questlog's `IsIconic` about the game's window with yes while a non-Wine window is active, so Questlog hides its overlays (§6.12) |
 | `a2qlinux/bin/questlog_ctl.exe` (from `bridge/questlog_ctl.c`) | prefix, started per command | hides/shows Questlog's tray icon, closes its window, ends its session |
 
 ## 3. Invariants
@@ -1267,21 +1267,47 @@ not made here.
 **Symptom** (issue #3, reproduced here on KDE Plasma, Wayland, 14 November
 2026). With the game running borderless and Questlog's overlays on
 (Timers, Tracker, Tracker Map), switching to a Linux program with Alt+Tab
-leaves the overlays drawn above that program. On Windows they hide as soon
-as the game is not in front.
+leaves the overlays drawn above that program. On Windows they end up
+behind it.
 
-**Cause.** Questlog decides by itself: every 100 ms its main process asks
-`GetForegroundWindow` (through koffi) and shows the overlays only while
-the answer is the game's window. Wine answers from its own idea of the
-foreground window, which changes only when another Wine window is
-activated. Measured with `tools/foreground_probe.exe` in the game prefix:
-terminal active, desktop window `#32769`; game clicked, `AION2.exe`;
-browser active, still `AION2.exe`. X11 does know: at the same moments the
-root window's `_NET_ACTIVE_WINDOW` and the X input focus moved from the
-game's window to a window of KWin's own (no `WM_CLASS`), and the game's
-`_NET_WM_STATE_FOCUSED` went away; switching back restored all three.
-`_NET_ACTIVE_WINDOW` is EWMH, kept by every X11 window manager and by
-Wayland compositors for their Xwayland windows.
+**What Questlog does on Windows.** Every 100 ms its main process asks
+`GetForegroundWindow` (through koffi) whether the game is in front. While
+it is, the overlays are made topmost; when another window is in front,
+they are only lowered in the window order to just above the game (the
+function in Questlog's win32 chunk that calls `SetWindowPos` with
+`HWND_TOPMOST`, or with the window above the game), so the other window
+covers them. Questlog hides them altogether in one case only: when the
+game's window is minimized (`IsIconic`) or has no area. Then the HUD
+window is hidden ("hud hidden, game window minimized or empty"), the
+widgets follow it (a widget shows only while the HUD is visible), and
+when the game is back the HUD is shown again with `showInactive`
+("hud shown").
+
+**Cause, in two layers.**
+
+1. Wine's foreground window changes only when another Wine window is
+   activated. Measured with `tools/foreground_probe.exe` in the game
+   prefix: terminal active, desktop window `#32769`; game clicked,
+   `AION2.exe`; browser active, still `AION2.exe`. X11 does know: at the
+   same moments the root window's `_NET_ACTIVE_WINDOW` and the X input
+   focus moved from the game's window to a window of KWin's own (no
+   `WM_CLASS`), and the game's `_NET_WM_STATE_FOCUSED` went away;
+   switching back restored all three. `_NET_ACTIVE_WINDOW` is EWMH, kept
+   by every X11 window manager and by Wayland compositors for their
+   Xwayland windows.
+2. Lowering the overlays has no effect on a Linux desktop. Wine maps them
+   as unmanaged (`override_redirect`) X windows: they are not in
+   `_NET_CLIENT_LIST_STACKING`, only the game and Questlog's main window
+   are. KWin draws unmanaged Xwayland windows above every window that is
+   not Wine's, whatever their order inside Wine (measured here; whether
+   Mutter does the same is §11's question 7). Measured
+   with a first version of this fix, which told Questlog that the
+   desktop window was in front: `foreground_probe.exe` showed the
+   overlays going from 3 topmost to 0 topmost, so Questlog did lower
+   them, and they stayed on the screen above the browser.
+
+So the only one of Questlog's own paths that works under Wine is the
+hiding one, and A2Qlinux takes that one.
 
 **What A2Qlinux does.**
 
@@ -1293,8 +1319,8 @@ Wayland compositors for their Xwayland windows.
                          BridgeServer.set_focus ── "focus" connection ──►
                          version.dll in Questlog's main process
                                      │
-          Questlog: GetForegroundWindow() ── "out": the desktop window
-                                          └─ "in":  Wine's answer
+   Questlog: IsIconic(game) ── "out": yes         → overlays hidden
+                            └─ "in":  real answer → shown again
 ```
 
 1. `ActiveWindowWatch` (`a2qlinux/focus.py`) opens the X display through
@@ -1313,32 +1339,44 @@ Wayland compositors for their Xwayland windows.
 2. `BridgeServer` keeps the state (`in` at the start) and sends it, one
    line, to every `focus` connection at once and on each change, in order
    (`focus_lock`). The request needs the token like the others.
-3. `version.dll` (`bridge/foreground_hook.c`). `Questlog.exe` imports
+3. `version.dll` (`bridge/focus_hook.c`). `Questlog.exe` imports
    `VERSION.dll`; the launcher copies ours beside it before every start
    (`install_focus_dll`: a Questlog update replaces the folder) and adds
    `version=n,b` to `WINEDLLOVERRIDES` in Questlog's environment, only when
    the file there carries `FOCUS_SIGNATURE` (`focus_dll_ours`). It loads
    Wine's `version.dll` from system32 and passes all 16 functions on to it.
    In Questlog's main process (no `--type=`) with `QUESTLOG_PROTON_BRIDGE`
-   set, it replaces user32's `GetForegroundWindow`: the first 12 bytes
-   become `mov rax, fake_foreground; jmp rax`, written while `version.dll`
-   loads, before Questlog's own threads exist. `fake_foreground` answers
-   `GetDesktopWindow()` while the state is "out", else win32u's
-   `NtUserGetForegroundWindow`, which is what user32's own function calls.
-   A thread holds the `focus` connection and reconnects every 2 s; while
-   it has none, the state is "in", Wine's own answer.
-4. Questlog sees the desktop as the foreground window and hides its
-   overlays by its own logic, as on Windows; back in the game it shows
-   them again.
+   set, it replaces user32's `IsIconic`: the first 12 bytes become
+   `mov rax, fake_iconic; jmp rax`, written while `version.dll` loads,
+   before Questlog's own threads exist. `fake_iconic` answers yes for a
+   window of another process while the state is "out"; otherwise, and
+   always for Questlog's own windows, it answers what `IsIconic` is
+   defined as: `WS_MINIMIZE` in the window's style (`GetWindowLongW`). A
+   thread holds the `focus` connection and reconnects every 2 s; while it
+   has none, the state is "in", the real answer.
+4. Questlog takes the game for minimized and hides its overlays by its
+   own logic; once a Wine window is active again it shows them, also by
+   its own logic. Nothing is minimized in fact: the game, Wine and the
+   compositor see no change.
 
 **Why this shape.**
 
+- *`IsIconic`, not `GetForegroundWindow`:* the first version answered
+  `GetForegroundWindow` with the desktop window while "out". Questlog
+  then lowered its overlays, which under Wine does not take them off the
+  screen (cause 2). `IsIconic` leads to the path that hides them.
+- *Only windows of other processes:* Questlog asks `IsIconic` about the
+  game's windows (to find the game's area); the replaced function serves
+  every caller in the main process, Chromium included, so Questlog's own
+  windows keep the real answer whoever asks.
 - *Replacing the function, not its import:* koffi looks the function up
   with `GetProcAddress` when Questlog first calls it, so only the code at
   that address reaches it. Before writing, `room_after` reads user32's
-  export table: in Proton 11 (CachyOS) `GetForegroundWindow` has 16 bytes
-  before the next exported function. With fewer than 12 it is not
-  replaced, and that is logged.
+  export table: `IsIconic` has 48 bytes before the next exported function
+  in every user32 checked (Wine 11.21, wine-cachyos, Proton 9.0, 10.0,
+  11.0, Hotfix and Experimental, proton-cachyos-slr, GE-Proton11-6,
+  UMU-Proton 9 and 10). With fewer than 12 it is not replaced, and that is
+  logged.
 - *In the main process:* `wpcap.dll` lives in Questlog's NodeService
   process (§6.1); its answers would not reach the main process, which is
   the one that asks.
@@ -1347,30 +1385,43 @@ Wayland compositors for their Xwayland windows.
   processes, the main one among them, Questlog starts as without it, and
   calls reach Wine's `version.dll`. Injecting from `wpcap.dll` into the
   main process (`CreateRemoteThread`) would work too, with more parts that
-  can fail: finding the process, the order of starts.
-- *Not changing Wine's foreground window:* making the desktop Wine's
-  foreground window would reach the game as a deactivation (lost focus,
-  maybe a minimise); Proton keeps the game active on purpose. I2.
+  can fail: finding the process, the order of starts. Wine 11.21 loads a
+  `version.dll` beside the program even without the override (found while
+  testing: the harness's negative run must leave the file out); the
+  override states the intent and does not rely on that default.
+- *Not changing Wine's foreground window or really minimizing the game:*
+  either would reach the game as a deactivation (lost focus, a minimise);
+  Proton keeps the game active on purpose. I2.
 - *Not hiding the overlays in the compositor:* that needs one mechanism per
   desktop (a KWin script, a GNOME Shell extension, …); the X11 property is
   the same on all of them, and Questlog's own logic then decides what to
-  hide, as on Windows.
+  hide.
+
+**Differs from Windows** in one case: with the other program on a second
+monitor, the overlays hide over the game too, where on Windows they would
+stay over the game, only below that program. "out" could be narrowed to an
+active window that overlaps the game's monitor; not done.
 
 **Logs.** `version.dll` writes to Questlog's stderr, so to
-`proton-stream/questlog.log`: `[a2qlinux] focus: Questlog's
-GetForegroundWindow follows the desktop's active window (…)` once per
-start, and a reason when it does not (not found, not enough room, no
-bridge, the connection ended). The launcher logs when it cannot follow the
-active window, and when a `version.dll` beside Questlog is not ours or
-cannot be written. Should Wine's own `version.dll` fail to load, ours
-refuses to load (Questlog would otherwise call functions that are not
-there), which shows as a Questlog that does not start (§6.9).
+`proton-stream/questlog.log`: `[a2qlinux] focus: the game counts as
+minimized for Questlog while a window that is not Wine's is active (…)`
+once per start, and a reason when it does not (not found, not enough room,
+no bridge, the connection ended). Questlog's own "hud hidden" and "hud
+shown" go to an in-memory list of its last 100 events, not to a file. The
+launcher logs when it cannot follow the active window, and when a
+`version.dll` beside Questlog is not ours or cannot be written. Should
+Wine's own `version.dll` fail to load, ours refuses to load (Questlog
+would otherwise call functions that are not there), which shows as a
+Questlog that does not start (§6.9).
 
-**Checked** in a throwaway prefix with Proton 11 (CachyOS):
-`bridge/tests/run_focus_hook_test.py` (§9) passes, and fails without the
-override. With the game (14 November 2026, KDE Plasma, Wayland): see the
-issue; whether the KDE overlays' script (§6.8) is still needed for Black
-Market Cards once Questlog hides the HUD itself is open (§11).
+**Checked** in a throwaway prefix with Wine 11.21:
+`bridge/tests/run_focus_hook_test.py` (§9) passes; it fails without our
+`version.dll`, and fails when `fake_iconic` also answers yes for the
+program's own window. With the game (14 November 2026, KDE Plasma,
+Wayland, Questlog 0.1.54): the overlays hide on Alt+Tab to a browser and
+come back with the game. Whether the KDE overlays' script (§6.8) is still
+needed for Black Market Cards once Questlog hides the HUD itself is open
+(§11).
 
 ## 7. Failure modes
 
@@ -1524,7 +1575,7 @@ one** — §6.4.
 | KDE overlays (§6.8) | `tests/test_kde_overlays.py` runs against stand-ins for KDE's config tools and `dbus-send`, and, where `kwriteconfig6` is installed, checks with the real tools that removal gives the rule file back byte for byte; on the desktop, a one-off KWin script that prints the HUD's `layer` and `opacity` shows what KWin applied |
 | folder handler (§6.10) | `tests/test_open_folders.py` (the setup step against a stand-in for `questlog_ctl.exe`; `registry_state` on `system.reg` text as Wine saves it; the value in Python equal to the one in `questlog_ctl.c`); the command itself in a throwaway prefix: `WINEPREFIX=<throwaway> wine questlog_ctl.exe folder-handler status` (then `set`, `remove`), and a test program making Chromium's call (`ShellExecuteExW`, verb `explore`, class `folder`, `SEE_MASK_IDLIST`) with a stand-in `xdg-open` first in `PATH` that records its argument |
 | process snapshot (§9.1) | `ProcessSnapshotTest` in `tests/test_diagnose.py` against a fake `/proc` tree (CPU time from the difference of the two readings, idle threads counted together, a process that ends between the readings); on a running Questlog, `python3 -c "from a2qlinux import diagnose; print('\n'.join(diagnose.questlog_snapshot()))"` |
-| focus hook (§6.12) | `tests/test_focus.py` (which windows are Wine's; only changes reported; `FocusFollower` passes the child's lines on and falls back to "in" with the reason logged once), `tests/test_pcap_bridge.py` (`focus`: state now and on change, token, a gone client dropped), `tests/test_launcher.py` (`install_focus_dll`; `version=n,b` only with our file); in a throwaway prefix, `WINEPREFIX=<throwaway> python3 bridge/tests/run_focus_hook_test.py <Proton's wine>`: `focus_hook_test.exe` with `version.dll` beside it and a live `BridgeServer` switching in/out/in prints `own`, `desktop`, `own`, `PASS`; with `--no-override`, `FAIL`; in the game prefix, `tools/foreground_probe.exe [seconds]` prints what Wine reports as the foreground window on each change |
+| focus hook (§6.12) | `tests/test_focus.py` (which windows are Wine's; only changes reported; `FocusFollower` passes the child's lines on and falls back to "in" with the reason logged once), `tests/test_pcap_bridge.py` (`focus`: state now and on change, token, a gone client dropped), `tests/test_launcher.py` (`install_focus_dll`; `version=n,b` only with our file); in a throwaway prefix, `WINEPREFIX=<throwaway> python3 bridge/tests/run_focus_hook_test.py <wine>`: `focus_hook_test.exe` with `version.dll` beside it starts a copy of itself that opens a window, and with a live `BridgeServer` switching in/out/in prints `other iconic no`, `yes`, `no` while its own window stays `no`, `PASS`; with `--no-dll`, `FAIL`; in the game prefix, `tools/foreground_probe.exe [seconds]` prints the foreground window, whether the game is topmost, and how many of Questlog's overlays are visible and topmost, on each change |
 | does the session survive a quit (§5.1) | without the game: a Windows program that only waits, started as `systemd-run --user --unit=<name> protontricks-launch --appid 3393110 <program>.exe`, plays the game; quit Questlog and check that the program, the `wineserver` and `explorer.exe /desktop` run on, and which unit holds them (`/proc/<pid>/cgroup`) |
 | a stuck process (§6.9) | `gdb -p <pid> -batch -ex bt` as root (`ptrace_scope` 1 allows a user to trace only their own children); A2Qlinux never does this itself |
 | Wine's view of windows and focus | run `WINEDEBUG=+event,+x11drv,+win a2qlinux-run`; the log grows about 40 KB/s, so only briefly |
@@ -1614,9 +1665,15 @@ safe at any time, the game running or not. In order:
 The lines that describe the machine rather than A2Qlinux. They exist so
 that a report from another system can be compared with one where things
 work: how windows, the tray and overlays behave depends on the desktop
-(§6.8, §14), and Questlog draws its windows with Chromium on the GPU
-(Direct3D 11 through DXVK under Proton), so a window that stays black is
-first a question of card and driver.
+(§6.8, §14), and a card or driver fault can take the whole desktop with
+it (issue #2: a GPU reset that started in gnome-shell). Questlog itself
+draws without the GPU: on Windows it turns hardware acceleration and
+DirectComposition off (`disableHardwareAcceleration`,
+`disable-direct-composition`, in its main chunk), so Chromium composes its
+windows in software and Wine shows them through its X11 driver; its GPU
+process runs only for WebGL, with ANGLE on Direct3D 11's software device
+(`--use-angle=d3d11-warp-webgl`). Its `questlog.log` holds no DXVK lines
+(checked 14 November 2026, Questlog 0.1.54).
 
 | Line | Function | Read from | Notes |
 |---|---|---|---|
@@ -1662,8 +1719,7 @@ itself instead of hiding the checks after it.
 diagnosis, the last `REPORT_LOG_LINES` (400) lines of `launcher.log`, a
 snapshot of Questlog's processes (below), the last 10 of `steam_launch.log`, `questlog.log` (`questlog_log_excerpt`:
 whole up to `QUESTLOG_LOG_HEAD` + `QUESTLOG_LOG_TAIL` lines, 400 + 800,
-else its start, where DXVK names its device and Chromium starts its GPU
-process, and its end, the gap marked) and `questlog.log.1`, the run
+else its start, where Wine and Chromium start Questlog's processes, and its end, the gap marked) and `questlog.log.1`, the run
 before (200 + 400 lines), all passed through `Anonymiser`. That replaces
 the home folder with `~`, the user name as a path component with `<user>`
 (also between backslashes, as in Wine's `Z:\home\<user>\…`, which
@@ -1775,10 +1831,11 @@ automatic update
    Questlog following the game onto the network card once the game has
    reconnected has not been seen yet.
 7. With §6.12, Questlog hides its full-screen HUD (Black Market Cards) by
-   its own logic when the game is not in front. Whether the KDE overlays'
+   its own logic while a window that is not Wine's is active. Whether the KDE overlays'
    script (§6.8), which does the same from KWin, is still needed then, and
    whether §6.12 holds on GNOME (Mutter keeping `_NET_ACTIVE_WINDOW` the
-   same way as KWin), is not checked yet.
+   same way as KWin), is not checked yet. On GNOME the hiding does not
+   depend on how Mutter stacks unmanaged windows, only on the property.
 
 ## 12. Packaging and releases
 

@@ -1,32 +1,36 @@
-/* version.dll - tells Questlog when the desktop's active window is not one of Wine's.
+/* version.dll - tells Questlog the game is minimized while the desktop's active window is not one of Wine's.
  *
- * Questlog shows its overlays (meter, timers, tracker, map, Black Market
- * Cards) while the game is the foreground window, which its main process
- * asks GetForegroundWindow every 100 ms, and hides them otherwise, as on
- * Windows. Under Wine on a Linux desktop that answer goes stale: when a Linux
- * program (a browser, a terminal) becomes active, Wine keeps the game as its
- * foreground window, so Questlog's overlays stay above the Linux program
- * (docs/ARCHITECTURE.md §6.12, issue #3). The launcher follows the desktop's
- * active window through X11 and passes "in" (a Wine window is active) or
- * "out" (anything else) over the capture bridge; while it is "out", this
- * DLL's GetForegroundWindow answers the desktop window instead, so Questlog
- * hides its overlays by its own logic. Nothing else changes: the game and the
- * other programs in the prefix are not touched and get Wine's own answer.
+ * Questlog places its overlays (meter, timers, tracker, map, Black Market
+ * Cards) above the game while the game is in front; when another window is
+ * in front it only lowers them beneath it in the window order, and it hides
+ * them altogether when the game's window is minimized (IsIconic, asked every
+ * 100 ms in its main process: "hud hidden, game window minimized or empty").
+ * Under Wine on a Linux desktop the lowering has no effect: the overlays are
+ * unmanaged (override-redirect) X windows, which the compositor draws above
+ * every window that is not Wine's, whatever their order inside Wine. So they
+ * stay over a browser or terminal (docs/ARCHITECTURE.md §6.12, issue #3).
+ * The launcher follows the desktop's active window through X11 and passes
+ * "in" (a Wine window is active) or "out" (anything else) over the capture
+ * bridge; while it is "out", this DLL's IsIconic answers yes for windows of
+ * other processes - the game's - so Questlog hides its overlays by its own
+ * logic, and shows them again by it once a Wine window is active. Nothing
+ * else changes: the game and the other programs in the prefix are not touched
+ * and Questlog's own windows always get the real answer.
  *
  * How it gets into Questlog's main process: Questlog.exe imports VERSION.dll,
  * so a version.dll beside it, with WINEDLLOVERRIDES=version=n,b in Questlog's
  * environment only, is loaded instead of Wine's. It passes every one of
  * version.dll's 16 functions on to the real one in system32. Only in the main
  * process (no --type= on its command line) and only when Questlog was started
- * by A2Qlinux (QUESTLOG_PROTON_BRIDGE set) does it replace user32's
- * GetForegroundWindow: the first 12 bytes become a jump to fake_foreground,
- * written while version.dll is loaded, when Questlog's other threads do not
- * exist yet. Questlog calls user32 through koffi, which looks the function up
- * with GetProcAddress, so only a replacement of the function itself reaches
- * it. The replacement is refused, and logged, when user32's export table
- * shows less than 12 bytes before the next exported function.
+ * by A2Qlinux (QUESTLOG_PROTON_BRIDGE set) does it replace user32's IsIconic:
+ * the first 12 bytes become a jump to fake_iconic, written while version.dll
+ * is loaded, when Questlog's other threads do not exist yet. Questlog calls
+ * user32 through koffi, which looks the function up with GetProcAddress, so
+ * only a replacement of the function itself reaches it. The replacement is
+ * refused, and logged, when user32's export table shows less than 12 bytes
+ * before the next exported function (Wine 9 to 11 and Proton have 48).
  *
- * Without the launcher (no connection) every answer is Wine's own. Lines in
+ * Without the launcher (no connection) every answer is the real one. Lines in
  * Questlog's log (proton-stream/questlog.log) start with "[a2qlinux] focus". */
 #include <winsock2.h>
 #include <windows.h>
@@ -34,7 +38,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define HOOK_SIGNATURE "a2qlinux foreground hook"
+#define HOOK_SIGNATURE "a2qlinux focus hook"
 #define PATCH_BYTES 12
 #define RETRY_MS 2000
 
@@ -49,7 +53,7 @@ static const char *const names[16] = {
     "VerLanguageNameW", "VerQueryValueA", "VerQueryValueW"};
 FARPROC forward[16];
 
-/* Each export jumps to the real function with its arguments untouched (foreground_hook.def names them). */
+/* Each export jumps to the real function with its arguments untouched (focus_hook.def names them). */
 #define PASS(i, name) __attribute__((naked)) void pass_##name(void) { __asm__("jmp *%0" :: "m"(forward[i])); }
 PASS(0, GetFileVersionInfoA) PASS(1, GetFileVersionInfoExA) PASS(2, GetFileVersionInfoExW)
 PASS(3, GetFileVersionInfoSizeA) PASS(4, GetFileVersionInfoSizeExA) PASS(5, GetFileVersionInfoSizeExW)
@@ -88,11 +92,15 @@ static int load_real_version(void)
 /* ---------------------------------------------------------------- the replacement */
 
 static volatile LONG outside;                 /* 1 while the desktop's active window is not Wine's */
-static HWND (WINAPI *wine_foreground)(void);  /* win32u's NtUserGetForegroundWindow: what user32's calls */
 
-static HWND WINAPI fake_foreground(void)
+/* IsIconic as Windows and Wine define it (WS_MINIMIZE in the window's style),
+ * except that a window of another process counts as minimized while "out". */
+static BOOL WINAPI fake_iconic(HWND window)
 {
-    return outside ? GetDesktopWindow() : wine_foreground();
+    DWORD pid = 0;
+    if (outside && window && GetWindowThreadProcessId(window, &pid) && pid && pid != GetCurrentProcessId())
+        return TRUE;
+    return (GetWindowLongW(window, GWL_STYLE) & WS_MINIMIZE) != 0;
 }
 
 /* Bytes from `target` to the next exported function of `module`: how much may be overwritten. */
@@ -113,36 +121,30 @@ static SIZE_T room_after(HMODULE module, BYTE *target)
     return next ? next - own : 0;
 }
 
-static int replace_foreground(void)
+static int replace_iconic(void)
 {
-    HMODULE user32 = LoadLibraryW(L"user32.dll"), win32u = LoadLibraryW(L"win32u.dll");
-    BYTE *target = user32 ? (BYTE *)GetProcAddress(user32, "GetForegroundWindow") : NULL;
+    HMODULE user32 = LoadLibraryW(L"user32.dll");
+    BYTE *target = user32 ? (BYTE *)GetProcAddress(user32, "IsIconic") : NULL;
     SIZE_T room;
     DWORD old;
 
-    wine_foreground = win32u ? (void *)GetProcAddress(win32u, "NtUserGetForegroundWindow") : NULL;
-    if (!target || !wine_foreground) {
-        focus_log("GetForegroundWindow or NtUserGetForegroundWindow not found; Questlog's overlays follow "
-                  "Wine's foreground window only");
-        return 0;
-    }
-    if ((BYTE *)wine_foreground == target) {
-        focus_log("user32's GetForegroundWindow is win32u's own; not replaced");
+    if (!target) {
+        focus_log("user32's IsIconic not found; Questlog's overlays stay over other programs");
         return 0;
     }
     room = room_after(user32, target);
     if (room < PATCH_BYTES) {
-        focus_log("user32's GetForegroundWindow has %lu bytes before the next function, %d needed; not "
-                  "replaced", (unsigned long)room, PATCH_BYTES);
+        focus_log("user32's IsIconic has %lu bytes before the next function, %d needed; not replaced, Questlog's "
+                  "overlays stay over other programs", (unsigned long)room, PATCH_BYTES);
         return 0;
     }
     if (!VirtualProtect(target, PATCH_BYTES, PAGE_EXECUTE_READWRITE, &old)) {
-        focus_log("could not make GetForegroundWindow writable (error %lu)", GetLastError());
+        focus_log("could not make IsIconic writable (error %lu)", GetLastError());
         return 0;
     }
-    target[0] = 0x48;                                      /* mov rax, fake_foreground */
+    target[0] = 0x48;                                      /* mov rax, fake_iconic */
     target[1] = 0xB8;
-    *(void **)(target + 2) = (void *)fake_foreground;
+    *(void **)(target + 2) = (void *)fake_iconic;
     target[10] = 0xFF;                                     /* jmp rax */
     target[11] = 0xE0;
     VirtualProtect(target, PATCH_BYTES, old, &old);
@@ -208,7 +210,7 @@ static void follow(const struct bridge *b)
         }
     }
     closesocket(s);
-    InterlockedExchange(&outside, 0);      /* without the launcher: Wine's own answer */
+    InterlockedExchange(&outside, 0);      /* without the launcher: the real answer */
 }
 
 static DWORD WINAPI follow_thread(void *arg)
@@ -218,7 +220,7 @@ static DWORD WINAPI follow_thread(void *arg)
     int told = 0;
     (void)arg;
     if (!read_bridge(&b) || WSAStartup(MAKEWORD(2, 2), &data) != 0) {
-        focus_log("no capture bridge to follow; Questlog's overlays follow Wine's foreground window only");
+        focus_log("no capture bridge to follow; Questlog's overlays stay over other programs");
         return 0;
     }
     for (;;) {
@@ -244,11 +246,12 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, void *reserved)
     }
     if (GetEnvironmentVariableA("QUESTLOG_PROTON_BRIDGE", NULL, 0) == 0 || strstr(GetCommandLineA(), "--type="))
         return TRUE;                       /* not A2Qlinux's Questlog, or not its main process */
-    if (replace_foreground()) {
+    if (replace_iconic()) {
         HANDLE thread = CreateThread(NULL, 0, follow_thread, NULL, 0, NULL);
         if (thread)
             CloseHandle(thread);
-        focus_log("Questlog's GetForegroundWindow follows the desktop's active window (%s)", signature);
+        focus_log("the game counts as minimized for Questlog while a window that is not Wine's is active (%s)",
+                  signature);
     }
     return TRUE;
 }

@@ -7,8 +7,11 @@ starts a BridgeServer, runs the program under xvfb-run with the bridge's
 QUESTLOG_PROTON_BRIDGE and WINEDLLOVERRIDES=version=n,b, and switches the
 focus state once version.dll has connected: "in" for a second, "out" for
 1.5 s, "in" again.
-PASS when the program saw own -> desktop -> own; also run with
---no-override to see it FAIL without our version.dll (Wine's own answer).
+PASS when the window of the other process went not minimized -> minimized ->
+not minimized and the program's own window stayed not minimized throughout;
+also run with --no-dll to see it FAIL without our version.dll (the real
+answer throughout; leaving out only the override is not enough, as Wine may
+load a version.dll beside the program anyway).
 """
 
 from pathlib import Path
@@ -26,7 +29,7 @@ from a2qlinux.pcap_bridge import BridgeServer  # noqa: E402
 
 
 def main(argv):
-    override = "--no-override" not in argv
+    with_dll = "--no-dll" not in argv
     args = [a for a in argv if not a.startswith("--")]
     wine = args[0] if args else "wine"
     if not os.environ.get("WINEPREFIX"):
@@ -34,9 +37,10 @@ def main(argv):
     server = BridgeServer(print)
     with tempfile.TemporaryDirectory() as folder:
         shutil.copy(ROOT / "bridge" / "tests" / "focus_hook_test.exe", folder)
-        shutil.copy(ROOT / "a2qlinux" / "bin" / "version.dll", folder)
+        if with_dll:
+            shutil.copy(ROOT / "a2qlinux" / "bin" / "version.dll", folder)
         env = dict(os.environ, QUESTLOG_PROTON_BRIDGE=server.environment_value(),
-                   WINEDLLOVERRIDES="version=n,b" if override else "", WINEDEBUG="-all")
+                   WINEDLLOVERRIDES="version=n,b" if with_dll else "", WINEDEBUG="-all")
 
         def switch():
             deadline = time.monotonic() + 60
@@ -51,8 +55,9 @@ def main(argv):
                               capture_output=True, text=True, timeout=120)
     server.stop()
     print(done.stdout + done.stderr)
-    seen = [line.split()[-1] for line in done.stdout.splitlines() if line.endswith(("own", "desktop", "other"))]
-    ok = seen == ["own", "desktop", "own"] and "version.dll answers: yes" in done.stdout
+    seen = [line.split(" s ", 1)[1] for line in done.stdout.splitlines() if " iconic " in line]
+    ok = seen == ["other iconic no, own iconic no", "other iconic yes, own iconic no",
+                  "other iconic no, own iconic no"] and "version.dll answers: yes" in done.stdout
     print("PASS" if ok else f"FAIL (saw {seen})")
     return 0 if ok else 1
 

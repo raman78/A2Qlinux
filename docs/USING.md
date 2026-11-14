@@ -240,9 +240,19 @@ Questlog starts.
 - Overlays (the meter, alerts, the tracker map) appear over the game and let
   clicks pass through to it, as on Windows. When you switch to another
   program, a browser or a terminal, they hide, and they come back when you
-  return to the game. Questlog decides that from which window is in front,
-  and A2Qlinux tells it when a Linux program is, since the game's Proton
-  environment does not notice that by itself.
+  return to the game.
+
+  The idea: on Windows the overlays would slip behind that program. On a
+  Linux desktop they cannot, because the desktop always draws them on top.
+  So while a Linux program is in front, A2Qlinux tells Questlog that the
+  game is minimized, and Questlog hides its overlays, as it does when you
+  minimize the game on Windows. The game itself is not minimized and does
+  not notice. Questlog's own window, and other Windows programs started in
+  the game's environment, count as the game here: switching to them does
+  not hide the overlays.
+
+  With two monitors this means the overlays also hide while you use a
+  program on the other monitor.
 - With Questlog's full window open behind the game, clicks in the game stay
   in the game. To work in Questlog's window, switch to it with Alt+Tab, the
   taskbar or the tray icon.
