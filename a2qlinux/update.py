@@ -31,6 +31,7 @@ import base64
 import hashlib
 import json
 from pathlib import Path
+import posixpath
 import re
 import shutil
 import struct
@@ -113,6 +114,29 @@ def parse_feed(text):
 
 # ------------------------------------------------------------ compatibility
 
+CAPTURE_WORKER = ".output/electron/workers/aion-2/combat.cjs"
+
+
+def required_modules(asar, name, text, seen=None):
+    """The code of the modules `text` (the file `name` in the archive) requires by relative path, recursively.
+
+    Questlog's bundler moves shared code into chunks of its own, which the
+    worker loads with require("../../game-<hash>.cjs"): since 0.1.54 its
+    libpcap calls live in such a chunk. Modules outside the archive
+    ("node:fs", "koffi") are not followed.
+    """
+    seen = set() if seen is None else seen
+    found = []
+    for relative in re.findall(r'require\(["`](\.{1,2}/[^"`]+)["`]\)', text):
+        path = posixpath.normpath(posixpath.join(posixpath.dirname(name), relative))
+        if path in seen:
+            continue
+        seen.add(path)
+        code = read_asar_file(asar, path).decode("utf-8", "replace")
+        found += [code] + required_modules(asar, path, code, seen)
+    return found
+
+
 def compatibility_problems(app_dir):
     """What in an unpacked Questlog would break A2Qlinux; an empty list means it fits.
 
@@ -123,10 +147,11 @@ def compatibility_problems(app_dir):
     problems = []
     try:
         main = read_asar_file(asar, ".output/electron/main.cjs").decode("utf-8", "replace")
-        worker = read_asar_file(asar, ".output/electron/workers/aion-2/combat.cjs").decode("utf-8", "replace")
+        worker = read_asar_file(asar, CAPTURE_WORKER).decode("utf-8", "replace")
+        capture_code = [worker] + required_modules(asar, CAPTURE_WORKER, worker)
     except (OSError, KeyError, ValueError, struct.error) as error:
         return [f"its app.asar could not be read ({error!r})"]
-    calls = set(re.findall(r"(pcap_[a-z_]+)\(", worker))
+    calls = set(re.findall(r"(pcap_[a-z_]+)\(", "\n".join(capture_code)))
     if calls - PCAP_CALLS:
         problems.append(f"it calls libpcap functions the bridge DLL lacks: {', '.join(sorted(calls - PCAP_CALLS))}")
     if not calls:
@@ -142,7 +167,7 @@ def compatibility_problems(app_dir):
         problems.append(f"it uses Electron {electron.group(1).decode()}, not yet checked "
                         f"(known: {', '.join(sorted(KNOWN_ELECTRON))}); its tray icon id and session end "
                         "need reading in that version's source")
-    if not re.search(r'on\("second-instance",[A-Za-z0-9_$]+\.show\)', main):
+    if not re.search(r'on\(["`]second-instance["`],[A-Za-z0-9_$]+\.show\)', main):
         problems.append("a second start no longer simply shows its window (Open Questlog relies on it)")
     if "focusable:!1" not in main:
         problems.append("its overlay windows are no longer non-activatable (the window-order guard relies on it)")

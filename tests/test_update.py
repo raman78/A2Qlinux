@@ -42,7 +42,7 @@ def write_asar(path, files):
     path.write_bytes(struct.pack("<II", 4, len(pickle)) + pickle + data)
 
 
-def make_app(folder, version="0.1.35", electron="44.5.1", main=GOOD_MAIN, worker=GOOD_WORKER):
+def make_app(folder, version="0.1.35", electron="44.5.1", main=GOOD_MAIN, worker=GOOD_WORKER, extra=None):
     """An unpacked Questlog with just what A2Qlinux looks at."""
     (folder / "resources").mkdir(parents=True)
     (folder / "Questlog.exe").write_bytes(b"MZ ... Chrome/1 Electron/" + electron.encode() + b" ...")
@@ -52,6 +52,7 @@ def make_app(folder, version="0.1.35", electron="44.5.1", main=GOOD_MAIN, worker
         ".output/electron/main.cjs": main.encode(),
         ".output/electron/workers/aion-2/combat.cjs": worker.encode(),
         "resources/icon.png": b"\x89PNG",
+        **{name: text.encode() for name, text in (extra or {}).items()},
     })
     return folder
 
@@ -89,6 +90,19 @@ class CompatibilityTest(unittest.TestCase):
         app = make_app(self.root / "app")
         self.assertEqual(u.compatibility_problems(app), [])
         self.assertEqual(u.installed_version(app), "0.1.35")
+
+    def test_bundled_as_0_1_54_pcap_in_a_required_chunk_and_backtick_strings(self):
+        # 0.1.54: the worker requires a shared chunk that holds the libpcap calls; strings in backticks.
+        chunk = GOOD_WORKER.split(" S.find")[0] + ' require("./game-AbC.cjs") require("node:fs")'
+        worker = 'let e=require("../../game-AbC.cjs"),f=require("node:fs"); S.find(X=>X.addresses.includes(k))'
+        app = make_app(self.root / "app", main=GOOD_MAIN.replace('"second-instance"', "`second-instance`"),
+                       worker=worker, extra={".output/electron/game-AbC.cjs": chunk})
+        self.assertEqual(u.compatibility_problems(app), [])
+
+    def test_a_worker_without_pcap_anywhere_is_still_reported(self):
+        app = make_app(self.root / "app", worker='require("../../game-AbC.cjs"); S.find(X=>X.addresses.includes(k))',
+                       extra={".output/electron/game-AbC.cjs": "nothing here"})
+        self.assertIn("calls no libpcap functions", " | ".join(u.compatibility_problems(app)))
 
     def test_new_pcap_call_unknown_electron_and_lost_behaviours_are_reported(self):
         app = make_app(self.root / "app", electron="45.0.0", main="nothing relevant",

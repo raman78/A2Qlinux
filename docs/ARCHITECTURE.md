@@ -1606,11 +1606,11 @@ automatic update
 
 | Property | Used by | How to check |
 |---|---|---|
-| the eleven pcap calls in §4.1 | `bridge/wpcap_bridge.c` | `grep -ohE 'pcap_[a-z_]+\(' …/workers/aion-2/*.cjs \| sort -u` in the unpacked `app.asar` |
+| the eleven pcap calls in §4.1 | `bridge/wpcap_bridge.c` | `grep -ohE 'pcap_[a-z_]+\(' …/.output/electron/*.cjs …/workers/aion-2/*.cjs \| sort -u` in the unpacked `app.asar`: since 0.1.54 the calls sit in a shared chunk (`game-<hash>.cjs`) that `combat.cjs` loads with `require("../../game-<hash>.cjs")`; `required_modules` follows such relative requires |
 | the capture device is picked by the game connection's address, listing anew per connection | §4.3 | `grep -c 'addresses.includes(' …/workers/aion-2/combat.cjs` |
 | link types decoded: 1, 0, 108, 12, 101 (`QUESTLOG_LINKTYPES`) | §4.3 | by hand only: in `combat.cjs`, the function that reads source and destination from a frame, given the frame and `linkType`; its comparisons name the accepted types |
 | Electron 44.5.1 (`KNOWN_ELECTRON`): tray icon id 3, `WM_ENDSESSION` ending the process | `questlog_ctl.exe` | `grep -aoE 'Electron/[0-9.]+' Questlog.exe`; for another version read `notify_icon_host.cc` and `native_window_views_win.cc` |
-| `second-instance` shows the window | §6.3 | `grep -oE 'on\("second-instance",[^)]*\)' main.cjs` |
+| `second-instance` shows the window | §6.3 | ``grep -oE 'on\(["`]second-instance["`],[^)]*\)' main.cjs`` (since 0.1.54 the bundler writes strings in backticks) |
 | overlay windows non-activatable (`focusable: false`) | §6.1 | `grep -c 'focusable:!1' main.cjs` |
 | `resources/icon.png` in `app.asar`: a white Q on a dark tile | `a2qlinux_icon` (§12) | rerun `a2qlinux-setup` and look at `~/.local/share/icons/a2qlinux.png` |
 
