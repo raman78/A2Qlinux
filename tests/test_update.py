@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import struct
@@ -298,3 +299,45 @@ class InstallFreshTest(OfflineCdn, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RateLimitTest(unittest.TestCase):
+    """_download's pacing, on a file:// URL with a fake clock: the sleeps add up to size / limit."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.data = os.urandom(1 << 20)
+        self.source = Path(self.tmp.name) / "installer.exe"
+        self.source.write_bytes(self.data)
+        self.sha = base64.b64encode(hashlib.sha512(self.data).digest()).decode()
+        self.now, self.slept = 0.0, []
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def sleep(self, seconds):
+        self.slept.append(seconds)
+        self.now += seconds
+
+    def download(self, rate_limit):
+        target = Path(self.tmp.name) / "out.exe"
+        u._download(self.source.as_uri(), target, len(self.data), self.sha, rate_limit=rate_limit,
+                    sleep=self.sleep, clock=lambda: self.now)
+        self.assertEqual(target.read_bytes(), self.data)
+
+    def test_limited_download_takes_size_over_limit(self):
+        self.download(lambda: 256 << 10)                     # 1 MiB at 256 KiB/s: 4 s
+        self.assertAlmostEqual(sum(self.slept), 4.0, places=3)
+
+    def test_no_limit_no_sleep(self):
+        self.download(lambda: None)
+        self.assertEqual(self.slept, [])
+
+    def test_the_limit_follows_the_game(self):
+        calls = []
+
+        def limit():                                         # the game exits after the first 256 KiB
+            calls.append(1)
+            return 256 << 10 if len(calls) <= 4 else None
+        self.download(limit)
+        self.assertAlmostEqual(sum(self.slept), 1.0, places=3)

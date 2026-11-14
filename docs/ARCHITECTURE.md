@@ -735,7 +735,7 @@ section).
                                                      ^
                                                      | a staged version
  in the background (60 s after start, then every     | that fits
- 6 h; deferred while AION2.exe runs):                |
+ 6 h; slowed while AION2.exe runs):                  |
    stage(): feed -> download -> size + SHA-512 -> 7z -> checks
             -> <state>/update/<version>/app
             -> <state>/update/staged.json  (verdict: fits / why not)
@@ -748,9 +748,16 @@ section).
    which appears only after a download. Tested in a throwaway prefix.
 2. **`stage`**, in a thread (`check_for_updates` in `a2qlinux/launcher.py`): first
    check 60 s after the start, then every `UPDATE_CHECK_EVERY` (setting
-   `update_check_hours`, 6 by default). While
-   `AION2.exe` runs it waits instead (`UPDATE_CHECK_DEFER`, 10 min), so the
-   115 MB download never competes with the game's connection. It reads the
+   `update_check_hours`, 6 by default). While `AION2.exe` runs, the
+   download is paced to `UPDATE_RATE_DURING_GAME` (1 MiB/s; 0.1.54's
+   129 MB took 123 s, measured with `_download` against the CDN), so it
+   never takes a line's whole bandwidth from the game's connection.
+   `_download` asks `update_rate_limit` before every 64 KiB chunk, so the
+   limit starts and ends with the game. Until 0.7.2 the check waited while
+   the game ran instead; a player who starts Questlog with the game (the
+   launch option) and closes it with it (`after_game = "close"`, the
+   launcher ends 15 s after the game) was then practically never checked
+   for: the check fell into those 15 s only by chance. It reads the
    feed (`parse_feed`) and compares versions numerically. For a newer
    version it downloads the installer with the User-Agent
    `A2Qlinux (Questlog updater for Linux)`; the CDN answers Python's default

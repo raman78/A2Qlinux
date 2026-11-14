@@ -38,6 +38,7 @@ import struct
 import subprocess
 import tempfile
 import threading
+import time
 import urllib.request
 
 FEED = "https://cdn.questlog.gg/desktop/latest.yml"
@@ -195,14 +196,34 @@ def _open(url, timeout):
     return urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": USER_AGENT}), timeout=timeout)
 
 
-def _download(url, target, size, sha512_b64, timeout=60):
+def _download(url, target, size, sha512_b64, timeout=60, rate_limit=None, sleep=time.sleep,
+              clock=time.monotonic):
+    """Download, then check the size and SHA-512 from latest.yml.
+
+    rate_limit: a callable giving the bytes per second allowed right now, or
+    None for no limit; asked before every chunk, so a limit starts and ends
+    with the game. Limited, it reads small chunks and sleeps between them,
+    which keeps the download's share of the connection steady.
+    """
     digest = hashlib.sha512()
     got = 0
     with _open(url, timeout) as response, open(target, "wb") as out:
-        while chunk := response.read(1 << 20):
+        paced_bytes, paced_since = 0, clock()
+        while True:
+            limit = rate_limit() if rate_limit else None
+            chunk = response.read(64 << 10 if limit else 1 << 20)
+            if not chunk:
+                break
             out.write(chunk)
             digest.update(chunk)
             got += len(chunk)
+            if not limit:
+                paced_bytes, paced_since = 0, clock()
+                continue
+            paced_bytes += len(chunk)
+            ahead = paced_bytes / limit - (clock() - paced_since)
+            if ahead > 0:
+                sleep(ahead)
     if got != size:
         raise ValueError(f"downloaded {got} bytes, latest.yml says {size}")
     if base64.b64encode(digest.digest()).decode() != sha512_b64:
@@ -241,14 +262,15 @@ def write_state(state_dir, state):
     path.write_text(json.dumps(state, indent=1))
 
 
-def stage(questlog_dir, state_dir, log, notify, feed_url=FEED, downloads=DOWNLOADS):
+def stage(questlog_dir, state_dir, log, notify, feed_url=FEED, downloads=DOWNLOADS, rate_limit=None):
     """Check for a newer Questlog and stage it for the next start. Returns the staged state.
 
     Network or format errors are logged and end this attempt; the next check
-    tries again. A version already staged or already judged is not fetched again.
+    tries again. A version already staged or already judged is not fetched again
+    (refused_by_older_checks names the exception). rate_limit: see _download.
     """
     with BUSY:
-        return _stage(questlog_dir, state_dir, log, notify, feed_url, downloads)
+        return _stage(questlog_dir, state_dir, log, notify, feed_url, downloads, rate_limit)
 
 
 def read_feed(feed_url=FEED):
@@ -257,7 +279,7 @@ def read_feed(feed_url=FEED):
         return parse_feed(response.read().decode("utf-8", "replace"))
 
 
-def _fetch(feed, work, downloads):
+def _fetch(feed, work, downloads, rate_limit=None):
     """Download the feed's installer into `work`, verify and unpack it; (app folder, compatibility problems).
 
     The installer is deleted once unpacked, and Questlog's own updater
@@ -265,7 +287,7 @@ def _fetch(feed, work, downloads):
     Raises OSError, ValueError or RuntimeError when a step fails.
     """
     installer = work / feed["path"]
-    _download(downloads + feed["path"], installer, feed["size"], feed["sha512"])
+    _download(downloads + feed["path"], installer, feed["size"], feed["sha512"], rate_limit=rate_limit)
     app = _unpack(installer, work)
     installer.unlink()
     problems = compatibility_problems(app)
@@ -298,7 +320,7 @@ def refused_by_older_checks(state):
     return state.get("checked_by") != checks_version()
 
 
-def _stage(questlog_dir, state_dir, log, notify, feed_url, downloads):
+def _stage(questlog_dir, state_dir, log, notify, feed_url, downloads, rate_limit=None):
     current = installed_version(questlog_dir)
     try:
         feed = read_feed(feed_url)
@@ -314,7 +336,7 @@ def _stage(questlog_dir, state_dir, log, notify, feed_url, downloads):
     log(f"Questlog {feed['version']} is out (installed: {current or 'unknown'}); downloading it.")
     try:
         work.mkdir(parents=True, exist_ok=True)
-        app, problems = _fetch(feed, work, downloads)
+        app, problems = _fetch(feed, work, downloads, rate_limit)
     except (OSError, ValueError, RuntimeError) as error:
         shutil.rmtree(work, ignore_errors=True)
         log(f"Questlog {feed['version']} could not be staged: {error}. Trying again later.")

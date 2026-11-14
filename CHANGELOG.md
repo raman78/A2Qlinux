@@ -11,6 +11,11 @@ What changed for players, release by release. Technical details are in
   simply shows its window"), but nothing it relies on changed: Questlog
   only packs its code differently. Players on 0.1.53 get 0.1.54 at the next
   update check after updating A2Qlinux.
+- New Questlog versions now also reach players who start Questlog with the
+  game and close it with the game (`after_game = "close"`). The download
+  used to wait until the game was closed, and by then A2Qlinux had closed
+  too, so the update was almost never fetched. It now runs during play,
+  slowed to about 1 MB per second, and installs at the next start as before.
 - A Questlog version that an older A2Qlinux refused is checked again after
   A2Qlinux is updated, instead of staying refused until the next Questlog
   version.

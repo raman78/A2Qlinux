@@ -12,9 +12,9 @@ download in the background, install at the next start.
 What you will notice:
 
 1. A minute after Questlog starts, and every six hours after that, A2Qlinux
-   checks for a new Questlog. It never downloads while the game is running,
-   so your connection to the game server is left alone; it waits until the
-   game is closed.
+   checks for a new Questlog. While the game is running it downloads
+   slowly, about 1 MB per second, so the download never takes your whole
+   connection from the game; a new version takes about two minutes then.
 2. When a new version is out, A2Qlinux downloads it, checks that the
    download is complete and genuine, and checks that the new version still
    works with A2Qlinux. Then you get a desktop notification:

@@ -798,7 +798,9 @@ def show_questlog_window(start_again):
 # ------------------------------------------------------------------- launch
 
 UPDATE_CHECK_EVERY = 6 * 3600   # s between checks for a new Questlog; set from config (update_check_hours)
-UPDATE_CHECK_DEFER = 600        # s to wait while the game runs: no 115 MB download during play
+# Bytes/s a Questlog download may use while AION 2 runs (0.1.54, 129 MB: 123 s measured), so that
+# it never takes a line's whole bandwidth from the game's connection.
+UPDATE_RATE_DURING_GAME = 1 << 20
 UPDATE_TRIAL = 60               # s: a just-updated Questlog that exits sooner is rolled back
 
 
@@ -807,14 +809,21 @@ def notify(text):
     subprocess.run(["notify-send", f"--app-name={APP_NAME}", f"--icon={ICON}", APP_NAME, text], check=False)
 
 
+def update_rate_limit():
+    """The download limit right now: UPDATE_RATE_DURING_GAME while AION 2 runs, else none."""
+    return UPDATE_RATE_DURING_GAME if game_processes(APPID, ["aion2.exe"])["aion2.exe"] else None
+
+
 def check_for_updates(questlog_dir, state_dir):
-    """Thread body: stage new Questlog versions, never while the game runs."""
+    """Thread body: stage new Questlog versions, 60 s after the start and then every UPDATE_CHECK_EVERY.
+
+    Also while the game runs, with the download slowed (update_rate_limit):
+    deferring it to a moment without the game meant that a player who starts
+    Questlog with the game and closes it with the game was never checked for.
+    """
     time.sleep(60)
     while True:
-        if game_processes(APPID, ["aion2.exe"])["aion2.exe"]:
-            time.sleep(UPDATE_CHECK_DEFER)
-            continue
-        questlog_update.stage(questlog_dir, state_dir, log, notify)
+        questlog_update.stage(questlog_dir, state_dir, log, notify, rate_limit=update_rate_limit)
         time.sleep(UPDATE_CHECK_EVERY)
 
 

@@ -24,7 +24,7 @@ game:
 - quitting Questlog without losing its last data and without touching the
   game or other programs in the prefix;
 - updating Questlog: its own updater cannot install under Proton, so A2Qlinux
-  downloads new versions in the background (not while the game runs), checks
+  downloads new versions in the background (slowly while the game runs), checks
   them against what it relies on, installs them at the next start and rolls
   back if they do not start.
 
