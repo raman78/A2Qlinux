@@ -3,13 +3,14 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
-## [Unreleased]
+## [0.7.3] — 2026-11-14
 
 ### Fixed
 - Questlog's overlays (meter, timers, tracker, map) no longer stay drawn
-  over another program, such as a browser, when you switch to it from the
+  over another program, such as a browser, after switching to it from the
   game: they hide while it is in front and come back with the game. With
-  two monitors they also hide while you use a program on the other one.
+  two monitors they also hide while a program on the other monitor is in
+  use.
 - Questlog 0.1.54 is installed again. A2Qlinux had refused it ("its capture
   worker calls no libpcap functions any more; a second start no longer
   simply shows its window"), but nothing it relies on changed: Questlog
