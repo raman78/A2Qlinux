@@ -273,6 +273,31 @@ def _fetch(feed, work, downloads):
     return app, problems
 
 
+ROLLED_BACK = "it did not start under Proton after installing"
+
+
+def checks_version():
+    """The A2Qlinux whose compatibility checks judge a version, as recorded with a refusal."""
+    from . import shown_version
+    return shown_version()
+
+
+def refused_by_older_checks(state):
+    """Whether a staged state is a refusal by another A2Qlinux's checks, so it is checked again.
+
+    A refusal names what in Questlog A2Qlinux could not rely on; a newer
+    A2Qlinux may rely on it differently (0.1.54 was refused by 0.7.2's checks
+    for a change in how Questlog packs its code). A version that was installed
+    and then rolled back because it did not start stays refused: that came
+    from running it, not from the checks. States written before checked_by
+    existed count as refusals by older checks, except a rollback's, which is
+    told by its problem text.
+    """
+    if state.get("fits", True) or state.get("rolled_back") or state.get("problems") == [ROLLED_BACK]:
+        return False
+    return state.get("checked_by") != checks_version()
+
+
 def _stage(questlog_dir, state_dir, log, notify, feed_url, downloads):
     current = installed_version(questlog_dir)
     try:
@@ -283,7 +308,7 @@ def _stage(questlog_dir, state_dir, log, notify, feed_url, downloads):
     if current and version_key(feed["version"]) <= version_key(current):
         return None
     state = read_state(state_dir)
-    if state.get("version") == feed["version"]:
+    if state.get("version") == feed["version"] and not refused_by_older_checks(state):
         return state                                   # already staged or already refused
     work = Path(state_dir) / "update" / feed["version"]
     log(f"Questlog {feed['version']} is out (installed: {current or 'unknown'}); downloading it.")
@@ -294,7 +319,8 @@ def _stage(questlog_dir, state_dir, log, notify, feed_url, downloads):
         shutil.rmtree(work, ignore_errors=True)
         log(f"Questlog {feed['version']} could not be staged: {error}. Trying again later.")
         return None
-    state = {"version": feed["version"], "app": str(app), "fits": not problems, "problems": problems}
+    state = {"version": feed["version"], "app": str(app), "fits": not problems, "problems": problems,
+             "checked_by": checks_version()}
     # Older staged versions are superseded by this one.
     for other in (Path(state_dir) / "update").iterdir():
         if other.is_dir() and other != work:
@@ -433,7 +459,7 @@ def rollback(questlog_dir, state_dir, log):
     backup.rename(questlog_dir)
     (failed / state_dir.name).rename(questlog_dir / state_dir.name)
     (state_dir / "questlog-backup.json").unlink(missing_ok=True)
-    write_state(state_dir, {"version": record.get("installed"), "fits": False,
-                            "problems": ["it did not start under Proton after installing"]})
+    write_state(state_dir, {"version": record.get("installed"), "fits": False, "rolled_back": True,
+                            "problems": [ROLLED_BACK]})
     log(f"Went back to Questlog {record.get('version')}; the version that failed is in {failed}.")
     return True

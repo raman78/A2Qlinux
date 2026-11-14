@@ -11,6 +11,9 @@ What changed for players, release by release. Technical details are in
   simply shows its window"), but nothing it relies on changed: Questlog
   only packs its code differently. Players on 0.1.53 get 0.1.54 at the next
   update check after updating A2Qlinux.
+- A Questlog version that an older A2Qlinux refused is checked again after
+  A2Qlinux is updated, instead of staying refused until the next Questlog
+  version.
 - The GitHub issue that `a2qlinux --diagnose --report` opens shows the end
   of A2Qlinux's own log again under "launcher.log"; since 0.7.2 it showed
   part of the new process snapshot there instead. The report file itself

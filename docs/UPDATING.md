@@ -22,7 +22,9 @@ What you will notice:
      Nothing else to do.
    - "Questlog X does not fit this A2Qlinux yet …" with the reason. Your
      current version stays. This happens when Questlog changed something
-     A2Qlinux relies on; A2Qlinux itself needs an update first.
+     A2Qlinux relies on; A2Qlinux itself needs an update first. Once you
+     have updated A2Qlinux, it checks that Questlog version again at its
+     next update check.
 3. The next time you start "A2Qlinux", the new version is put in
    place before Questlog opens. That takes a few seconds. The status window
    says `Installed Questlog X; Questlog Y is kept in …` and then

@@ -762,7 +762,15 @@ section).
    - Does not fit: the unpacked files are deleted, and the user is told which
      check failed and that the installed version stays.
    - Either way the verdict is kept in `staged.json`, so the same version is
-     not downloaded again.
+     not downloaded again, with one exception: a refusal records the
+     A2Qlinux that made it (`checked_by`, `checks_version`), and another
+     A2Qlinux checks that version again (`refused_by_older_checks`). The
+     checks are what changes between A2Qlinux versions: 0.7.2 refused
+     Questlog 0.1.54 for a change in how Questlog packs its code (§10), and
+     without the exception the fixed checks would never have seen it again.
+     A version installed and then rolled back because it did not start
+     (`rollback`, marked `rolled_back`) stays refused for every A2Qlinux:
+     that verdict came from running it, not from the checks.
 3. **`install_staged`**, called by `start_questlog` before every Questlog
    launch: if a version that fits is staged, the Questlog folder is renamed
    to `<folder>-<old version>`, the staged files take its place, and

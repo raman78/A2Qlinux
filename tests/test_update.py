@@ -212,6 +212,26 @@ class StageInstallRollbackTest(OfflineCdn, unittest.TestCase):
         self.assertIsNone(u.install_staged(self.questlog, self.state, self.logged.append))
         self.assertEqual(u.installed_version(self.questlog), "0.1.34")
 
+    def test_a_refusal_is_checked_again_by_another_a2qlinux_only(self):
+        from unittest import mock
+        self.publish_unfitting()
+        with mock.patch.object(u, "checks_version", return_value="0.7.2"):
+            self.assertFalse(self.stage()["fits"])
+            downloads = len([l for l in self.logged if "downloading" in l])
+            self.stage()                                     # the same A2Qlinux: not fetched again
+            self.assertEqual(len([l for l in self.logged if "downloading" in l]), downloads)
+        with mock.patch.object(u, "checks_version", return_value="0.7.3"):
+            self.stage()                                     # a newer A2Qlinux checks it again
+            self.assertEqual(len([l for l in self.logged if "downloading" in l]), downloads + 1)
+            self.assertEqual(u.read_state(self.state)["checked_by"], "0.7.3")
+
+    def test_a_rollback_stays_refused_for_any_a2qlinux(self):
+        for state in ({"version": "0.1.35", "fits": False, "rolled_back": True, "problems": [u.ROLLED_BACK]},
+                      {"version": "0.1.35", "fits": False, "problems": [u.ROLLED_BACK]}):   # written by 0.7.2
+            self.assertFalse(u.refused_by_older_checks(state))
+        self.assertTrue(u.refused_by_older_checks({"version": "0.1.54", "fits": False, "problems": ["x"]}))
+        self.assertFalse(u.refused_by_older_checks({"version": "0.1.54", "fits": True, "problems": []}))
+
     def test_builtin_updater_is_switched_off(self):
         u.disable_builtin_updater(self.questlog, self.logged.append)
         self.assertFalse((self.questlog / "resources" / "app-update.yml").exists())
