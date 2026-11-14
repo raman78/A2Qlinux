@@ -109,6 +109,18 @@ class IssueUrlTest(unittest.TestCase):
         self.assertNotIn("line 0 ", body)
         self.assertIn("/tmp/r.txt", body)
 
+    def test_the_log_part_is_launcher_log_of_a_real_report(self):
+        with tempfile.TemporaryDirectory() as folder:
+            logs = Path(folder) / "proton-stream"
+            logs.mkdir()
+            (logs / "launcher.log").write_text("2026-11-14 00:15:37.000 Starting Questlog 0.1.53.\n")
+            report = d.build_report([(d.OK, "A2Qlinux 1.0")], Path(folder), lambda t: t,
+                                    snapshot=lambda: ["PID 1 main: 53 threads, 20 ms CPU in 1 s"])
+        url = d.issue_url([(d.OK, "A2Qlinux 1.0")], report, Path("/tmp/r.txt"), lambda t: t)
+        body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
+        self.assertIn("Starting Questlog 0.1.53.", body)
+        self.assertNotIn("PID 1 main", body)
+
     def test_a_diagnosis_too_long_for_the_url_is_cut_not_looped_over(self):
         results = [(d.PROBLEM, f"problem {n} " + "y" * 200) for n in range(60)]
         url = d.issue_url(results, "## launcher.log\n\nlast line\n", Path("/tmp/r.txt"), lambda t: t)

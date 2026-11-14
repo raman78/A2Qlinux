@@ -737,7 +737,8 @@ def issue_url(results, report, report_path, anonymise, limit=ISSUE_URL_LIMIT):
     """A new-issue URL with the diagnosis and as much of the log's end as fits within `limit`."""
     title = f"Problem report (A2Qlinux {shown_version()})"
     diagnosis = anonymise(format_results(results)).splitlines()
-    log_lines = report.split("## launcher.log", 1)[-1].split("## steam_launch.log", 1)[0].strip().splitlines()[1:]
+    # launcher.log's section only: up to the next heading, whichever section follows it.
+    log_lines = report.split("## launcher.log", 1)[-1].split("\n## ", 1)[0].strip().splitlines()[1:]
     log_lines = [line for line in log_lines if line.strip()]
 
     def head(lines):

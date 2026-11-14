@@ -3,6 +3,14 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
+## [Unreleased]
+
+### Fixed
+- The GitHub issue that `a2qlinux --diagnose --report` opens shows the end
+  of A2Qlinux's own log again under "launcher.log"; since 0.7.2 it showed
+  part of the new process snapshot there instead. The report file itself
+  was complete.
+
 ## [0.7.2] — 2026-11-13
 
 ### Changed

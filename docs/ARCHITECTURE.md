@@ -1541,7 +1541,7 @@ addresses with `<private-N>` (RFC 1918, 100.64.0.0/10, link-local),
 default no, whether to open a new GitHub issue. On yes, `xdg-open` opens
 `github.com/raman78/A2Qlinux/issues/new` with a title and a body: a place
 to say what happened, the request to attach the report file, the diagnosis,
-and as many of the log's last lines as fit. The user logs in with their own
+and as many of `launcher.log`'s last lines as fit (its section of the report only, up to the next heading). The user logs in with their own
 account, can change everything, and submits. A2Qlinux holds no token and
 sends nothing itself; the issue is public, which is why the anonymising
 happens before the file is written. Without a terminal to ask in, it only
