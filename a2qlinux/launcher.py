@@ -814,6 +814,17 @@ def update_rate_limit():
     return UPDATE_RATE_DURING_GAME if game_processes(APPID, ["aion2.exe"])["aion2.exe"] else None
 
 
+def notify_unless_playing(text):
+    """notify(), except while AION 2 runs: then the line in the status window and the log is enough.
+
+    For news that asks nothing of the player ("Questlog X is ready", which
+    installs by itself at the next start), so that no popup comes up over
+    the game.
+    """
+    if not game_processes(APPID, ["aion2.exe"])["aion2.exe"]:
+        notify(text)
+
+
 def check_for_updates(questlog_dir, state_dir):
     """Thread body: stage new Questlog versions, 60 s after the start and then every UPDATE_CHECK_EVERY.
 
@@ -823,7 +834,8 @@ def check_for_updates(questlog_dir, state_dir):
     """
     time.sleep(60)
     while True:
-        questlog_update.stage(questlog_dir, state_dir, log, notify, rate_limit=update_rate_limit)
+        questlog_update.stage(questlog_dir, state_dir, log, notify, rate_limit=update_rate_limit,
+                              notify_ready=notify_unless_playing)
         time.sleep(UPDATE_CHECK_EVERY)
 
 

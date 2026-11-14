@@ -197,6 +197,15 @@ class StageInstallRollbackTest(OfflineCdn, unittest.TestCase):
         self.assertFalse(u.read_state(self.state)["fits"])
         self.assertIsNone(u.install_staged(self.questlog, self.state, self.logged.append))
 
+    def test_ready_goes_to_notify_ready_and_a_refusal_to_notify(self):
+        ready = []
+        state = u.stage(self.questlog, self.state, self.logged.append, self.notified.append,
+                        feed_url=(self.cdn / "latest.yml").as_uri(), downloads=self.cdn.as_uri() + "/",
+                        notify_ready=ready.append)
+        self.assertTrue(state["fits"])
+        self.assertEqual((len(ready), self.notified), (1, []))
+        self.assertIn("is downloaded and checked", " ".join(self.logged))   # the status window still says it
+
     def test_a_corrupt_download_is_not_staged(self):
         feed = self.cdn / "latest.yml"
         feed.write_text(feed.read_text().replace("sha512: ", "sha512: AAAA", 1).replace("\nsha512: ", "\nsha512: AAAA"))

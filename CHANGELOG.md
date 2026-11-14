@@ -16,6 +16,8 @@ What changed for players, release by release. Technical details are in
   used to wait until the game was closed, and by then A2Qlinux had closed
   too, so the update was almost never fetched. It now runs during play,
   slowed to about 1 MB per second, and installs at the next start as before.
+  During play, "Questlog X is ready" shows only in the status window, not
+  as a desktop notification.
 - A Questlog version that an older A2Qlinux refused is checked again after
   A2Qlinux is updated, instead of staying refused until the next Questlog
   version.

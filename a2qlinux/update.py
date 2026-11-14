@@ -262,15 +262,19 @@ def write_state(state_dir, state):
     path.write_text(json.dumps(state, indent=1))
 
 
-def stage(questlog_dir, state_dir, log, notify, feed_url=FEED, downloads=DOWNLOADS, rate_limit=None):
+def stage(questlog_dir, state_dir, log, notify, feed_url=FEED, downloads=DOWNLOADS, rate_limit=None,
+          notify_ready=None):
     """Check for a newer Questlog and stage it for the next start. Returns the staged state.
 
     Network or format errors are logged and end this attempt; the next check
     tries again. A version already staged or already judged is not fetched again
     (refused_by_older_checks names the exception). rate_limit: see _download.
+    notify_ready: what tells the user a version is ready (default notify); a
+    refusal always goes to notify, since the user should know about it.
     """
     with BUSY:
-        return _stage(questlog_dir, state_dir, log, notify, feed_url, downloads, rate_limit)
+        return _stage(questlog_dir, state_dir, log, notify, feed_url, downloads, rate_limit,
+                      notify_ready or notify)
 
 
 def read_feed(feed_url=FEED):
@@ -320,7 +324,7 @@ def refused_by_older_checks(state):
     return state.get("checked_by") != checks_version()
 
 
-def _stage(questlog_dir, state_dir, log, notify, feed_url, downloads, rate_limit=None):
+def _stage(questlog_dir, state_dir, log, notify, feed_url, downloads, rate_limit=None, notify_ready=None):
     current = installed_version(questlog_dir)
     try:
         feed = read_feed(feed_url)
@@ -357,7 +361,8 @@ def _stage(questlog_dir, state_dir, log, notify, feed_url, downloads, rate_limit
     else:
         log(f"Questlog {feed['version']} is downloaded and checked; it is installed the next time "
             "Questlog starts.")
-        notify(f"Questlog {feed['version']} is ready. It is installed the next time Questlog starts.")
+        (notify_ready or notify)(f"Questlog {feed['version']} is ready. It is installed the next time "
+                                 "Questlog starts.")
     return state
 
 

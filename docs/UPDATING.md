@@ -19,7 +19,8 @@ What you will notice:
    download is complete and genuine, and checks that the new version still
    works with A2Qlinux. Then you get a desktop notification:
    - "Questlog X is ready. It is installed the next time Questlog starts."
-     Nothing else to do.
+     Nothing else to do. While you play, this one appears only in the
+     status window, so no popup comes up over the game.
    - "Questlog X does not fit this A2Qlinux yet …" with the reason. Your
      current version stays. This happens when Questlog changed something
      A2Qlinux relies on; A2Qlinux itself needs an update first. Once you

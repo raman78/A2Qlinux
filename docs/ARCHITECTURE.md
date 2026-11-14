@@ -765,7 +765,10 @@ section).
    the NSIS installer and its `$PLUGINSDIR/app-64.7z` with `7z`, and runs
    `compatibility_problems`, which automates the checks of §10.
    - Fits: the version is left staged, and the user is told it installs at
-     the next start (log and desktop notification).
+     the next start: in the log, and as a desktop notification unless
+     `AION2.exe` runs (`notify_unless_playing`, passed as `stage`'s
+     `notify_ready`). The news asks nothing of the player, and a popup over
+     the game would be the only thing it did during play.
    - Does not fit: the unpacked files are deleted, and the user is told which
      check failed and that the installed version stays.
    - Either way the verdict is kept in `staged.json`, so the same version is
