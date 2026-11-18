@@ -3,27 +3,26 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
-## [Unreleased]
+## [0.8.0] — 2026-11-18
+
+### Added
+- A newer Questlog that A2Qlinux cannot install yet no longer goes
+  unnoticed once its notification has gone: the tray icon's menu shows a
+  line such as "Questlog 0.1.56 not installed: does not fit yet" for as
+  long as that holds (hovering over it shows the reason), and
+  `a2qlinux-setup` names the installed Questlog and what is known about a
+  newer one. A version ready for the next start shows there too.
+- When Questlog has just released a version A2Qlinux cannot work with yet,
+  `a2qlinux-setup` on a new machine no longer stops with an error: it
+  installs the newest earlier Questlog that works and says so; the newer
+  version follows by itself once A2Qlinux works with it.
 
 ### Fixed
 - Questlog 0.1.56 is installed again. A2Qlinux had refused it, as it had
-  0.1.55 ("a second start no longer simply shows its window"), but Open Questlog
-  works as before: Questlog now also opens questlog:// links when started a
-  second time, and still shows its window first. Players on 0.1.54 get the
-  newest version at the next update check after updating A2Qlinux; a new
+  0.1.55 ("a second start no longer simply shows its window"), although
+  Open Questlog works with it as before. Players on 0.1.54 get the newest
+  version at the next update check after updating A2Qlinux, and a new
   installation with `a2qlinux-setup` works again.
-
-### Added
-- A newer Questlog that A2Qlinux could not install no longer goes unnoticed
-  once its notification has gone: the tray icon's menu shows a line such as
-  "Questlog 0.1.56 not installed: does not fit yet" for as long as that
-  holds (hover over it for the reason), and `a2qlinux-setup` names the
-  installed Questlog and what is known about a newer one. A version ready
-  for the next start shows there too.
-- When Questlog has just released a version A2Qlinux cannot work with yet,
-  `a2qlinux-setup` on a new machine no longer stops with an error: it
-  installs the newest earlier Questlog that works, says so, and A2Qlinux
-  moves you to the newer one by itself once it works.
 
 ## [0.7.3] — 2026-11-14
 
