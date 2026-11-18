@@ -579,7 +579,10 @@ without a StatusNotifierItem host). Its menu is drawn by the desktop, outside
 Wine's foreground rules. The tray process only prints `open` or `quit` on stdout; class `Tray`
 in `a2qlinux/launcher.py` reads that into `Requests`. The menu's first line,
 greyed out, and the tooltip carry A2Qlinux's version (§12, "Shown
-version"). The tray runs in its own
+version"). The other direction is one kind of line on its stdin: `news
+<short>\t<full>` puts a second greyed-out line in the menu (the short text,
+the full one as its tooltip, and the full one added to the icon's tooltip),
+and a bare `news` removes it; §6.6, "Telling the player". The tray runs in its own
 session, so a Ctrl+C for the launcher does not reach it. It ends when its
 stdin closes.
 
@@ -802,6 +805,37 @@ A busy lock (`BUSY`) keeps an install from meeting a half-written stage; an
 install that finds a stage in progress waits for a later start.
 `auto_update = false` (§13) or `--no-auto-update` turns off steps 2–4. Step 1 stays, since the built-in
 updater cannot install under Wine anyway.
+
+**Telling the player.** A verdict is news once, as a notification and a log
+line, and a notification that went by during play is gone. Until 0.7.3 a
+refused version then left no trace the player would meet: the installed
+Questlog simply stayed old, and `a2qlinux-setup` said nothing about updates
+on a machine that had Questlog. Questlog 0.1.55 and 0.1.56 were refused that
+way on the author's machine for two days without being noticed. So the
+verdict now stays visible for as long as it holds. `update_news` turns
+`staged.json` and the installed version into a short and a full text, or
+nothing: a newer version that does not fit (refused by the checks, or rolled
+back), with the reason and the way out (a newer A2Qlinux, or, when another
+A2Qlinux made the refusal, the re-check at the next update check); or a
+newer version staged for the next start. Nothing is said when nothing is
+staged or the staged version is the installed one, and an install removes
+the stage, so the news ends with it. Two places show it:
+
+- `a2qlinux-setup` names the installed version and prints the full text
+  under it.
+- The tray icon's menu shows the short text as a greyed-out line under the
+  version, with the full text as its tooltip and in the icon's tooltip. The
+  launcher's `Tray` sends it when the icon starts (after any install or
+  rollback, which come before) and after every update check
+  (`check_for_updates`' `checked`, i.e. `Tray.refresh`). A failure to work
+  out the news is logged and leaves the icon as it is; it never stops the
+  launcher.
+
+Checked 18 November 2026: the tray process on KDE Plasma, its menu and
+tooltip read back over D-Bus (`com.canonical.dbusmenu` `GetLayout`,
+`org.kde.StatusNotifierItem` `ToolTip`) before, with and after a `news`
+line; and `a2qlinux-setup` on the author's machine, which printed the
+refusal of 0.1.56 made by 0.7.3.
 
 **Why "at the next start".** That is when Questlog does not run, so the swap
 needs no shutdown; it is also what Questlog does on Windows. A swap while

@@ -8,6 +8,7 @@ import struct
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 from a2qlinux import questlog_versions, update as u
 
@@ -409,3 +410,46 @@ class RateLimitTest(unittest.TestCase):
             return 256 << 10 if len(calls) <= 4 else None
         self.download(limit)
         self.assertAlmostEqual(sum(self.slept), 1.0, places=3)
+
+
+class UpdateNewsTest(unittest.TestCase):
+    """What a2qlinux-setup and the tray icon say about a newer Questlog, from staged.json."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.questlog = make_app(Path(self.tmp.name) / "Questlog", version="0.1.54")
+        self.state = self.questlog / "proton-stream"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def news(self, state):
+        if state is not None:
+            u.write_state(self.state, state)
+        return u.update_news(self.questlog, self.state)
+
+    def test_nothing_staged_or_the_installed_version_is_no_news(self):
+        self.assertIsNone(self.news(None))
+        self.assertIsNone(self.news({"version": "0.1.54", "fits": True}))
+
+    def test_a_staged_version_installs_at_the_next_start(self):
+        short, full = self.news({"version": "0.1.56", "fits": True, "problems": []})
+        self.assertEqual(short, "Questlog 0.1.56 installs at the next start")
+        self.assertIn("installed the next time Questlog starts", full)
+
+    def test_a_refusal_names_the_reason_the_kept_version_and_the_way_out(self):
+        with mock.patch.object(u, "checks_version", return_value="0.7.4"):
+            short, full = self.news({"version": "0.1.56", "fits": False, "problems": ["a", "b"],
+                                     "checked_by": "0.7.4"})
+        self.assertEqual(short, "Questlog 0.1.56 not installed: does not fit yet")
+        self.assertIn("so Questlog 0.1.54 stays. Why: a; b. Check for a newer A2Qlinux: pipx upgrade", full)
+
+    def test_a_refusal_by_other_checks_says_it_is_checked_again(self):
+        with mock.patch.object(u, "checks_version", return_value="0.7.4"):
+            _short, full = self.news({"version": "0.1.56", "fits": False, "problems": ["a"], "checked_by": "0.7.3"})
+        self.assertIn("checked again at the next update check", full)
+
+    def test_a_rollback_is_news_too(self):
+        _short, full = self.news({"version": "0.1.56", "fits": False, "rolled_back": True,
+                                  "problems": [u.ROLLED_BACK]})
+        self.assertIn(u.ROLLED_BACK, full)

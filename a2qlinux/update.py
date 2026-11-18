@@ -371,6 +371,32 @@ def _stage(questlog_dir, state_dir, log, notify, feed_url, downloads, rate_limit
     return state
 
 
+def update_news(questlog_dir, state_dir):
+    """What the player should know about a newer Questlog, as (short, full); None when there is nothing.
+
+    From the updater's verdict (staged.json) against the installed version:
+    a newer version that does not fit (refused, or rolled back after it did
+    not start), or one that is staged and installs at the next start. Shown
+    by a2qlinux-setup and, for as long as it holds, in the tray icon's menu
+    (docs/ARCHITECTURE.md §6.6, "Telling the player"), so a refusal is more
+    than one notification that may have gone by unseen.
+    """
+    state, installed = read_state(state_dir), installed_version(questlog_dir)
+    version = state.get("version")
+    if not version or version == installed:
+        return None
+    if state.get("fits"):
+        return (f"Questlog {version} installs at the next start",
+                f"Questlog {version} is downloaded and checked; it is installed the next time Questlog starts.")
+    why = "; ".join(state.get("problems") or ["no reason recorded"])
+    again = (" It is checked again at the next update check, as another A2Qlinux judged it."
+             if refused_by_older_checks(state) else
+             " Check for a newer A2Qlinux: pipx upgrade a2qlinux.")
+    return (f"Questlog {version} not installed: does not fit yet",
+            f"Questlog {version} is out but does not fit this A2Qlinux yet, so Questlog {installed or '(unknown)'} "
+            f"stays. Why: {why}.{again}")
+
+
 # ------------------------------------------------------------- installation
 
 # How many older versions install_fresh downloads at most when the newest does not fit (130 MB each).

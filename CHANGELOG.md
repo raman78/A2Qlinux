@@ -14,6 +14,12 @@ What changed for players, release by release. Technical details are in
   installation with `a2qlinux-setup` works again.
 
 ### Added
+- A newer Questlog that A2Qlinux could not install no longer goes unnoticed
+  once its notification has gone: the tray icon's menu shows a line such as
+  "Questlog 0.1.56 not installed: does not fit yet" for as long as that
+  holds (hover over it for the reason), and `a2qlinux-setup` names the
+  installed Questlog and what is known about a newer one. A version ready
+  for the next start shows there too.
 - When Questlog has just released a version A2Qlinux cannot work with yet,
   `a2qlinux-setup` on a new machine no longer stops with an error: it
   installs the newest earlier Questlog that works, says so, and A2Qlinux

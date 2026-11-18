@@ -949,3 +949,38 @@ class QuestlogLogTest(unittest.TestCase):
             self.assertEqual(path.with_name("questlog.log.1").read_text(), "run 1\n")
             q.start_questlog_log(path)                       # an empty run does not replace the kept one
             self.assertEqual(path.with_name("questlog.log.1").read_text(), "run 1\n")
+
+
+class TrayNewsTest(unittest.TestCase):
+    """Tray.refresh: the update news reaches the icon as one `news` line on its stdin."""
+
+    class FakeProcess:
+        def __init__(self):
+            import io
+            self.stdin, self.running = io.BytesIO(), True
+
+        def poll(self):
+            return None if self.running else 0
+
+    def tray(self, news):
+        tray = q.Tray(requests=None, news=lambda: news)
+        tray.process = self.FakeProcess()
+        return tray
+
+    def test_news_is_sent_as_short_tab_full_without_line_breaks(self):
+        tray = self.tray(("Questlog 0.1.56 not installed", "Why:\ta\nb"))
+        tray.refresh()
+        self.assertEqual(tray.process.stdin.getvalue(), b"news Questlog 0.1.56 not installed\tWhy: a b\n")
+
+    def test_no_news_clears_the_line(self):
+        tray = self.tray(None)
+        tray.refresh()
+        self.assertEqual(tray.process.stdin.getvalue(), b"news\n")
+
+    def test_nothing_is_written_when_the_icon_does_not_run(self):
+        tray = self.tray(("x", "y"))
+        tray.process.running = False
+        tray.refresh()
+        self.assertEqual(tray.process.stdin.getvalue(), b"")
+        tray.process = None
+        tray.refresh()

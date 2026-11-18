@@ -26,6 +26,12 @@ What you will notice:
      A2Qlinux relies on; A2Qlinux itself needs an update first. Once you
      have updated A2Qlinux, it checks that Questlog version again at its
      next update check.
+
+   The notification comes once, but the news stays in sight: as a
+   greyed-out line in the tray icon's menu ("Questlog X not installed: does
+   not fit yet" or "Questlog X installs at the next start"; hover over it
+   for the reason), and in the output of `a2qlinux-setup`, which names the
+   installed Questlog and what is known about a newer one.
 3. The next time you start "A2Qlinux", the new version is put in
    place before Questlog opens. That takes a few seconds. The status window
    says `Installed Questlog X; Questlog Y is kept in …` and then

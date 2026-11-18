@@ -745,12 +745,18 @@ class Tray:
     It runs in its own session, so a Ctrl+C meant for this launcher does not
     reach it; it ends when its stdin closes. If it ends by itself, "tray-died"
     is put into requests so that Questlog's own icon can be shown again.
+
+    news: a callable giving update.update_news's (short, full) or None; sent
+    to the icon when it starts and on refresh(), so the menu carries a
+    refused or staged Questlog version for as long as that holds.
     """
 
-    def __init__(self, requests):
+    def __init__(self, requests, news=lambda: None):
         self.requests = requests
+        self.news = news
         self.process = None
         self.stopping = False
+        self.writing = threading.Lock()     # refresh() runs in the update thread
 
     def start(self):
         if self.process and self.process.poll() is None:
@@ -759,6 +765,26 @@ class Tray:
         self.process = subprocess.Popen([sys.executable, "-m", "a2qlinux.tray"], stdin=subprocess.PIPE,
                                         stdout=subprocess.PIPE, start_new_session=True)
         threading.Thread(target=self._read, args=(self.process,), daemon=True).start()
+        self.refresh()
+
+    def refresh(self):
+        """Send the current news to the icon (update.update_news); nothing when it does not run."""
+        try:
+            news = self.news()
+        except Exception as error:       # the news must never stop the launcher; say why it is missing
+            log(f"Could not work out the update news for the tray icon: {error!r}")
+            return
+        line = "news" if not news else "news " + "\t".join(part.replace("\t", " ").replace("\n", " ")
+                                                           for part in news)
+        with self.writing:
+            process = self.process
+            if not process or process.poll() is not None:
+                return
+            try:
+                process.stdin.write((line + "\n").encode())
+                process.stdin.flush()
+            except (OSError, ValueError):
+                pass                     # it is ending (stop() may have closed the pipe); _read reports that
 
     def _read(self, process):
         for line in process.stdout:
@@ -870,7 +896,7 @@ def notify_unless_playing(text):
         notify(text)
 
 
-def check_for_updates(questlog_dir, state_dir):
+def check_for_updates(questlog_dir, state_dir, checked=lambda: None):
     """Thread body: stage new Questlog versions, 60 s after the start and then every UPDATE_CHECK_EVERY.
 
     Also while the game runs, with the download slowed (update_rate_limit):
@@ -881,6 +907,7 @@ def check_for_updates(questlog_dir, state_dir):
     while True:
         questlog_update.stage(questlog_dir, state_dir, log, notify, rate_limit=update_rate_limit,
                               notify_ready=notify_unless_playing)
+        checked()
         time.sleep(UPDATE_CHECK_EVERY)
 
 
@@ -1453,7 +1480,7 @@ def main():
                     "Start the game any time - its traffic then flows to Questlog.")
             log_path = state_dir / "questlog.log"
             start_questlog_log(log_path)
-            tray = Tray(requests)
+            tray = Tray(requests, news=lambda: questlog_update.update_news(executable.parent, state_dir))
             quit_control = QuitControl()
 
             trial = {"until": 0.0}      # end of a just-installed update's trial run
@@ -1478,7 +1505,8 @@ def main():
 
             questlog = start_questlog()
             if auto_update:
-                threading.Thread(target=check_for_updates, args=(executable.parent, state_dir), daemon=True).start()
+                threading.Thread(target=check_for_updates, args=(executable.parent, state_dir, tray.refresh),
+                                 daemon=True).start()
             told = False
             game_gone_since = None
             after_exit = None

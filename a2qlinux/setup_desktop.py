@@ -16,6 +16,9 @@ What it does, in order:
   5. Installs the newest Questlog when its folder has no Questlog.exe
      (update.install_fresh: the updater's download and checks), or, when
      the newest does not fit, the newest earlier one that does.
+     Names the installed version, and what the updater knows of a newer
+     one (update.update_news): refused and why, or installing at the next
+     start.
   6. Takes Questlog's icon from the installed Questlog (resources/icon.png in
      its app.asar) and colours its white Q red (a2qlinux_icon), so that
      A2Qlinux's entry and tray icon are told apart from Questlog's own - the
@@ -52,7 +55,7 @@ import sys
 from . import APP_NAME, ICON, config, shown_version
 from . import kde_overlays, open_folders
 from .desktop import TERMINALS, terminal_command
-from .update import install_fresh, read_asar_file
+from .update import install_fresh, installed_version, read_asar_file, update_news
 
 BIN = Path(__file__).resolve().parent / "bin"
 ENTRY_ID = "questlog-aion2"      # the file name from before the entry was called A2Qlinux; kept, so that
@@ -516,6 +519,10 @@ def main():
             except RuntimeError as error:
                 problems.append(str(error))
     if (questlog_dir / "Questlog.exe").is_file():
+        print(f"Questlog: {installed_version(questlog_dir) or '(version unknown)'} in {questlog_dir}.")
+        news = update_news(questlog_dir, questlog_dir / "proton-stream")
+        if news:
+            print(f"  {news[1]}")
         try:
             write_icon(questlog_dir)
             print(f"Icon: {ICON}")

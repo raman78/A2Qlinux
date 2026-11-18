@@ -203,6 +203,8 @@ responding.
    right-click the icon
    ┌──────────────────────┐
    │  A2Qlinux x.y.z      │   (greyed out: which A2Qlinux runs)
+   │  Questlog X …        │   (greyed out, only when there is news
+   │                      │    about a newer Questlog)
    ├──────────────────────┤
    │  Open Questlog       │
    ├──────────────────────┤
@@ -214,6 +216,13 @@ The first line only shows which A2Qlinux you have; it does nothing when
 clicked. The same number appears when you hover over the icon, as the first
 line of the status window, and from `a2qlinux --version` in a terminal.
 Mention it when you report a problem.
+
+A second greyed-out line appears when there is news about a newer Questlog:
+"Questlog X installs at the next start", or "Questlog X not installed: does
+not fit yet". Hover over it, or over the icon, for the whole message: why
+the version does not fit, and what to do (usually nothing, or updating
+A2Qlinux). The line stays until that news no longer holds. See
+[UPDATING.md](UPDATING.md).
 
 | You do | What happens |
 |---|---|
