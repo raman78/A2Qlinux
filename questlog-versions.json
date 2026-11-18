@@ -1,0 +1,27 @@
+{
+ "format": 1,
+ "versions": {
+  "0.1.54": {
+   "checked_at": "2026-11-18T20:57:04Z",
+   "checked_by": "0.7.3-1-g322b77b (source checkout)",
+   "fits": true,
+   "issue": null,
+   "path": "questlog-setup-0.1.54.exe",
+   "problems": [],
+   "sha512": "r0MsWaJGOZoRDSqgu5Vx0CcdBfrPxsxkP6SsyUPcJTrJDTbGf6L73l0X34p3nHX+dsmJ9jCec+md/ZDd+9dmUg==",
+   "sha512_from": "computed",
+   "size": 129151960
+  },
+  "0.1.56": {
+   "checked_at": "2026-11-18T20:57:00Z",
+   "checked_by": "0.7.3-1-g322b77b (source checkout)",
+   "fits": true,
+   "issue": null,
+   "path": "questlog-setup-0.1.56.exe",
+   "problems": [],
+   "sha512": "BcahWXShyCu2t6SIIgLW3D6gYm4O94noO8EV3YrYSjWn9hxYH5UOmh0BI+ZutPt9QdWsSrbkK9wg9eaVljdcmA==",
+   "sha512_from": "latest.yml",
+   "size": 129748160
+  }
+ }
+}
