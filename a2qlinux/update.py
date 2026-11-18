@@ -41,6 +41,8 @@ import threading
 import time
 import urllib.request
 
+from . import questlog_versions
+
 FEED = "https://cdn.questlog.gg/desktop/latest.yml"
 DOWNLOADS = "https://cdn.questlog.gg/desktop/"
 # The libpcap calls bridge/wpcap_bridge.c implements.
@@ -371,13 +373,52 @@ def _stage(questlog_dir, state_dir, log, notify, feed_url, downloads, rate_limit
 
 # ------------------------------------------------------------- installation
 
-def install_fresh(questlog_dir, log, feed_url=FEED, downloads=DOWNLOADS):
-    """Install the newest Questlog into a missing or empty folder; returns its version.
+# How many older versions install_fresh downloads at most when the newest does not fit (130 MB each).
+FALLBACK_TRIES = 2
+
+
+def _older_that_fits(newest, work, downloads, register_url, log):
+    """For install_fresh: the newest older version that fits, as (app folder, version, None);
+    else (None, None, why not).
+
+    The register (questlog_versions, kept by the Questlog watch on GitHub)
+    names the candidates and their size and SHA-512, which Questlog's feed
+    gives for its newest version only; this A2Qlinux's own checks decide.
+    """
+    try:
+        candidates = questlog_versions.older_fitting(questlog_versions.read(register_url), newest)
+    except (OSError, ValueError) as error:
+        return None, None, f"the list of earlier versions that fit could not be read ({error})"
+    if not candidates:
+        return None, None, "no earlier version is known to fit"
+    tried = []
+    for feed in candidates[:FALLBACK_TRIES]:
+        log(f"Downloading Questlog {feed['version']} instead, the newest earlier version known to fit "
+            f"({feed['size'] / 1e6:.0f} MB) …")
+        try:
+            (work / feed["version"]).mkdir()
+            app, problems = _fetch(feed, work / feed["version"], downloads)
+        except (OSError, ValueError, RuntimeError) as error:
+            tried.append(f"{feed['version']} could not be installed: {error}")
+            log(f"Questlog {tried[-1]}.")
+            continue
+        if not problems:
+            return app, feed["version"], None
+        shutil.rmtree(app, ignore_errors=True)
+        tried.append(f"{feed['version']} does not fit either: " + "; ".join(problems))
+        log(f"Questlog {tried[-1]}.")
+    return None, None, "; ".join(tried)
+
+
+def install_fresh(questlog_dir, log, feed_url=FEED, downloads=DOWNLOADS, register_url=None):
+    """Install the newest Questlog that fits into a missing or empty folder; returns its version.
 
     For a2qlinux-setup on a machine without Questlog: the same download,
     checksum, unpacking and compatibility checks as an update (_fetch), then
     the unpacked program is moved into place. The work folder is made next
-    to the target, so the move is a rename on one file system.
+    to the target, so the move is a rename on one file system. When the
+    newest version does not fit, the newest earlier one that does is
+    installed instead (_older_that_fits), and the log says so and why.
 
     Raises RuntimeError with what went wrong and what to do; a folder that
     holds anything is never written into, and nothing is left behind.
@@ -391,7 +432,7 @@ def install_fresh(questlog_dir, log, feed_url=FEED, downloads=DOWNLOADS):
     except (OSError, ValueError) as error:
         raise RuntimeError(f"Questlog's download information could not be read ({error}); "
                            "check the internet connection and run a2qlinux-setup again") from error
-    version = feed["version"]
+    version = newest = feed["version"]
     log(f"Downloading Questlog {version} from its authors' server ({feed['size'] / 1e6:.0f} MB), "
         "checking and unpacking it …")
     try:
@@ -405,9 +446,15 @@ def install_fresh(questlog_dir, log, feed_url=FEED, downloads=DOWNLOADS):
         except (OSError, ValueError, RuntimeError) as error:
             raise RuntimeError(f"Questlog {version} could not be installed: {error}") from error
         if problems:
-            raise RuntimeError(f"Questlog {version} does not fit this A2Qlinux yet: " + "; ".join(problems)
-                               + ". Update A2Qlinux (pipx upgrade a2qlinux), or install an earlier "
-                               "Questlog by hand (docs/UPDATING.md, 'Installing Questlog by hand')")
+            refused = f"Questlog {version} does not fit this A2Qlinux yet: " + "; ".join(problems)
+            shutil.rmtree(app, ignore_errors=True)
+            log(refused + ".")
+            app, version, why_not = _older_that_fits(version, work, downloads,
+                                                     register_url or questlog_versions.URL, log)
+            if app is None:
+                raise RuntimeError(refused + f". No earlier version was installed instead: {why_not}. Update "
+                                   "A2Qlinux (pipx upgrade a2qlinux), or install an earlier Questlog by hand "
+                                   "(docs/UPDATING.md, 'Installing Questlog by hand')")
         try:
             if questlog_dir.exists():
                 questlog_dir.rmdir()
@@ -417,6 +464,10 @@ def install_fresh(questlog_dir, log, feed_url=FEED, downloads=DOWNLOADS):
     finally:
         shutil.rmtree(work, ignore_errors=True)
     log(f"Installed Questlog {version} in {questlog_dir}.")
+    if newest != version:
+        log(f"Questlog {newest} does not fit this A2Qlinux yet, so {version} was installed instead. A2Qlinux "
+            f"updates it by itself once Questlog's newest version fits; a fix for {newest} comes with a newer "
+            "A2Qlinux (pipx upgrade a2qlinux).")
     return version
 
 

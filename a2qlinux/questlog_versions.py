@@ -6,6 +6,8 @@ their SHA-512 is, or whether they fit A2Qlinux. The watch workflow
 (.github/workflows/questlog-watch.yml, tools/questlog_watch.py) therefore
 records every new version while it is the feed's newest: its size and
 SHA-512 as the feed gives them, and the verdict of compatibility_problems.
+a2qlinux-setup reads it (read, older_fitting) when the newest version does
+not fit, to install the newest earlier one that does (update.install_fresh).
 The register lives on the branch `questlog-versions` as one JSON file:
 
   {"format": 1,
@@ -25,10 +27,14 @@ refusal, if any.
 
 import json
 from pathlib import Path
+import re
+import urllib.request
 
 FORMAT = 1
 FILE = "questlog-versions.json"
 BRANCH = "questlog-versions"
+# Where a2qlinux-setup reads the register (update.install_fresh).
+URL = f"https://raw.githubusercontent.com/raman78/A2Qlinux/{BRANCH}/{FILE}"
 
 
 def empty():
@@ -40,10 +46,31 @@ def load(path):
     path = Path(path)
     if not path.exists():
         return empty()
-    register = json.loads(path.read_text())
+    return _checked(json.loads(path.read_text()), path)
+
+
+def _checked(register, where):
     if register.get("format") != FORMAT or not isinstance(register.get("versions"), dict):
-        raise ValueError(f"{path} is not a register of format {FORMAT}")
+        raise ValueError(f"{where} is not a register of format {FORMAT}")
     return register
+
+
+def read(url=URL, timeout=20):
+    """The register as published; raises OSError or ValueError."""
+    with urllib.request.urlopen(url, timeout=timeout) as response:
+        return _checked(json.loads(response.read().decode("utf-8")), url)
+
+
+def older_fitting(register, below):
+    """Feed-like descriptions of the versions older than `below` the register says fit, newest first."""
+    found = []
+    for version, entry in register["versions"].items():
+        if not re.fullmatch(r"\d+(\.\d+)+", version) or version_key(version) >= version_key(below):
+            continue
+        if not entry.get("fits") or not re.fullmatch(r"[\w.-]+\.exe", str(entry.get("path", ""))):
+            continue
+        found.append({"version": version, "path": entry["path"], "size": entry["size"], "sha512": entry["sha512"]})
+    return sorted(found, key=lambda feed: version_key(feed["version"]), reverse=True)
 
 
 def save(path, register):

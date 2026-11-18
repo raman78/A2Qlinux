@@ -13,6 +13,12 @@ What changed for players, release by release. Technical details are in
   newest version at the next update check after updating A2Qlinux; a new
   installation with `a2qlinux-setup` works again.
 
+### Added
+- When Questlog has just released a version A2Qlinux cannot work with yet,
+  `a2qlinux-setup` on a new machine no longer stops with an error: it
+  installs the newest earlier Questlog that works, says so, and A2Qlinux
+  moves you to the newer one by itself once it works.
+
 ## [0.7.3] — 2026-11-14
 
 ### Fixed

@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 import unittest
 
-from a2qlinux import update as u
+from a2qlinux import questlog_versions, update as u
 
 FEED_0134 = """version: 0.1.34
 files:
@@ -259,9 +259,59 @@ class StageInstallRollbackTest(OfflineCdn, unittest.TestCase):
 class InstallFreshTest(OfflineCdn, unittest.TestCase):
     """a2qlinux-setup on a machine without Questlog: the same feed and checks, then straight into place."""
 
+    def setUp(self):
+        super().setUp()
+        self.register = Path(self.tmp.name) / "register.json"
+        questlog_versions.save(self.register, questlog_versions.empty())
+
     def install(self, target):
         return u.install_fresh(target, self.logged.append, feed_url=(self.cdn / "latest.yml").as_uri(),
-                               downloads=self.cdn.as_uri() + "/")
+                               downloads=self.cdn.as_uri() + "/", register_url=self.register.as_uri())
+
+    def publish_older(self, version="0.1.34", electron="44.5.1", sha512=None):
+        """Put an earlier Questlog on the CDN and enter it in the register as fitting."""
+        build = Path(self.tmp.name) / f"build-{version}"
+        make_app(build / "app", version=version, electron=electron)
+        (build / "nsis" / "$PLUGINSDIR").mkdir(parents=True)
+        subprocess.run(["7z", "a", str(build / "nsis" / "$PLUGINSDIR" / "app-64.7z"), "."],
+                       cwd=build / "app", check=True, capture_output=True)
+        installer = self.cdn / f"questlog-setup-{version}.exe"
+        subprocess.run(["7z", "a", "-t7z", str(installer), "$PLUGINSDIR"], cwd=build / "nsis",
+                       check=True, capture_output=True)
+        register = questlog_versions.load(self.register)
+        feed = {"version": version, "path": installer.name, "size": installer.stat().st_size,
+                "sha512": sha512 or base64.b64encode(hashlib.sha512(installer.read_bytes()).digest()).decode()}
+        questlog_versions.record(register, feed, [], "0.7.4", "2026-11-18T00:00:00Z", "computed")
+        questlog_versions.save(self.register, register)
+
+    def test_when_the_newest_does_not_fit_the_newest_earlier_one_that_fits_is_installed(self):
+        self.publish_unfitting()
+        self.publish_older("0.1.33")
+        self.publish_older("0.1.34")
+        target = Path(self.tmp.name) / "fresh" / "Questlog"
+        self.assertEqual(self.install(target), "0.1.34")
+        self.assertEqual(u.installed_version(target), "0.1.34")
+        self.assertEqual(list(target.parent.iterdir()), [target])
+        said = " | ".join(self.logged)
+        self.assertIn("Questlog 0.1.35 does not fit this A2Qlinux yet: it uses Electron 45.0.0", said)
+        self.assertIn("0.1.35 does not fit this A2Qlinux yet, so 0.1.34 was installed instead", self.logged[-1])
+
+    def test_an_earlier_version_is_checked_here_too_and_its_checksum_from_the_register(self):
+        self.publish_unfitting()
+        self.publish_older("0.1.33", sha512="AAAA")              # broken download or wrong register entry
+        self.publish_older("0.1.34", electron="45.0.0")          # the register says it fits; these checks do not
+        target = Path(self.tmp.name) / "fresh" / "Questlog"
+        with self.assertRaisesRegex(RuntimeError, "No earlier version was installed instead: 0.1.34 does not fit "
+                                    "either: .*Electron 45.0.0.*; 0.1.33 could not be installed: .*SHA-512"):
+            self.install(target)
+        self.assertFalse(target.exists())
+        self.assertEqual(list(target.parent.iterdir()), [])
+
+    def test_an_unreadable_register_is_named_in_the_refusal(self):
+        self.publish_unfitting()
+        self.register.unlink()
+        with self.assertRaisesRegex(RuntimeError, "list of earlier versions that fit could not be read"):
+            self.install(Path(self.tmp.name) / "fresh" / "Questlog")
 
     def test_installs_into_a_missing_folder_and_leaves_nothing_behind(self):
         target = Path(self.tmp.name) / "Games" / "Questlog"
@@ -303,7 +353,8 @@ class InstallFreshTest(OfflineCdn, unittest.TestCase):
     def test_a_version_that_does_not_fit_is_not_installed(self):
         self.publish_unfitting()
         target = Path(self.tmp.name) / "fresh" / "Questlog"
-        with self.assertRaisesRegex(RuntimeError, "does not fit this A2Qlinux yet: .*Electron 45.0.0.*pipx upgrade"):
+        with self.assertRaisesRegex(RuntimeError, "does not fit this A2Qlinux yet: .*Electron 45.0.0.*"
+                                    "no earlier version is known to fit.*pipx upgrade"):
             self.install(target)
         self.assertFalse(target.exists())
         self.assertEqual(list(target.parent.iterdir()), [])

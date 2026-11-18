@@ -832,10 +832,32 @@ the unpacked program into place. Differences from an update, and why:
 - It never writes into a folder that exists and holds anything: a folder
   without `Questlog.exe` but with other files is reported, not filled.
 - A version that does not fit is not installed. Unlike an update, there is
-  no older version to keep, so the message names the two ways out:
-  a newer A2Qlinux, or an earlier Questlog by hand.
+  no older version to keep, so the newest earlier version that fits is
+  installed instead (`_older_that_fits`). Questlog's CDN keeps every
+  installer, but its feed describes only the newest, so the candidates and
+  their size and SHA-512 come from the register the Questlog watch keeps
+  on GitHub (`questlog_versions.read`, `questlog_versions.URL`; §12
+  "Watching Questlog's releases"): versions older than the refused one
+  that the watch judged to fit, newest first. The register only proposes:
+  each candidate goes through `_fetch` here, size and SHA-512 against the
+  register's entry and this A2Qlinux's own `compatibility_problems`, and
+  only a candidate that passes is installed. At most `FALLBACK_TRIES` (2)
+  candidates are downloaded, 130 MB each. Every step is logged: the
+  refusal and its reason, each candidate tried and why it failed, and at
+  the end which version was installed instead of which. Later the updater
+  (§6.6) offers the feed's newest version as usual, so the player moves
+  up as soon as a version fits.
+- When no earlier version can be installed (the register cannot be read,
+  names none, or every candidate fails), the message gives the refusal,
+  why no earlier version was installed, and the two ways out: a newer
+  A2Qlinux, or an earlier Questlog by hand.
 - Errors are raised as `RuntimeError` with the reason and what to do;
   `a2qlinux-setup` lists them under "Not ready yet".
+
+Fallback checked against the real register and CDN (18 November 2026),
+with `develop`'s source temporarily set back to 0.7.3's `second-instance`
+check: 0.1.56 refused, 0.1.54 read from the register, downloaded, its
+computed SHA-512 matched, judged to fit and installed.
 
 Checked against the real CDN (4 November 2026) with an empty home folder:
 Questlog 0.1.48 downloaded, verified, unpacked, judged to fit and put in
@@ -1460,7 +1482,8 @@ needed for Black Market Cards once Questlog hides the HUD itself is open
 | "AION 2's Wine prefix was not found …" / "Only a Flatpak Steam was found" | no prefix in any native installation's libraries; only a Flatpak Steam (§14) | the message lists the files read |
 | `a2qlinux-setup`: "A2Qlinux's tray icon cannot run here (…)" | no system tray, or Qt cannot start (§14) | the `qt.qpa` lines in the message |
 | `a2qlinux-setup`: "capturing is not allowed yet (…)" | the capture check failed (§14) | `dumpcap`'s own line in the message, and the commands listed |
-| `a2qlinux-setup`: "Questlog X does not fit …" / "could not be installed" / "not an empty folder" | `install_fresh` refused or failed (§6.6) | the reason in the message |
+| `a2qlinux-setup`: "Questlog X does not fit this A2Qlinux yet, so Y was installed instead" | the newest version refused, an earlier one installed (§6.6, "First installation") | nothing; the updater offers newer versions as usual |
+| `a2qlinux-setup`: "Questlog X does not fit … No earlier version was installed instead: …" / "could not be installed" / "not an empty folder" | `install_fresh` refused or failed (§6.6) | the reason in the message |
 
 ### 7.1 `--no-sandbox`
 

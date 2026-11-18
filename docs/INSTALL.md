@@ -146,7 +146,10 @@ without installing anything. A2Qlinux installs Questlog itself, the same way
 it later keeps Questlog up to date: it downloads the newest version from
 Questlog's authors, checks that the download is complete and genuine,
 unpacks it, checks that this version works with A2Qlinux, and puts it in
-`~/Games/Questlog`. It does not install Npcap, the Windows capture driver
+`~/Games/Questlog`. If Questlog has just released a version that A2Qlinux
+cannot work with yet, the setup installs the newest earlier version that
+works instead and tells you so; A2Qlinux moves you to the newer one by
+itself once it works. It does not install Npcap, the Windows capture driver
 Questlog normally asks for; it does not work under Proton, and A2Qlinux
 replaces it.
 
@@ -207,7 +210,7 @@ every later run of the setup use it; you do not give it again. Then:
 | What is in the folder | What the setup does |
 |---|---|
 | a Questlog you unpacked before (`Questlog.exe` is there) | uses it; nothing is downloaded |
-| nothing, or the folder does not exist yet | installs the newest Questlog there |
+| nothing, or the folder does not exist yet | installs the newest Questlog there (or the newest that works with A2Qlinux, saying so) |
 | other files, but no `Questlog.exe` | installs nothing, and says so; choose an empty folder |
 
 To move back to the default, run it with `--questlog-dir ~/Games/Questlog`,

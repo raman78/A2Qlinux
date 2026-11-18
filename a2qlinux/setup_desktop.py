@@ -14,7 +14,8 @@ What it does, in order:
   4. Checks that the Windows parts are present: shipped in the package, built
      by bridge/build.sh in a source checkout.
   5. Installs the newest Questlog when its folder has no Questlog.exe
-     (update.install_fresh: the updater's download and checks).
+     (update.install_fresh: the updater's download and checks), or, when
+     the newest does not fit, the newest earlier one that does.
   6. Takes Questlog's icon from the installed Questlog (resources/icon.png in
      its app.asar) and colours its white Q red (a2qlinux_icon), so that
      A2Qlinux's entry and tray icon are told apart from Questlog's own - the
