@@ -168,7 +168,10 @@ def compatibility_problems(app_dir):
         problems.append(f"it uses Electron {electron.group(1).decode()}, not yet checked "
                         f"(known: {', '.join(sorted(KNOWN_ELECTRON))}); its tray icon id and session end "
                         "need reading in that version's source")
-    if not re.search(r'on\(["`]second-instance["`],[A-Za-z0-9_$]+\.show\)', main):
+    # The handler is the window's show itself, or (since 0.1.56) a function whose first act is to call it;
+    # 0.1.56 then follows a questlog:// link from the arguments, which A2Qlinux's second start never passes.
+    if not re.search(r'on\(["`]second-instance["`],(?:[A-Za-z0-9_$]+\.show\)'
+                     r'|\([^)]*\)=>\{?[A-Za-z0-9_$]+\.show\(\)[,;})])', main):
         problems.append("a second start no longer simply shows its window (Open Questlog relies on it)")
     if "focusable:!1" not in main:
         problems.append("its overlay windows are no longer non-activatable (the window-order guard relies on it)")

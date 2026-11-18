@@ -1801,7 +1801,7 @@ automatic update
 | the capture device is picked by the game connection's address, listing anew per connection | §4.3 | `grep -c 'addresses.includes(' …/workers/aion-2/combat.cjs` |
 | link types decoded: 1, 0, 108, 12, 101 (`QUESTLOG_LINKTYPES`) | §4.3 | by hand only: in `combat.cjs`, the function that reads source and destination from a frame, given the frame and `linkType`; its comparisons name the accepted types |
 | Electron 44.5.1 (`KNOWN_ELECTRON`): tray icon id 3, `WM_ENDSESSION` ending the process | `questlog_ctl.exe` | `grep -aoE 'Electron/[0-9.]+' Questlog.exe`; for another version read `notify_icon_host.cc` and `native_window_views_win.cc` |
-| `second-instance` shows the window | §6.3 | ``grep -oE 'on\(["`]second-instance["`],[^)]*\)' main.cjs`` (since 0.1.54 the bundler writes strings in backticks) |
+| `second-instance` shows the window | §6.3 | ``grep -oE 'on\(["`]second-instance["`],.{0,60}' main.cjs``: the handler is the window's `show` itself (`m.show`), or since 0.1.56 a function that calls it first, `(e,t)=>{h.show(),h.openLink(t)}`; `openLink` follows a `questlog://` link among the arguments, which the second start never passes. Since 0.1.54 the bundler writes strings in backticks |
 | overlay windows non-activatable (`focusable: false`) | §6.1 | `grep -c 'focusable:!1' main.cjs` |
 | `resources/icon.png` in `app.asar`: a white Q on a dark tile | `a2qlinux_icon` (§12) | rerun `a2qlinux-setup` and look at `~/.local/share/icons/a2qlinux.png` |
 

@@ -100,6 +100,14 @@ class CompatibilityTest(unittest.TestCase):
                        worker=worker, extra={".output/electron/game-AbC.cjs": chunk})
         self.assertEqual(u.compatibility_problems(app), [])
 
+    def test_0_1_56_second_instance_shows_then_follows_a_link(self):
+        main = 'r.app.on(`second-instance`,(e,t)=>{h.show(),h.openLink(t)}),w=new B({focusable:!1});'
+        self.assertEqual(u.compatibility_problems(make_app(self.root / "app", main=main)), [])
+
+    def test_a_second_instance_that_shows_only_sometimes_is_reported(self):
+        main = 'r.app.on(`second-instance`,(e,t)=>{t.length||h.show()}),w=new B({focusable:!1});'
+        self.assertIn("second start", " | ".join(u.compatibility_problems(make_app(self.root / "app", main=main))))
+
     def test_a_worker_without_pcap_anywhere_is_still_reported(self):
         app = make_app(self.root / "app", worker='require("../../game-AbC.cjs"); S.find(X=>X.addresses.includes(k))',
                        extra={".output/electron/game-AbC.cjs": "nothing here"})

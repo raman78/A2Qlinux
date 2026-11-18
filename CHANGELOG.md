@@ -3,6 +3,16 @@
 What changed for players, release by release. Technical details are in
 `docs/ARCHITECTURE.md`.
 
+## [Unreleased]
+
+### Fixed
+- Questlog 0.1.56 is installed again. A2Qlinux had refused it, as it had
+  0.1.55 ("a second start no longer simply shows its window"), but Open Questlog
+  works as before: Questlog now also opens questlog:// links when started a
+  second time, and still shows its window first. Players on 0.1.54 get the
+  newest version at the next update check after updating A2Qlinux; a new
+  installation with `a2qlinux-setup` works again.
+
 ## [0.7.3] — 2026-11-14
 
 ### Fixed
