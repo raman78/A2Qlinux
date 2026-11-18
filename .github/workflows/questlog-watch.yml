@@ -1,0 +1,64 @@
+name: Questlog watch
+
+# Every 3 hours: judge Questlog's newest version with the last release's
+# compatibility checks, record the verdict on the branch questlog-versions,
+# and open an issue when it does not fit (tools/questlog_watch.py;
+# docs/ARCHITECTURE.md §12 "Watching Questlog's releases").
+# Scheduled runs use this file as it is on the default branch (main).
+
+on:
+  schedule:
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Judge this older Questlog version instead of the newest (e.g. 0.1.54)"
+        required: false
+
+permissions:
+  contents: write     # push the register
+  issues: write       # open, comment on and close refusals
+
+concurrency:
+  group: questlog-watch
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install tools
+        run: pacman -Syu --noconfirm --needed git python p7zip github-cli
+
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0     # shown_version names the release from its tag
+
+      - uses: actions/checkout@v4
+        with:
+          ref: questlog-versions
+          path: register
+
+      - name: Trust the checkouts (owned by another user in the container)
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/register"
+
+      - name: Judge and record
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+        run: python -m tools.questlog_watch --register register/questlog-versions.json ${VERSION:+--version "$VERSION"}
+
+      - name: Push the register
+        # also after a failed judging step: an issue it opened is recorded in the register
+        if: ${{ !cancelled() }}
+        working-directory: register
+        run: |
+          git add questlog-versions.json
+          if git diff --cached --quiet; then echo "Register unchanged."; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Questlog watch: $(python -c 'import json; r=json.load(open("questlog-versions.json"))["versions"]; v=max(r, key=lambda k: r[k]["checked_at"]); print(v, "fits" if r[v]["fits"] else "refused")')"
+          git push origin HEAD:questlog-versions

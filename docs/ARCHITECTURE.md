@@ -1915,6 +1915,7 @@ the toolchain is the one `bridge/build.sh` is used with (Wine is in Arch's
 |---|---|---|
 | `tests.yml` | every push to `develop` or `main`, pull requests | `bridge/build.sh`, `python -m unittest` |
 | `release.yml` | a published GitHub Release; or by hand | build, tests, sdist + wheel, check that the wheel holds both Windows parts and that its version equals the tag, attach both packages to the release (by hand: keep them as a workflow artifact) |
+| `questlog-watch.yml` | every 3 hours; or by hand, optionally for an older version | judge Questlog's newest version with the last release's checks, record it in the register, open or close its issue ("Watching Questlog's releases" below) |
 
 In the container, `git` is installed before `actions/checkout`, which
 otherwise downloads a tarball without history, leaving hatch-vcs no tag to
@@ -1939,6 +1940,56 @@ because of the Windows parts.
 `README.md` is the package's description on PyPI, where relative links do not
 resolve, so its links to `docs/` and `LICENSE` are absolute URLs on `main`,
 i.e. the documentation of the latest release.
+
+**Watching Questlog's releases.** Questlog publishes a new version every
+few days, and a player learns that A2Qlinux refused it only when their own
+update check runs (§6.6): as one notification and a line in the log, or,
+on a machine without Questlog, as `a2qlinux-setup` failing. Questlog 0.1.55
+and 0.1.56 were refused that way on players' machines before an issue
+reported it.
+`questlog-watch.yml` makes GitHub find out first. Every 3 hours (cron
+`17 */3 * * *`) it checks out `main`, the last release and so what a new
+player installs, and runs `tools/questlog_watch.py`:
+
+1. `update.read_feed` names Questlog's newest version. If the register
+   already has a verdict on it, the run ends; a refusal by other checks than
+   this release's is judged again, as the checks may have been fixed
+   (`needs_judging`, the same idea as `refused_by_older_checks` in §6.6).
+2. `update._fetch` downloads it, checks size and SHA-512 against the feed,
+   unpacks it and runs `compatibility_problems`. This is the code a player's
+   update runs, called, not copied.
+3. `questlog_versions.record` enters the verdict in the register.
+4. A refusal opens the issue "Questlog X does not fit A2Qlinux", label
+   `questlog-compat`, listing the failed checks; if the register or GitHub
+   already has one for that version, it gets a comment instead. A later
+   fit closes it with a comment naming the release that fits it.
+5. The workflow commits the register to its branch (`github-actions[bot]`),
+   also when step 4 failed after opening an issue, so the issue's number is
+   kept.
+
+A failed step fails the run, which GitHub reports by e-mail; nothing is
+dropped quietly.
+
+**The register** (`a2qlinux/questlog_versions.py`) is the file
+`questlog-versions.json` on the branch `questlog-versions`, which holds
+nothing else: `main` must equal the last release, and the bot's commits
+would clutter `develop`. For each version it keeps the installer's file
+name, size and SHA-512, the verdict and its reasons, the A2Qlinux that
+judged it, when, and its issue. Its second purpose is the older versions:
+Questlog's CDN keeps every installer (checked 18 November 2026 back to
+0.1.29, `questlog-setup-<version>.exe`), but its feed describes only the
+newest, so only while a version is the newest can its size and checksum be
+taken from Questlog. The watch records them then. A version released and
+replaced between two runs is not seen at all. The checksum guards against
+a broken download, not against a changed file: it comes from the same CDN
+as the installer. Started on 18 November 2026 by hand with 0.1.56 (from the
+feed) and 0.1.54 (`--version 0.1.54`: size and SHA-512 worked out from the
+CDN's file, recorded as `sha512_from: computed`), both judged by `develop`
+after the 0.1.56 fix.
+
+Scheduled runs use the workflow as it is on the default branch, `main`, so
+a change to it acts from the next release. By hand:
+`gh workflow run questlog-watch.yml` (`-f version=0.1.54` for an older one).
 
 **Branches.** Work happens on `develop`; a release fast-forwards `main` to it
 and tags `main` (`docs/RELEASE.md`). `main` therefore always equals the last

@@ -159,6 +159,14 @@ Without the fetch an editable installation on this machine goes on
 showing the previous version plus a commit count (`docs/ARCHITECTURE.md`
 §12, "Shown version").
 
+The Questlog watch now judges with the new release's checks. It would do
+so on its own within 3 hours; to see at once whether a refused Questlog
+fits now (and have its issue closed):
+
+```bash
+gh workflow run questlog-watch.yml && sleep 5 && gh run watch
+```
+
 ## PyPI
 
 Publishing needs a Trusted Publisher on pypi.org: project `a2qlinux`, owner
