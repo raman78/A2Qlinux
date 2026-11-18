@@ -148,8 +148,8 @@ Questlog's authors, checks that the download is complete and genuine,
 unpacks it, checks that this version works with A2Qlinux, and puts it in
 `~/Games/Questlog`. If Questlog has just released a version that A2Qlinux
 cannot work with yet, the setup installs the newest earlier version that
-works instead and tells you so; A2Qlinux moves you to the newer one by
-itself once it works. It does not install Npcap, the Windows capture driver
+works instead and tells you so; the automatic updates bring the newer one
+later ([UPDATING.md](UPDATING.md#when-the-newest-questlog-does-not-fit-yet)). It does not install Npcap, the Windows capture driver
 Questlog normally asks for; it does not work under Proton, and A2Qlinux
 replaces it.
 

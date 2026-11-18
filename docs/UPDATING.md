@@ -27,11 +27,8 @@ What you will notice:
      have updated A2Qlinux, it checks that Questlog version again at its
      next update check.
 
-   The notification comes once, but the news stays in sight: as a
-   greyed-out line in the tray icon's menu ("Questlog X not installed: does
-   not fit yet" or "Questlog X installs at the next start"; hover over it
-   for the reason), and in the output of `a2qlinux-setup`, which names the
-   installed Questlog and what is known about a newer one.
+   The notification comes once, but the news stays in sight until it no
+   longer holds; see "When the newest Questlog does not fit yet" below.
 3. The next time you start "A2Qlinux", the new version is put in
    place before Questlog opens. That takes a few seconds. The status window
    says `Installed Questlog X; Questlog Y is kept in …` and then
@@ -45,6 +42,52 @@ settings are not in these folders, so an update does not touch them.
 
 Tip: the status window shows which version is running in its
 `Starting Questlog …` line.
+
+### When the newest Questlog does not fit yet
+
+Questlog's authors release often, and now and then a new version changes
+something A2Qlinux relies on. A2Qlinux checks every new version before it
+installs it, and refuses one it cannot work with yet, so the Questlog you
+have keeps working instead of breaking. Most of the time the next A2Qlinux
+release fixes it within days.
+
+While that lasts, you can see it in two places, not only in the one-time
+notification:
+
+- **The tray icon's menu** has a greyed-out line under the version, such as
+  "Questlog 0.1.56 not installed: does not fit yet". Hover over it, or over
+  the icon, for the whole message: the reason, and what to do. When a
+  version is downloaded and waiting instead, the line says
+  "Questlog 0.1.56 installs at the next start". The line goes away once
+  the news is over, for example after the new version is installed.
+- **`a2qlinux-setup`** names the Questlog you have and, under it, the same
+  message, for example:
+  ```
+  Questlog: 0.1.54 in /home/you/Games/Questlog.
+    Questlog 0.1.56 is out but does not fit this A2Qlinux yet, so Questlog 0.1.54 stays. Why: … Check for a newer A2Qlinux: pipx upgrade a2qlinux.
+  ```
+
+How it resolves: A2Qlinux keeps checking the newest Questlog every few
+hours. It installs it as soon as the A2Qlinux you have accepts it, which
+happens in one of two ways: you update A2Qlinux (`pipx upgrade a2qlinux`)
+to a release that fixes it, after which that same Questlog version is
+checked again; or Questlog releases another version that fits. If the
+message says "It is checked again at the next update check", the refusal
+came from an older A2Qlinux than the one you have now, and the check is
+already on its way.
+
+**On a new computer** there is no installed Questlog to keep, so
+`a2qlinux-setup` installs the newest *earlier* Questlog that works
+instead, and says so: "Questlog 0.1.56 does not fit this A2Qlinux yet, so
+0.1.54 was installed instead". It knows which earlier versions work from a
+list that A2Qlinux's project keeps on GitHub: every new Questlog is checked
+there within a few hours of its release, and the result is written down.
+The setup does not take the list's word for it; it downloads that version
+and runs the same checks itself before installing it. From then on the
+automatic updates take you to the newer version as described above. If
+no earlier version can be installed either (no internet connection to
+GitHub, for instance), the setup says why and stops; see
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 To turn automatic updates off, set `auto_update = false` in the settings file
 (see "Settings" in [USING.md](USING.md)); `update_check_hours` there sets how

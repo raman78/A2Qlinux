@@ -222,7 +222,7 @@ A second greyed-out line appears when there is news about a newer Questlog:
 not fit yet". Hover over it, or over the icon, for the whole message: why
 the version does not fit, and what to do (usually nothing, or updating
 A2Qlinux). The line stays until that news no longer holds. See
-[UPDATING.md](UPDATING.md).
+[When the newest Questlog does not fit yet](UPDATING.md#when-the-newest-questlog-does-not-fit-yet).
 
 | You do | What happens |
 |---|---|
